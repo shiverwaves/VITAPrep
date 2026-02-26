@@ -1,0 +1,227 @@
+# Extract PUMS distribution data for household generation.
+#
+# Downloads Census ACS PUMS microdata, extracts distribution tables,
+# and opens a PR with the new/updated SQLite file.
+#
+# Trigger: manual dispatch with state/year inputs, or matrix for multiple states.
+#
+# The raw PUMS CSVs (~400MB per state) are downloaded and discarded on the runner.
+# Only the small SQLite output (~1MB) is committed to the repo.
+
+name: Extract Distributions
+
+on:
+  workflow_dispatch:
+    inputs:
+      states:
+        description: >
+          Comma-separated state abbreviations (e.g., "HI" or "HI,CA,TX").
+          Each state runs as a separate matrix job.
+        required: true
+        default: "HI"
+        type: string
+      year:
+        description: "ACS 5-Year PUMS data year"
+        required: true
+        default: "2022"
+        type: string
+      parts:
+        description: "Extraction parts to run (space-separated, e.g., '1' or '1 2')"
+        required: true
+        default: "1"
+        type: string
+      create_pr:
+        description: "Create a PR with the extracted data (vs. commit to branch)"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  # Parse the comma-separated states input into a JSON matrix
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Parse state list into matrix
+        id: set-matrix
+        run: |
+          # Convert "HI,CA,TX" → ["HI","CA","TX"]
+          STATES="${{ inputs.states }}"
+          JSON=$(echo "$STATES" | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr '[:lower:]' '[:upper:]' | jq -R . | jq -s -c .)
+          echo "matrix={\"state\":$JSON}" >> "$GITHUB_OUTPUT"
+          echo "Matrix: {\"state\":$JSON}"
+
+  extract:
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install extraction dependencies
+        run: |
+          pip install pandas numpy sqlalchemy requests
+
+      - name: Cache PUMS downloads
+        uses: actions/cache@v4
+        with:
+          path: extraction/pums_cache
+          key: pums-${{ matrix.state }}-${{ inputs.year }}
+
+      - name: Run extraction
+        run: |
+          python -m extraction.extract_all \
+            --state "${{ matrix.state }}" \
+            --year "${{ inputs.year }}" \
+            --parts ${{ inputs.parts }} \
+            --verbose
+
+      - name: Validate output
+        run: |
+          STATE_LOWER=$(echo "${{ matrix.state }}" | tr '[:upper:]' '[:lower:]')
+          DB_FILE="data/distributions_${STATE_LOWER}_${{ inputs.year }}.sqlite"
+
+          if [ ! -f "$DB_FILE" ]; then
+            echo "ERROR: Expected output file not found: $DB_FILE"
+            exit 1
+          fi
+
+          echo "Validating $DB_FILE..."
+          python -c "
+          import sqlite3, sys
+          conn = sqlite3.connect('$DB_FILE')
+          cursor = conn.cursor()
+          cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")
+          tables = [r[0] for r in cursor.fetchall()]
+          print(f'Tables found: {len(tables)}')
+          for t in tables:
+              cursor.execute(f'SELECT COUNT(*) FROM [{t}]')
+              count = cursor.fetchone()[0]
+              print(f'  {t}: {count} rows')
+              if count == 0:
+                  print(f'  WARNING: {t} is empty!')
+          conn.close()
+          if len(tables) < 1:
+              print('ERROR: No tables found')
+              sys.exit(1)
+          print('Validation passed')
+          "
+
+      - name: Run data inventory
+        run: |
+          python scripts/data_inventory.py --format markdown --github-summary
+
+      - name: Upload SQLite artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions-${{ matrix.state }}-${{ inputs.year }}
+          path: data/distributions_*.sqlite
+          retention-days: 90
+
+      # Store state info for the PR job
+      - name: Save extraction metadata
+        run: |
+          STATE_LOWER=$(echo "${{ matrix.state }}" | tr '[:upper:]' '[:lower:]')
+          DB_FILE="data/distributions_${STATE_LOWER}_${{ inputs.year }}.sqlite"
+          echo "$DB_FILE" > /tmp/db_file_path.txt
+
+      - name: Upload extracted database for PR
+        if: inputs.create_pr
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-${{ matrix.state }}-${{ inputs.year }}
+          path: data/distributions_*.sqlite
+
+  # Collect all extracted databases and create a single PR
+  create-pr:
+    if: inputs.create_pr
+    needs: extract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install inventory dependencies
+        run: pip install pandas numpy sqlalchemy
+
+      - name: Download all extracted databases
+        uses: actions/download-artifact@v4
+        with:
+          pattern: db-*
+          path: data/
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: ls -la data/distributions_*.sqlite 2>/dev/null || echo "No files found"
+
+      - name: Generate inventory summary
+        id: inventory
+        run: |
+          SUMMARY=$(python scripts/data_inventory.py --format markdown)
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$SUMMARY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR branch and commit
+        run: |
+          BRANCH="data/extract-${{ inputs.states }}-${{ inputs.year }}-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git add data/distributions_*.sqlite
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Extract distribution data: ${{ inputs.states }} (${{ inputs.year }})"
+          git push -u origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STATES="${{ inputs.states }}"
+          YEAR="${{ inputs.year }}"
+          PARTS="${{ inputs.parts }}"
+
+          gh pr create \
+            --title "Extract distribution data: ${STATES} (${YEAR})" \
+            --body "$(cat <<'PREOF'
+          ## Distribution Data Extraction
+
+          **States:** ${{ inputs.states }}
+          **Year:** ${{ inputs.year }}
+          **Parts:** ${{ inputs.parts }}
+
+          ### What this PR does
+          Extracts PUMS distribution tables from Census ACS 5-Year microdata and adds
+          the resulting SQLite file(s) to `data/`.
+
+          ### Data Summary
+          ${{ steps.inventory.outputs.summary }}
+
+          ### How to verify
+          1. Download the artifact from the extraction workflow run
+          2. Open the SQLite file and inspect table contents
+          3. Run `python scripts/data_inventory.py` locally after merging
+
+          ---
+          *Generated by the Extract Distributions workflow.*
+          PREOF
+          )"
