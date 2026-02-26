@@ -1,0 +1,17 @@
+/* Shared styles for all rendered documents */
+/* Watermark overlay — applied to every document */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 24px;
+    font-weight: bold;
+    color: rgba(255, 0, 0, 0.15);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1000;
+}
+.watermark::after {
+    content: "SAMPLE — FOR TRAINING USE ONLY";
+}
