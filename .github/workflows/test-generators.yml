@@ -1,8 +1,8 @@
 # Run generator unit tests on every push and PR.
 #
 # Tests use in-memory distribution tables (no SQLite download needed).
-# The "with-pii" job is included but skipped until pii.py is implemented,
-# at which point the condition can be flipped.
+# TODO (Sprint 4): Add a "with PII" job that includes test_pii.py and
+# installs Faker once the PII generator is implemented.
 
 name: Test Generators
 
@@ -66,35 +66,3 @@ jobs:
                            tests/test_pipeline.py \
                            tests/test_db.py \
                            --tb=no -q 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
-
-  # ── PII overlay tests (enabled once pii.py is implemented) ─────────
-  test-generators-with-pii:
-    name: Generator tests (with PII)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # Flip this to true once pii.py and test_pii.py are implemented
-    if: ${{ hashFiles('tests/test_pii.py') != '' }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install pandas numpy sqlalchemy faker pytest
-
-      - name: Run all generator tests (including PII)
-        run: |
-          python -m pytest tests/test_models.py \
-                           tests/test_sampler.py \
-                           tests/test_demographics.py \
-                           tests/test_children.py \
-                           tests/test_pipeline.py \
-                           tests/test_pii.py \
-                           tests/test_db.py \
-                           -v --tb=short
