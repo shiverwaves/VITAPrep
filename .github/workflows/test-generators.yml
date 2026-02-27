@@ -9,6 +9,16 @@ name: Generate Household
 on:
   workflow_dispatch:
     inputs:
+      state:
+        description: "State to generate for (must have SQLite data in data/)"
+        required: false
+        default: "HI"
+        type: string
+      year:
+        description: "PUMS data year"
+        required: false
+        default: "2022"
+        type: string
       pattern:
         description: "Household pattern (or 'random' to sample from distribution)"
         required: false
@@ -61,13 +71,22 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Parameter | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| State | \`${{ inputs.state }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Year | \`${{ inputs.year }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Pattern | \`${{ inputs.pattern }}\` |" >> "$GITHUB_STEP_SUMMARY"
           SEED="${{ inputs.seed }}"
           echo "| Seed | \`${SEED:-<random>}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Run tests | \`${{ inputs.run-tests }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Python | 3.11 |" >> "$GITHUB_STEP_SUMMARY"
           COMMIT=$(git rev-parse --short HEAD)
           echo "| Commit | \`$COMMIT\` |" >> "$GITHUB_STEP_SUMMARY"
+          STATE_LOWER=$(echo "${{ inputs.state }}" | tr '[:upper:]' '[:lower:]')
+          DB_FILE="data/distributions_${STATE_LOWER}_${{ inputs.year }}.sqlite"
+          if [ -f "$DB_FILE" ]; then
+            SIZE=$(du -h "$DB_FILE" | cut -f1)
+            echo "| Database | \`$DB_FILE\` ($SIZE) |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Database | **NOT FOUND:** \`$DB_FILE\` |" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
 
@@ -76,8 +95,10 @@ jobs:
         run: |
           PATTERN="${{ inputs.pattern }}"
           SEED="${{ inputs.seed }}"
+          STATE="${{ inputs.state }}"
+          YEAR="${{ inputs.year }}"
 
-          ARGS=""
+          ARGS="--state $STATE --year $YEAR"
           if [ "$PATTERN" != "random" ]; then
             ARGS="$ARGS --pattern $PATTERN"
           fi
@@ -107,6 +128,7 @@ jobs:
               addr_line = f\"{addr.get('street', '')}, {addr.get('apt', '')}, {addr.get('city', '')}, {addr.get('state', '')} {addr.get('zip_code', '')}\"
           print(f'| Field | Value |')
           print(f'|-------|-------|')
+          print(f'| State | {d[\"state\"]} ({d[\"year\"]}) |')
           print(f'| Pattern | \`{p}\` |')
           print(f'| Adults | {a} |')
           print(f'| Children | {c} |')
