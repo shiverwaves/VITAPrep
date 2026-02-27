@@ -18,6 +18,7 @@ from .models import Household, PATTERN_METADATA
 from .db import DistributionLoader
 from .demographics import DemographicsGenerator
 from .children import ChildGenerator
+from .pii import PIIGenerator
 from .sampler import weighted_sample, set_random_seed
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ class HouseholdGenerator:
         # Initialize Part 1 generators
         self.demographics = DemographicsGenerator(self.distributions)
         self.children = ChildGenerator(self.distributions)
+        self.pii = PIIGenerator(tax_year=self.year)
 
         logger.info("Initialized generator for %s (%d)", self.state, self.year)
 
@@ -141,5 +143,34 @@ class HouseholdGenerator:
             household.pattern,
             len(household.get_adults()),
             len(household.get_children()),
+        )
+        return household
+
+    def generate_with_pii(
+        self,
+        pattern: Optional[str] = None,
+        seed: Optional[int] = None,
+    ) -> Household:
+        """Generate a household with demographics AND PII overlay.
+
+        Runs :meth:`generate_part1` then applies the PII generator to
+        populate names, SSNs, DOBs, addresses, and ID details.
+
+        Args:
+            pattern: Specific household pattern (e.g.,
+                "married_couple_with_children"). If None, randomly
+                samples from the distribution.
+            seed: Random seed for reproducibility.
+
+        Returns:
+            Household with members fully populated (demographics + PII).
+        """
+        household = self.generate_part1(pattern=pattern, seed=seed)
+        self.pii.overlay(household)
+
+        logger.info(
+            "Generated household with PII: pattern=%s, members=%d",
+            household.pattern,
+            len(household.members),
         )
         return household
