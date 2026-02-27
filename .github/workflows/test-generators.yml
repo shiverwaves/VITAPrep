@@ -1,8 +1,8 @@
 # Generate a sample household and display the full output.
 #
-# Dispatch-only. Runs the generation pipeline with in-memory
-# distribution tables (no SQLite download needed) and prints the
-# resulting household as JSON in the Actions step summary.
+# Dispatch-only. Runs the full generation pipeline against the real
+# SQLite distribution data shipped in data/ and prints the resulting
+# household as JSON in the Actions step summary.
 
 name: Generate Household
 
