@@ -2,7 +2,7 @@
 PII generator — overlays synthetic personal identifying information onto households.
 
 Takes a Household with demographics (age, sex, race) and populates:
-- Legal names (Faker, culturally informed by race/hispanic_origin)
+- Legal names (Faker, en_US locale — all Latin script for VITA docs)
 - SSNs (always 9XX-XX-XXXX test range)
 - DOBs (calculated from age + tax year)
 - Addresses (Faker, state-matched, consistent within household)
@@ -27,23 +27,10 @@ from .models import Address, Household, Person, RelationshipType
 
 logger = logging.getLogger(__name__)
 
-# Faker locale hints keyed by race / hispanic_origin.  We use these to
-# bias first-name pools toward culturally plausible names while keeping
-# the generation simple (Faker doesn't have per-race providers, but
-# locale switching gives a reasonable approximation).
-_LOCALE_MAP: Dict[str, str] = {
-    "asian": "zh_CN",
-    "native_hawaiian_pacific_islander": "en_US",
-    "white": "en_US",
-    "black": "en_US",
-    "american_indian": "en_US",
-    "alaska_native": "en_US",
-    "american_indian_alaska_native": "en_US",
-    "other": "en_US",
-    "two_or_more": "en_US",
-}
-
-_HISPANIC_LOCALE = "es_MX"
+# All names use en_US locale to ensure Latin script on VITA documents.
+# Non-Latin locales (zh_CN, ja_JP, etc.) produce characters that don't
+# render correctly on SSN cards and driver's licenses.
+_DEFAULT_LOCALE = "en_US"
 
 # State-specific DL number formats.  Each format string uses '#' for a
 # random digit and '?' for a random uppercase letter.
@@ -68,8 +55,7 @@ class PIIGenerator:
 
     def __init__(self, tax_year: int = 2024) -> None:
         self.tax_year = tax_year
-        self._fake = Faker("en_US")
-        self._locale_fakers: Dict[str, Faker] = {}
+        self._fake = Faker(_DEFAULT_LOCALE)
         self._used_ssns: Set[str] = set()
 
     # =================================================================
@@ -204,13 +190,13 @@ class PIIGenerator:
     ) -> None:
         """Fill remaining PII fields on a single Person."""
         # First / middle name
-        locale_fake = self._get_locale_faker(person)
+        fake = self._get_faker()
         if person.sex == "F":
-            person.legal_first_name = locale_fake.first_name_female()
-            person.legal_middle_name = locale_fake.first_name_female()
+            person.legal_first_name = fake.first_name_female()
+            person.legal_middle_name = fake.first_name_female()
         else:
-            person.legal_first_name = locale_fake.first_name_male()
-            person.legal_middle_name = locale_fake.first_name_male()
+            person.legal_first_name = fake.first_name_male()
+            person.legal_middle_name = fake.first_name_male()
 
         # Suffix: if male child shares father's first name
         self._maybe_add_suffix(person, household)
@@ -237,16 +223,9 @@ class PIIGenerator:
     # Name helpers
     # =================================================================
 
-    def _get_locale_faker(self, person: Person) -> Faker:
-        """Return a Faker instance with a locale hinted by demographics."""
-        if person.hispanic_origin:
-            locale = _HISPANIC_LOCALE
-        else:
-            locale = _LOCALE_MAP.get(person.race, "en_US")
-
-        if locale not in self._locale_fakers:
-            self._locale_fakers[locale] = Faker(locale)
-        return self._locale_fakers[locale]
+    def _get_faker(self) -> Faker:
+        """Return the Faker instance (en_US, Latin script only)."""
+        return self._fake
 
     def _maybe_add_suffix(
         self, person: Person, household: Household,

@@ -1,26 +1,14 @@
-# Run generator unit tests and optionally generate a sample household.
+# Generate a sample household and display the full output.
 #
-# Dispatch-only — not triggered on push or PR.
-# Tests use in-memory distribution tables (no SQLite download needed).
+# Dispatch-only. Runs the generation pipeline with in-memory
+# distribution tables (no SQLite download needed) and prints the
+# resulting household as JSON in the Actions step summary.
 
-name: Test Generators
+name: Generate Household
 
 on:
   workflow_dispatch:
     inputs:
-      python-version:
-        description: "Python version"
-        required: false
-        default: "3.11"
-        type: choice
-        options:
-          - "3.11"
-          - "3.12"
-      generate-sample:
-        description: "Generate a sample household and show JSON output"
-        required: false
-        default: true
-        type: boolean
       pattern:
         description: "Household pattern (or 'random' to sample from distribution)"
         required: false
@@ -41,59 +29,17 @@ on:
         required: false
         default: ""
         type: string
+      run-tests:
+        description: "Also run the generator test suite"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  # ── Run all generator tests ──────────────────────────────────────
-  test:
-    name: Generator tests (Python ${{ inputs.python-version }})
+  generate:
+    name: Generate household
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install dependencies
-        run: |
-          pip install pandas numpy sqlalchemy faker pytest
-
-      - name: Run generator tests
-        run: |
-          python -m pytest tests/test_models.py \
-                           tests/test_sampler.py \
-                           tests/test_demographics.py \
-                           tests/test_children.py \
-                           tests/test_pipeline.py \
-                           tests/test_pii.py \
-                           tests/test_db.py \
-                           -v --tb=short
-
-      - name: Test summary
-        if: always()
-        run: |
-          echo "### Generator Test Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "Python ${{ inputs.python-version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest tests/test_models.py \
-                           tests/test_sampler.py \
-                           tests/test_demographics.py \
-                           tests/test_children.py \
-                           tests/test_pipeline.py \
-                           tests/test_pii.py \
-                           tests/test_db.py \
-                           --tb=no -q 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
-
-  # ── Generate a sample household and display JSON ─────────────────
-  generate-sample:
-    name: Generate sample household
-    if: inputs.generate-sample
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
@@ -102,12 +48,30 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.python-version }}
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          pip install pandas numpy sqlalchemy faker
+          pip install pandas numpy sqlalchemy faker pytest
 
+      # ── Parameters ───────────────────────────────────────────────
+      - name: Show parameters
+        run: |
+          echo "### Parameters" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Parameter | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pattern | \`${{ inputs.pattern }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          SEED="${{ inputs.seed }}"
+          echo "| Seed | \`${SEED:-<random>}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Run tests | \`${{ inputs.run-tests }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Python | 3.11 |" >> "$GITHUB_STEP_SUMMARY"
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "| Commit | \`$COMMIT\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Generate ─────────────────────────────────────────────────
       - name: Generate household
         run: |
           PATTERN="${{ inputs.pattern }}"
@@ -123,20 +87,67 @@ jobs:
 
           python scripts/generate_sample.py $ARGS --format json | tee /tmp/household.json
 
+      # ── Display ──────────────────────────────────────────────────
       - name: Display generated household
         run: |
           echo "### Generated Household" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          # Summary line
-          PATTERN=$(python -c "import json; d=json.load(open('/tmp/household.json')); print(d['pattern'])")
-          ADULTS=$(python -c "import json; d=json.load(open('/tmp/household.json')); print(d['adult_count'])")
-          CHILDREN=$(python -c "import json; d=json.load(open('/tmp/household.json')); print(d['child_count'])")
-          STATUS=$(python -c "import json; d=json.load(open('/tmp/household.json')); print(d['filing_status'])")
-          echo "**Pattern:** \`$PATTERN\` | **Adults:** $ADULTS | **Children:** $CHILDREN | **Filing status:** $STATUS" >> "$GITHUB_STEP_SUMMARY"
+          # Quick summary line
+          python -c "
+          import json
+          d = json.load(open('/tmp/household.json'))
+          p = d['pattern']
+          a = d['adult_count']
+          c = d['child_count']
+          s = d['filing_status']
+          addr = d.get('address', {})
+          addr_line = f\"{addr.get('street', '')}, {addr.get('city', '')}, {addr.get('state', '')} {addr.get('zip_code', '')}\"
+          if addr.get('apt'):
+              addr_line = f\"{addr.get('street', '')}, {addr.get('apt', '')}, {addr.get('city', '')}, {addr.get('state', '')} {addr.get('zip_code', '')}\"
+          print(f'| Field | Value |')
+          print(f'|-------|-------|')
+          print(f'| Pattern | \`{p}\` |')
+          print(f'| Adults | {a} |')
+          print(f'| Children | {c} |')
+          print(f'| Filing status | {s} |')
+          print(f'| Address | {addr_line} |')
+          print(f'| Married | {d[\"is_married\"]} |')
+          " >> "$GITHUB_STEP_SUMMARY"
+
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          # Full JSON in a collapsible block
+          # Per-member table
+          echo "#### Members" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          python -c "
+          import json
+          d = json.load(open('/tmp/household.json'))
+          print('| # | Name | Relationship | Age | Sex | Race | Hispanic | SSN | DOB | Phone | ID |')
+          print('|---|------|-------------|-----|-----|------|----------|-----|-----|-------|-----|')
+          for i, m in enumerate(d['members'], 1):
+              name = f\"{m['legal_first_name']} {m.get('legal_middle_name', '')} {m['legal_last_name']}\"
+              suffix = m.get('suffix', '')
+              if suffix:
+                  name += f' {suffix}'
+              name = name.replace('  ', ' ')
+              phone = m.get('phone', '') or '—'
+              id_info = '—'
+              if m.get('id_type'):
+                  expired = ''
+                  if m.get('id_expiry'):
+                      from datetime import date
+                      if date.fromisoformat(m['id_expiry']) < date.today():
+                          expired = ' **(expired)**'
+                  id_info = f\"\`{m['id_number']}\` exp {m.get('id_expiry', '—')}{expired}\"
+              race = m.get('race', '—')
+              hisp = 'Yes' if m.get('hispanic_origin') else 'No'
+              print(f\"| {i} | {name} | {m['relationship']} | {m['age']} | {m['sex']} | {race} | {hisp} | \`{m['ssn']}\` | {m['dob']} | {phone} | {id_info} |\")
+          " >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Full JSON collapsible
           echo "<details><summary>Full household JSON</summary>" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
@@ -144,19 +155,31 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "</details>" >> "$GITHUB_STEP_SUMMARY"
 
-          # Per-member summary table
+      # ── Optional tests ───────────────────────────────────────────
+      - name: Run generator tests
+        if: inputs.run-tests
+        run: |
+          python -m pytest tests/test_models.py \
+                           tests/test_sampler.py \
+                           tests/test_demographics.py \
+                           tests/test_children.py \
+                           tests/test_pipeline.py \
+                           tests/test_pii.py \
+                           tests/test_db.py \
+                           -v --tb=short
+
+      - name: Test summary
+        if: inputs.run-tests && always()
+        run: |
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "#### Members" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Generator Test Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          python -c "
-          import json
-          d = json.load(open('/tmp/household.json'))
-          print('| # | Name | Relationship | Age | Sex | SSN | DOB |')
-          print('|---|------|-------------|-----|-----|-----|-----|')
-          for i, m in enumerate(d['members'], 1):
-              name = f\"{m['legal_first_name']} {m['legal_last_name']}\"
-              suffix = m.get('suffix', '')
-              if suffix:
-                  name += f' {suffix}'
-              print(f\"| {i} | {name} | {m['relationship']} | {m['age']} | {m['sex']} | \`{m['ssn']}\` | {m['dob']} |\")
-          " >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/test_models.py \
+                           tests/test_sampler.py \
+                           tests/test_demographics.py \
+                           tests/test_children.py \
+                           tests/test_pipeline.py \
+                           tests/test_pii.py \
+                           tests/test_db.py \
+                           --tb=no -q 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
