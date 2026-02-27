@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Generate a sample household with PII and print as JSON.
 
-This is the script invoked by the Test Generators workflow to show
+This is the script invoked by the Generate Household workflow to show
 what the pipeline actually produces at runtime.
+
+Uses the real SQLite distribution data shipped in data/ when available.
+Falls back to the HouseholdGenerator pipeline which handles loading.
 
 Usage:
     python scripts/generate_sample.py                          # random pattern
@@ -19,199 +22,30 @@ from pathlib import Path
 # Ensure repo root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from generator.models import Household, PATTERN_METADATA
-from generator.demographics import DemographicsGenerator
-from generator.children import ChildGenerator
-from generator.pii import PIIGenerator
+from generator.models import PATTERN_METADATA
+from generator.pipeline import HouseholdGenerator
 from generator.sampler import set_random_seed
-
 
 logger = logging.getLogger(__name__)
 
 
-# Lightweight in-memory distribution tables so the script works
-# without the real SQLite database (same tables used by the test suite).
-def _build_in_memory_distributions():
-    """Build minimal distribution tables for standalone generation."""
-    import pandas as pd
-
-    return {
-        "household_patterns": pd.DataFrame([
-            {"pattern": "married_couple_with_children", "weight": 30},
-            {"pattern": "single_parent", "weight": 15},
-            {"pattern": "married_couple_no_children", "weight": 20},
-            {"pattern": "single_adult", "weight": 15},
-            {"pattern": "blended_family", "weight": 5},
-            {"pattern": "multigenerational", "weight": 5},
-            {"pattern": "unmarried_partners", "weight": 5},
-            {"pattern": "other", "weight": 5},
-        ]),
-        "race_by_age": pd.DataFrame([
-            {"age_bracket": "18-24", "race": "white", "weight": 30},
-            {"age_bracket": "18-24", "race": "asian", "weight": 40},
-            {"age_bracket": "18-24", "race": "black", "weight": 10},
-            {"age_bracket": "18-24", "race": "native_hawaiian_pacific_islander", "weight": 20},
-            {"age_bracket": "25-34", "race": "asian", "weight": 40},
-            {"age_bracket": "25-34", "race": "white", "weight": 30},
-            {"age_bracket": "25-34", "race": "black", "weight": 10},
-            {"age_bracket": "25-34", "race": "native_hawaiian_pacific_islander", "weight": 20},
-            {"age_bracket": "35-44", "race": "asian", "weight": 35},
-            {"age_bracket": "35-44", "race": "white", "weight": 30},
-            {"age_bracket": "35-44", "race": "black", "weight": 15},
-            {"age_bracket": "35-44", "race": "native_hawaiian_pacific_islander", "weight": 20},
-            {"age_bracket": "45-54", "race": "white", "weight": 35},
-            {"age_bracket": "45-54", "race": "asian", "weight": 35},
-            {"age_bracket": "45-54", "race": "black", "weight": 10},
-            {"age_bracket": "45-54", "race": "native_hawaiian_pacific_islander", "weight": 20},
-            {"age_bracket": "55-64", "race": "white", "weight": 40},
-            {"age_bracket": "55-64", "race": "asian", "weight": 35},
-            {"age_bracket": "55-64", "race": "black", "weight": 10},
-            {"age_bracket": "55-64", "race": "native_hawaiian_pacific_islander", "weight": 15},
-            {"age_bracket": "65+", "race": "white", "weight": 45},
-            {"age_bracket": "65+", "race": "asian", "weight": 35},
-            {"age_bracket": "65+", "race": "black", "weight": 10},
-            {"age_bracket": "65+", "race": "native_hawaiian_pacific_islander", "weight": 10},
-        ]),
-        "race_distribution": pd.DataFrame([
-            {"race": "asian", "weight": 380},
-            {"race": "white", "weight": 250},
-            {"race": "native_hawaiian_pacific_islander", "weight": 200},
-            {"race": "two_or_more", "weight": 100},
-            {"race": "black", "weight": 40},
-            {"race": "other", "weight": 30},
-        ]),
-        "hispanic_origin_by_age": pd.DataFrame([
-            {"age_bracket": "18-24", "is_hispanic": 0, "weight": 85},
-            {"age_bracket": "18-24", "is_hispanic": 1, "weight": 15},
-            {"age_bracket": "25-34", "is_hispanic": 0, "weight": 87},
-            {"age_bracket": "25-34", "is_hispanic": 1, "weight": 13},
-            {"age_bracket": "35-44", "is_hispanic": 0, "weight": 88},
-            {"age_bracket": "35-44", "is_hispanic": 1, "weight": 12},
-            {"age_bracket": "45-54", "is_hispanic": 0, "weight": 90},
-            {"age_bracket": "45-54", "is_hispanic": 1, "weight": 10},
-            {"age_bracket": "55-64", "is_hispanic": 0, "weight": 92},
-            {"age_bracket": "55-64", "is_hispanic": 1, "weight": 8},
-            {"age_bracket": "65+", "is_hispanic": 0, "weight": 94},
-            {"age_bracket": "65+", "is_hispanic": 1, "weight": 6},
-        ]),
-        "spousal_age_gaps": pd.DataFrame([
-            {"age_gap": 0, "weight": 25},
-            {"age_gap": 1, "weight": 20},
-            {"age_gap": 2, "weight": 15},
-            {"age_gap": -1, "weight": 15},
-            {"age_gap": 3, "weight": 10},
-            {"age_gap": -2, "weight": 8},
-            {"age_gap": 5, "weight": 4},
-            {"age_gap": -5, "weight": 3},
-        ]),
-        "couple_sex_patterns": pd.DataFrame([
-            {"relationship": "spouse", "householder_sex": "M", "partner_sex": "F", "weight": 48},
-            {"relationship": "spouse", "householder_sex": "F", "partner_sex": "M", "weight": 48},
-            {"relationship": "spouse", "householder_sex": "M", "partner_sex": "M", "weight": 2},
-            {"relationship": "spouse", "householder_sex": "F", "partner_sex": "F", "weight": 2},
-            {"relationship": "unmarried_partner", "householder_sex": "M", "partner_sex": "F", "weight": 45},
-            {"relationship": "unmarried_partner", "householder_sex": "F", "partner_sex": "M", "weight": 45},
-            {"relationship": "unmarried_partner", "householder_sex": "M", "partner_sex": "M", "weight": 5},
-            {"relationship": "unmarried_partner", "householder_sex": "F", "partner_sex": "F", "weight": 5},
-        ]),
-        "children_by_parent_age": pd.DataFrame([
-            {"parent_age_bracket": "18-24", "num_children": 1, "weight": 70},
-            {"parent_age_bracket": "18-24", "num_children": 2, "weight": 30},
-            {"parent_age_bracket": "25-29", "num_children": 1, "weight": 50},
-            {"parent_age_bracket": "25-29", "num_children": 2, "weight": 35},
-            {"parent_age_bracket": "25-29", "num_children": 3, "weight": 15},
-            {"parent_age_bracket": "30-34", "num_children": 1, "weight": 30},
-            {"parent_age_bracket": "30-34", "num_children": 2, "weight": 40},
-            {"parent_age_bracket": "30-34", "num_children": 3, "weight": 20},
-            {"parent_age_bracket": "30-34", "num_children": 4, "weight": 10},
-            {"parent_age_bracket": "35-39", "num_children": 1, "weight": 25},
-            {"parent_age_bracket": "35-39", "num_children": 2, "weight": 35},
-            {"parent_age_bracket": "35-39", "num_children": 3, "weight": 25},
-            {"parent_age_bracket": "35-39", "num_children": 4, "weight": 15},
-            {"parent_age_bracket": "40-44", "num_children": 1, "weight": 30},
-            {"parent_age_bracket": "40-44", "num_children": 2, "weight": 35},
-            {"parent_age_bracket": "40-44", "num_children": 3, "weight": 25},
-            {"parent_age_bracket": "40-44", "num_children": 4, "weight": 10},
-            {"parent_age_bracket": "45-54", "num_children": 1, "weight": 40},
-            {"parent_age_bracket": "45-54", "num_children": 2, "weight": 35},
-            {"parent_age_bracket": "45-54", "num_children": 3, "weight": 25},
-        ]),
-        "child_age_distributions": pd.DataFrame([
-            {"relationship": "biological_child", "age": a, "weight": max(1, 17 - a)}
-            for a in range(18)
-        ] + [
-            {"relationship": "stepchild", "age": a, "weight": max(1, 17 - a + 3)}
-            for a in range(18)
-        ] + [
-            {"relationship": "grandchild", "age": a, "weight": max(1, 15 - a)}
-            for a in range(16)
-        ]),
-        "stepchild_patterns": pd.DataFrame([
-            {"num_stepchildren": 1, "weight": 60},
-            {"num_stepchildren": 2, "weight": 30},
-            {"num_stepchildren": 3, "weight": 10},
-        ]),
-        "multigenerational_patterns": pd.DataFrame([
-            {"num_generations": 3, "weight": 70},
-            {"num_generations": 2, "weight": 30},
-        ]),
-    }
-
-
-def generate_household(pattern=None, seed=None):
+def generate_household(pattern=None, seed=None, state="HI", year=2022):
     """Generate a single household with demographics + PII.
 
     Args:
         pattern: Household pattern name, or None for random.
         seed: Random seed for reproducibility.
+        state: Two-letter state code (must have SQLite data in data/).
+        year: PUMS data year.
 
     Returns:
         Household with all fields populated.
     """
-    import numpy as np
-    from generator.sampler import weighted_sample
-
     if seed is not None:
         set_random_seed(seed)
 
-    distributions = _build_in_memory_distributions()
-
-    # Select pattern
-    if pattern is None:
-        hp_df = distributions["household_patterns"]
-        row = weighted_sample(hp_df, "weight").iloc[0]
-        pattern = str(row["pattern"])
-
-    # Build household
-    import uuid
-    metadata = PATTERN_METADATA.get(pattern, PATTERN_METADATA["other"])
-    expected_adults = metadata.get("expected_adults")
-    if isinstance(expected_adults, tuple):
-        expected_adults = expected_adults[0]
-
-    household = Household(
-        household_id=str(uuid.uuid4()),
-        state="HI",
-        year=2022,
-        pattern=pattern,
-        expected_adults=expected_adults,
-        expected_children_range=metadata.get("expected_children"),
-        expected_complexity=metadata.get("complexity"),
-    )
-
-    # Demographics
-    demo_gen = DemographicsGenerator(distributions)
-    adults = demo_gen.generate_adults(household)
-    household.members = adults
-
-    child_gen = ChildGenerator(distributions)
-    children = child_gen.generate_children(household)
-    household.members.extend(children)
-
-    # PII overlay
-    pii_gen = PIIGenerator(tax_year=2024)
-    pii_gen.overlay(household)
-
+    generator = HouseholdGenerator(state, year)
+    household = generator.generate_with_pii(pattern=pattern, seed=seed)
     return household
 
 
@@ -232,6 +66,17 @@ def main():
         help="Random seed for reproducibility",
     )
     parser.add_argument(
+        "--state",
+        default="HI",
+        help="State code (default: HI)",
+    )
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=2022,
+        help="PUMS data year (default: 2022)",
+    )
+    parser.add_argument(
         "--format",
         choices=["json", "text"],
         default="json",
@@ -244,7 +89,12 @@ def main():
         format="%(levelname)s: %(message)s",
     )
 
-    household = generate_household(pattern=args.pattern, seed=args.seed)
+    household = generate_household(
+        pattern=args.pattern,
+        seed=args.seed,
+        state=args.state,
+        year=args.year,
+    )
     data = household.to_dict()
 
     if args.format == "json":
