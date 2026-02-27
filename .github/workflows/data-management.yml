@@ -1,44 +1,88 @@
-# Extract PUMS distribution data for household generation.
+# Unified data management workflow: inventory existing data, extract new
+# distributions, or both.
 #
-# Downloads Census ACS PUMS microdata, extracts distribution tables,
-# and opens a PR with the new/updated SQLite file.
-#
-# Trigger: manual dispatch with state/year inputs, or matrix for multiple states.
-#
-# The raw PUMS CSVs (~400MB per state) are downloaded and discarded on the runner.
-# Only the small SQLite output (~1MB) is committed to the repo.
+# Replaces the separate "Data Inventory" and "Extract Distributions" workflows.
+# Dispatch-only — choose what you want to do via the action input.
 
-name: Extract Distributions
+name: Data Management
 
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: "What to do"
+        required: true
+        default: "inventory"
+        type: choice
+        options:
+          - inventory
+          - extract
+          - extract-and-inventory
       states:
         description: >
           Comma-separated state abbreviations (e.g., "HI" or "HI,CA,TX").
-          Each state runs as a separate matrix job.
-        required: true
+          Only used for extract actions.
+        required: false
         default: "HI"
         type: string
       year:
-        description: "ACS 5-Year PUMS data year"
-        required: true
+        description: "ACS 5-Year PUMS data year (extract only)"
+        required: false
         default: "2022"
         type: string
       parts:
-        description: "Extraction parts to run (space-separated, e.g., '1' or '1 2')"
-        required: true
+        description: "Extraction parts to run, space-separated (e.g., '1' or '1 2')"
+        required: false
         default: "1"
         type: string
       create_pr:
-        description: "Create a PR with the extracted data (vs. commit to branch)"
-        required: true
+        description: "Create a PR with extracted data (extract only)"
+        required: false
         default: true
         type: boolean
+      format:
+        description: "Inventory output format"
+        required: false
+        default: "markdown"
+        type: choice
+        options:
+          - markdown
+          - text
+          - json
 
 jobs:
-  # Parse the comma-separated states input into a JSON matrix
+  # ── Inventory existing data ────────────────────────────────────────
+  inventory:
+    name: Data inventory
+    if: inputs.action == 'inventory' || inputs.action == 'extract-and-inventory'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run data inventory
+        run: |
+          FORMAT="${{ inputs.format || 'markdown' }}"
+          python scripts/data_inventory.py \
+            --format "$FORMAT" \
+            --github-summary
+
+      - name: Print inventory to logs
+        run: |
+          echo "=== Distribution Data Inventory ==="
+          python scripts/data_inventory.py --format text
+          echo "==================================="
+
+  # ── Parse states into a matrix ─────────────────────────────────────
   prepare-matrix:
+    name: Prepare extraction matrix
+    if: inputs.action == 'extract' || inputs.action == 'extract-and-inventory'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -46,13 +90,15 @@ jobs:
       - name: Parse state list into matrix
         id: set-matrix
         run: |
-          # Convert "HI,CA,TX" → ["HI","CA","TX"]
           STATES="${{ inputs.states }}"
           JSON=$(echo "$STATES" | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr '[:lower:]' '[:upper:]' | jq -R . | jq -s -c .)
           echo "matrix={\"state\":$JSON}" >> "$GITHUB_OUTPUT"
           echo "Matrix: {\"state\":$JSON}"
 
+  # ── Extract distribution data ──────────────────────────────────────
   extract:
+    name: Extract ${{ matrix.state }}
+    if: inputs.action == 'extract' || inputs.action == 'extract-and-inventory'
     needs: prepare-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -129,13 +175,6 @@ jobs:
           path: data/distributions_*.sqlite
           retention-days: 90
 
-      # Store state info for the PR job
-      - name: Save extraction metadata
-        run: |
-          STATE_LOWER=$(echo "${{ matrix.state }}" | tr '[:upper:]' '[:lower:]')
-          DB_FILE="data/distributions_${STATE_LOWER}_${{ inputs.year }}.sqlite"
-          echo "$DB_FILE" > /tmp/db_file_path.txt
-
       - name: Upload extracted database for PR
         if: inputs.create_pr
         uses: actions/upload-artifact@v4
@@ -143,9 +182,10 @@ jobs:
           name: db-${{ matrix.state }}-${{ inputs.year }}
           path: data/distributions_*.sqlite
 
-  # Collect all extracted databases and create a single PR
+  # ── Create PR with extracted data ──────────────────────────────────
   create-pr:
-    if: inputs.create_pr
+    name: Create PR
+    if: inputs.create_pr && (inputs.action == 'extract' || inputs.action == 'extract-and-inventory')
     needs: extract
     runs-on: ubuntu-latest
     permissions:
@@ -196,12 +236,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          STATES="${{ inputs.states }}"
-          YEAR="${{ inputs.year }}"
-          PARTS="${{ inputs.parts }}"
-
           gh pr create \
-            --title "Extract distribution data: ${STATES} (${YEAR})" \
+            --title "Extract distribution data: ${{ inputs.states }} (${{ inputs.year }})" \
             --body "$(cat <<'PREOF'
           ## Distribution Data Extraction
 
@@ -222,6 +258,6 @@ jobs:
           3. Run `python scripts/data_inventory.py` locally after merging
 
           ---
-          *Generated by the Extract Distributions workflow.*
+          *Generated by the Data Management workflow.*
           PREOF
           )"
