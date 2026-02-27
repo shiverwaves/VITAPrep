@@ -1,5 +1,5 @@
-# Unified data management workflow: inventory existing data, extract new
-# distributions, or both.
+# Unified data management workflow: inventory existing data or extract new
+# distributions.
 #
 # Replaces the separate "Data Inventory" and "Extract Distributions" workflows.
 # Dispatch-only — choose what you want to do via the action input.
@@ -17,7 +17,6 @@ on:
         options:
           - inventory
           - extract
-          - extract-and-inventory
       states:
         description: >
           Comma-separated state abbreviations (e.g., "HI" or "HI,CA,TX").
@@ -54,7 +53,7 @@ jobs:
   # ── Inventory existing data ────────────────────────────────────────
   inventory:
     name: Data inventory
-    if: inputs.action == 'inventory' || inputs.action == 'extract-and-inventory'
+    if: inputs.action == 'inventory'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -82,7 +81,7 @@ jobs:
   # ── Parse states into a matrix ─────────────────────────────────────
   prepare-matrix:
     name: Prepare extraction matrix
-    if: inputs.action == 'extract' || inputs.action == 'extract-and-inventory'
+    if: inputs.action == 'extract'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -98,7 +97,7 @@ jobs:
   # ── Extract distribution data ──────────────────────────────────────
   extract:
     name: Extract ${{ matrix.state }}
-    if: inputs.action == 'extract' || inputs.action == 'extract-and-inventory'
+    if: inputs.action == 'extract'
     needs: prepare-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -185,7 +184,7 @@ jobs:
   # ── Create PR with extracted data ──────────────────────────────────
   create-pr:
     name: Create PR
-    if: inputs.create_pr && (inputs.action == 'extract' || inputs.action == 'extract-and-inventory')
+    if: inputs.create_pr && (inputs.action == 'extract')
     needs: extract
     runs-on: ubuntu-latest
     permissions:
