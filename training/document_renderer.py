@@ -2,9 +2,9 @@
 Document renderer — generates mock identity documents and tax forms.
 
 Uses Jinja2 templates + WeasyPrint to produce:
-- SSN card images (PNG)
-- Driver's license images (PNG)
-- State ID card images (PNG)
+- SSN card (PDF)
+- Driver's license (PDF)
+- State ID card (PDF)
 - Form 13614-C Part I (PDF, blank or pre-filled) — future
 - Form 1040 header (PDF) — future
 - W-2 forms (PDF) — future
@@ -80,22 +80,22 @@ class DocumentRenderer:
     # =================================================================
 
     def render_ssn_card(self, person: Person) -> Path:
-        """Render an SSN card as PNG.
+        """Render an SSN card as PDF.
 
         Args:
             person: Person with ssn and name fields populated.
 
         Returns:
-            Path to the generated PNG file.
+            Path to the generated PDF file.
         """
         template = self._env.get_template("ssn_card.html")
         html = template.render(
             ssn=person.ssn,
             full_name=person.full_legal_name(),
         )
-        filename = f"ssn_{person.person_id}.png"
+        filename = f"ssn_{person.person_id}.pdf"
         out_path = self.output_dir / filename
-        self._render_html_to_png(html, out_path)
+        self._render_html_to_pdf(html, out_path)
         logger.info("Rendered SSN card: %s", out_path)
         return out_path
 
@@ -104,13 +104,13 @@ class DocumentRenderer:
     # =================================================================
 
     def render_drivers_license(self, person: Person) -> Path:
-        """Render a driver's license as PNG.
+        """Render a driver's license as PDF.
 
         Args:
             person: Person with id_type='drivers_license' and PII populated.
 
         Returns:
-            Path to the generated PNG file.
+            Path to the generated PDF file.
         """
         return self._render_id_card(person, "drivers_license")
 
@@ -119,13 +119,13 @@ class DocumentRenderer:
     # =================================================================
 
     def render_state_id(self, person: Person) -> Path:
-        """Render a state identification card as PNG.
+        """Render a state identification card as PDF.
 
         Args:
             person: Person with id_type='state_id' and PII populated.
 
         Returns:
-            Path to the generated PNG file.
+            Path to the generated PDF file.
         """
         return self._render_id_card(person, "state_id")
 
@@ -140,7 +140,7 @@ class DocumentRenderer:
             person: Person with id_type and PII populated.
 
         Returns:
-            Path to generated PNG, or None if person has no ID.
+            Path to generated PDF, or None if person has no ID.
         """
         if person.id_type == "drivers_license":
             return self.render_drivers_license(person)
@@ -210,7 +210,7 @@ class DocumentRenderer:
             id_type: 'drivers_license' or 'state_id'.
 
         Returns:
-            Path to the generated PNG file.
+            Path to the generated PDF file.
         """
         if id_type == "state_id":
             template = self._env.get_template("state_id.html")
@@ -222,7 +222,6 @@ class DocumentRenderer:
         issue_date = _estimate_issue_date(person.id_expiry)
 
         # Determine if expired relative to a reasonable "current" date.
-        # Use the tax year + 1 April 15 as proxy (filing season).
         expired = False
         if person.id_expiry is not None:
             expired = person.id_expiry < date.today()
@@ -249,21 +248,21 @@ class DocumentRenderer:
         )
 
         label = "dl" if id_type == "drivers_license" else "sid"
-        filename = f"{label}_{person.person_id}.png"
+        filename = f"{label}_{person.person_id}.pdf"
         out_path = self.output_dir / filename
-        self._render_html_to_png(html, out_path)
+        self._render_html_to_pdf(html, out_path)
 
         doc_label = "driver's license" if id_type == "drivers_license" else "state ID"
         logger.info("Rendered %s: %s", doc_label, out_path)
         return out_path
 
     @staticmethod
-    def _render_html_to_png(html: str, out_path: Path) -> None:
-        """Convert an HTML string to a PNG file via WeasyPrint.
+    def _render_html_to_pdf(html: str, out_path: Path) -> None:
+        """Convert an HTML string to a PDF file via WeasyPrint.
 
         Args:
             html: Fully rendered HTML string.
-            out_path: Destination file path (.png).
+            out_path: Destination file path (.pdf).
 
         Raises:
             ImportError: If WeasyPrint is not installed.
@@ -282,6 +281,5 @@ class DocumentRenderer:
             string=html,
             base_url=str(_TEMPLATES_DIR),
         )
-        png_bytes = doc.write_png()
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(png_bytes)
+        doc.write_pdf(str(out_path))

@@ -352,33 +352,33 @@ class TestTemplateRendering:
 # =========================================================================
 
 class TestRendererWithMockedWeasyPrint:
-    """Test the renderer class by mocking the WeasyPrint HTML-to-PNG step."""
+    """Test the renderer class by mocking the WeasyPrint HTML-to-PDF step."""
 
     def _mock_render(self, renderer):
-        """Patch _render_html_to_png to write a dummy file."""
+        """Patch _render_html_to_pdf to write a dummy file."""
         def fake_render(html, out_path):
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text("FAKE_PNG")
-        return patch.object(renderer, "_render_html_to_png", side_effect=fake_render)
+            out_path.write_text("FAKE_PDF")
+        return patch.object(renderer, "_render_html_to_pdf", side_effect=fake_render)
 
     def test_render_ssn_card(self, renderer, adult_with_dl, output_dir) -> None:
         with self._mock_render(renderer):
             path = renderer.render_ssn_card(adult_with_dl)
         assert path.exists()
-        assert path.name == "ssn_p-1.png"
+        assert path.name == "ssn_p-1.pdf"
         assert path.parent == output_dir
 
     def test_render_drivers_license(self, renderer, adult_with_dl, output_dir) -> None:
         with self._mock_render(renderer):
             path = renderer.render_drivers_license(adult_with_dl)
         assert path.exists()
-        assert path.name == "dl_p-1.png"
+        assert path.name == "dl_p-1.pdf"
 
     def test_render_state_id(self, renderer, adult_with_state_id, output_dir) -> None:
         with self._mock_render(renderer):
             path = renderer.render_state_id(adult_with_state_id)
         assert path.exists()
-        assert path.name == "sid_p-2.png"
+        assert path.name == "sid_p-2.pdf"
 
     def test_render_photo_id_dispatches_to_dl(self, renderer, adult_with_dl) -> None:
         with self._mock_render(renderer):
@@ -431,31 +431,31 @@ class TestRendererWithMockedWeasyPrint:
 
 @skip_without_weasyprint
 class TestFullRendering:
-    """End-to-end rendering tests that produce real PNG files."""
+    """End-to-end rendering tests that produce real PDF files."""
 
-    def test_ssn_card_png_created(self, renderer, adult_with_dl, output_dir) -> None:
+    def test_ssn_card_pdf_created(self, renderer, adult_with_dl, output_dir) -> None:
         path = renderer.render_ssn_card(adult_with_dl)
         assert path.exists()
-        assert path.suffix == ".png"
-        # PNG files start with the PNG magic bytes
+        assert path.suffix == ".pdf"
+        # PDF files start with %PDF
         data = path.read_bytes()
-        assert data[:4] == b"\x89PNG"
+        assert data[:5] == b"%PDF-"
 
-    def test_dl_png_created(self, renderer, adult_with_dl, output_dir) -> None:
+    def test_dl_pdf_created(self, renderer, adult_with_dl, output_dir) -> None:
         path = renderer.render_drivers_license(adult_with_dl)
         assert path.exists()
         data = path.read_bytes()
-        assert data[:4] == b"\x89PNG"
+        assert data[:5] == b"%PDF-"
 
-    def test_state_id_png_created(self, renderer, adult_with_state_id, output_dir) -> None:
+    def test_state_id_pdf_created(self, renderer, adult_with_state_id, output_dir) -> None:
         path = renderer.render_state_id(adult_with_state_id)
         assert path.exists()
         data = path.read_bytes()
-        assert data[:4] == b"\x89PNG"
+        assert data[:5] == b"%PDF-"
 
-    def test_household_all_pngs(self, renderer, sample_household, output_dir) -> None:
+    def test_household_all_pdfs(self, renderer, sample_household, output_dir) -> None:
         paths = renderer.render_household_documents(sample_household)
         for label, path in paths.items():
             assert path.exists(), f"{label} missing"
             data = path.read_bytes()
-            assert data[:4] == b"\x89PNG", f"{label} is not a valid PNG"
+            assert data[:5] == b"%PDF-", f"{label} is not a valid PDF"

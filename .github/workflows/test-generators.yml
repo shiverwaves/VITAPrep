@@ -264,7 +264,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Document | File |" >> "$GITHUB_STEP_SUMMARY"
           echo "|----------|------|" >> "$GITHUB_STEP_SUMMARY"
-          for f in /tmp/rendered_docs/*.png; do
+          for f in /tmp/rendered_docs/*.pdf; do
             if [ -f "$f" ]; then
               NAME=$(basename "$f")
               SIZE=$(du -h "$f" | cut -f1)
@@ -279,7 +279,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rendered-documents
-          path: /tmp/rendered_docs/*.png
+          path: /tmp/rendered_docs/*.pdf
           retention-days: 14
 
       # ── Optional tests ───────────────────────────────────────────
