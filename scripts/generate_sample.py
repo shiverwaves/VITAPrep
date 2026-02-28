@@ -103,7 +103,7 @@ def main():
     parser.add_argument(
         "--render",
         action="store_true",
-        help="Render SSN cards and photo IDs as PNG files",
+        help="Render SSN cards and photo IDs as PDF files",
     )
     parser.add_argument(
         "--output-dir",
