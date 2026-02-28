@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+/* State ID card — same dimensions as DL (CR-80 at 2×: 648 × 408).
+   Visually distinguished by a different color scheme and "IDENTIFICATION CARD"
+   header instead of "DRIVER LICENSE". This mirrors real-world state IDs
+   which use the same card stock but a different banner color. */
+.id-card {
+    position: relative;
+    width: 648px;
+    height: 408px;
+    border: 2px solid #5c6b2c;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #f0f4e8 0%, #d8e4c4 30%, #f5f5f0 100%);
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 16px 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* State header bar */
+.id-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.id-state-name {
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #3a5c1a;
+    letter-spacing: 2px;
+}
+
+.id-doc-type {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #3a5c1a;
+    letter-spacing: 1px;
+    margin-top: 2px;
+}
+
+/* Photo placeholder */
+.id-photo {
+    position: absolute;
+    top: 60px;
+    right: 24px;
+    width: 120px;
+    height: 150px;
+    border: 1px solid #999;
+    background: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.id-photo-silhouette {
+    width: 80px;
+    height: 100px;
+    background: #bbb;
+    border-radius: 40px 40px 8px 8px;
+}
+
+/* Fields — reuse same layout as DL for consistency */
+.id-body {
+    margin-top: 4px;
+    max-width: 480px;
+}
+
+.id-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 4px;
+    align-items: baseline;
+}
+
+.id-field {
+    margin-bottom: 3px;
+}
+
+.id-label {
+    font-size: 8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #666;
+    letter-spacing: 0.5px;
+}
+
+.id-value {
+    font-size: 13px;
+    font-weight: bold;
+    color: #111;
+    letter-spacing: 0.5px;
+}
+
+.id-value.number {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 14px;
+    letter-spacing: 2px;
+}
+
+.id-name {
+    font-size: 15px;
+    font-weight: bold;
+    color: #111;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.id-address {
+    font-size: 11px;
+    color: #333;
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+/* Bottom details row */
+.id-details {
+    position: absolute;
+    bottom: 16px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    gap: 24px;
+}
+
+.id-detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.id-detail-label {
+    font-size: 7px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #888;
+}
+
+.id-detail-value {
+    font-size: 12px;
+    font-weight: bold;
+    color: #222;
+}
+
+/* Expired stamp */
+.id-expired-stamp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-20deg);
+    font-size: 36px;
+    font-weight: bold;
+    color: rgba(200, 0, 0, 0.3);
+    border: 4px solid rgba(200, 0, 0, 0.3);
+    padding: 4px 16px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    pointer-events: none;
+    z-index: 999;
+}
+</style>
+</head>
+<body>
+<div class="id-card">
+    <div class="watermark"></div>
+    {% if expired %}
+    <div class="id-expired-stamp">EXPIRED</div>
+    {% endif %}
+
+    <div class="id-header">
+        <div>
+            <div class="id-state-name">State of {{ state_name }}</div>
+            <div class="id-doc-type">Identification Card</div>
+        </div>
+    </div>
+
+    <div class="id-photo">
+        <div class="id-photo-silhouette"></div>
+    </div>
+
+    <div class="id-body">
+        <div class="id-field">
+            <div class="id-label">ID No.</div>
+            <div class="id-value number">{{ id_number }}</div>
+        </div>
+
+        <div class="id-row">
+            <div class="id-field">
+                <div class="id-label">Exp</div>
+                <div class="id-value">{{ expiry_formatted }}</div>
+            </div>
+        </div>
+
+        <div class="id-field">
+            <div class="id-label">Name</div>
+            <div class="id-name">{{ last_name }}, {{ first_name }}{% if middle_name %} {{ middle_initial }}{% endif %}{% if suffix %} {{ suffix }}{% endif %}</div>
+        </div>
+
+        <div class="id-field">
+            <div class="id-label">Address</div>
+            <div class="id-address">
+                {{ address_street }}{% if address_apt %}, {{ address_apt }}{% endif %}<br>
+                {{ address_city }}, {{ address_state }} {{ address_zip }}
+            </div>
+        </div>
+    </div>
+
+    <div class="id-details">
+        <div class="id-detail-item">
+            <div class="id-detail-label">DOB</div>
+            <div class="id-detail-value">{{ dob_formatted }}</div>
+        </div>
+        <div class="id-detail-item">
+            <div class="id-detail-label">Sex</div>
+            <div class="id-detail-value">{{ sex }}</div>
+        </div>
+        <div class="id-detail-item">
+            <div class="id-detail-label">ISS</div>
+            <div class="id-detail-value">{{ issue_formatted }}</div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

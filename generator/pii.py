@@ -306,8 +306,17 @@ class PIIGenerator:
     def _generate_id_document(
         self, person: Person, household: Household,
     ) -> None:
-        """Generate driver's license / state ID details for an adult."""
-        person.id_type = "drivers_license"
+        """Generate driver's license or state ID details for an adult.
+
+        Probability split:
+        - 85% driver's license
+        - 15% state-issued identification card (non-drivers: elderly,
+          disabled, urban residents without a car)
+        """
+        if random.random() < 0.15:
+            person.id_type = "state_id"
+        else:
+            person.id_type = "drivers_license"
         person.id_state = household.state
 
         # DL number in state-specific format
