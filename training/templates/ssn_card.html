@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+/* SSN card: 3.375" × 2.125" at 96 DPI ≈ 324px × 204px.
+   We render at 2× for sharper output (648 × 408). */
+.ssn-card {
+    position: relative;
+    width: 648px;
+    height: 408px;
+    border: 2px solid #1a3a5c;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f0f4f8 0%, #dce6f0 100%);
+    font-family: "Courier New", Courier, monospace;
+    padding: 24px 32px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.ssn-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.ssn-header-icon {
+    width: 40px;
+    height: 40px;
+    background: #1a3a5c;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ssn-header-icon::after {
+    content: "★";
+    color: white;
+    font-size: 20px;
+}
+
+.ssn-header-text {
+    font-family: Arial, Helvetica, sans-serif;
+    color: #1a3a5c;
+}
+
+.ssn-header-text .line1 {
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ssn-header-text .line2 {
+    font-size: 18px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #1a3a5c;
+}
+
+.ssn-number {
+    font-size: 28px;
+    font-weight: bold;
+    color: #1a3a5c;
+    letter-spacing: 4px;
+    margin: 24px 0 16px 0;
+    text-align: center;
+}
+
+.ssn-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #2a2a2a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.ssn-footer {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8px;
+    color: #666;
+    text-align: center;
+    margin-top: auto;
+    position: absolute;
+    bottom: 16px;
+    left: 32px;
+    right: 32px;
+}
+
+.ssn-footer .established {
+    font-size: 9px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ssn-footer .signature-line {
+    border-top: 1px solid #999;
+    padding-top: 4px;
+    margin-top: 8px;
+    text-align: right;
+    font-style: italic;
+}
+</style>
+</head>
+<body>
+<div class="ssn-card">
+    <div class="watermark"></div>
+
+    <div class="ssn-header">
+        <div class="ssn-header-icon"></div>
+        <div class="ssn-header-text">
+            <div class="line1">Social Security</div>
+            <div class="line2">Account Number</div>
+        </div>
+    </div>
+
+    <div class="ssn-number">{{ ssn }}</div>
+
+    <div class="ssn-name">{{ full_name }}</div>
+
+    <div class="ssn-footer">
+        <div class="established">THIS NUMBER HAS BEEN ESTABLISHED FOR</div>
+        <div class="signature-line">Signature ______________________________</div>
+    </div>
+</div>
+</body>
+</html>

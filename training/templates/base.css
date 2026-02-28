@@ -1,5 +1,19 @@
 /* Shared styles for all rendered documents */
-/* Watermark overlay — applied to every document */
+
+/* Reset — WeasyPrint renders from scratch so keep this minimal */
+* {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: white;
+    display: inline-block;
+}
+
+/* Watermark overlay — applied to every document.
+   Uses ::after pseudo-element so the text appears without
+   needing extra markup in each template. */
 .watermark {
     position: absolute;
     top: 50%;
@@ -13,5 +27,5 @@
     z-index: 1000;
 }
 .watermark::after {
-    content: "SAMPLE — FOR TRAINING USE ONLY";
+    content: "SAMPLE \2014  FOR TRAINING USE ONLY";
 }

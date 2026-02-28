@@ -355,14 +355,14 @@ class TestPhoneEmail:
 # =========================================================================
 
 class TestIDDocuments:
-    """Adults get driver's licenses; children get nothing."""
+    """Adults get a photo ID (DL or state ID); children get nothing."""
 
-    def test_adults_have_dl(self, pii_gen: PIIGenerator) -> None:
+    def test_adults_have_photo_id(self, pii_gen: PIIGenerator) -> None:
         hh = _make_married_couple_household()
         pii_gen.overlay(hh)
         for person in hh.members:
             if person.is_adult():
-                assert person.id_type == "drivers_license"
+                assert person.id_type in ("drivers_license", "state_id")
                 assert person.id_state == "HI"
                 assert person.id_number != ""
                 assert person.id_expiry is not None

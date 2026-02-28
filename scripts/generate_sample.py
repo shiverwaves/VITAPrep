@@ -11,6 +11,7 @@ Usage:
     python scripts/generate_sample.py                          # random pattern
     python scripts/generate_sample.py --pattern single_parent  # specific pattern
     python scripts/generate_sample.py --seed 42 --format json  # reproducible
+    python scripts/generate_sample.py --render --output-dir /tmp/docs  # render docs
 """
 
 import argparse
@@ -49,6 +50,23 @@ def generate_household(pattern=None, seed=None, state="HI", year=2022):
     return household
 
 
+def render_documents(household, output_dir):
+    """Render SSN cards and photo IDs for all household members.
+
+    Args:
+        household: Household with PII populated.
+        output_dir: Directory to write rendered PNG files.
+
+    Returns:
+        Dict mapping document labels to file paths.
+    """
+    from training.document_renderer import DocumentRenderer
+
+    renderer = DocumentRenderer(output_dir=output_dir)
+    paths = renderer.render_household_documents(household)
+    return paths
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate a sample household with PII"
@@ -82,6 +100,16 @@ def main():
         default="json",
         help="Output format (default: json)",
     )
+    parser.add_argument(
+        "--render",
+        action="store_true",
+        help="Render SSN cards and photo IDs as PNG files",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Directory for rendered documents (default: /tmp/vita_docs)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -110,6 +138,14 @@ def main():
             if m.get("suffix"):
                 name += f" {m['suffix']}"
             print(f"  {i}. {name} ({m['relationship']}, {m['age']}{m['sex']}) SSN: {m['ssn']} DOB: {m['dob']}")
+
+    if args.render:
+        output_dir = args.output_dir or "/tmp/vita_docs"
+        print(f"\nRendering documents to {output_dir}/ ...", file=sys.stderr)
+        paths = render_documents(household, output_dir)
+        print(f"Rendered {len(paths)} documents:", file=sys.stderr)
+        for label, path in sorted(paths.items()):
+            print(f"  {label}: {path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

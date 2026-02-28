@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+/* Driver's license: standard CR-80 card 3.375" × 2.125" at 2× → 648 × 408 */
+.dl-card {
+    position: relative;
+    width: 648px;
+    height: 408px;
+    border: 2px solid #2c5f8a;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #e8f0f8 0%, #c4d8ec 30%, #f5f5f5 100%);
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 16px 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* State header bar */
+.dl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.dl-state-name {
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #1a3a5c;
+    letter-spacing: 2px;
+}
+
+.dl-doc-type {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #1a3a5c;
+    letter-spacing: 1px;
+    margin-top: 2px;
+}
+
+/* Photo placeholder */
+.dl-photo {
+    position: absolute;
+    top: 60px;
+    right: 24px;
+    width: 120px;
+    height: 150px;
+    border: 1px solid #999;
+    background: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dl-photo-silhouette {
+    width: 80px;
+    height: 100px;
+    background: #bbb;
+    border-radius: 40px 40px 8px 8px;
+}
+
+/* Fields */
+.dl-body {
+    margin-top: 4px;
+    max-width: 480px;
+}
+
+.dl-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 4px;
+    align-items: baseline;
+}
+
+.dl-field {
+    margin-bottom: 3px;
+}
+
+.dl-label {
+    font-size: 8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #666;
+    letter-spacing: 0.5px;
+}
+
+.dl-value {
+    font-size: 13px;
+    font-weight: bold;
+    color: #111;
+    letter-spacing: 0.5px;
+}
+
+.dl-value.number {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 14px;
+    letter-spacing: 2px;
+}
+
+.dl-name {
+    font-size: 15px;
+    font-weight: bold;
+    color: #111;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.dl-address {
+    font-size: 11px;
+    color: #333;
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+/* Bottom details row */
+.dl-details {
+    position: absolute;
+    bottom: 16px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    gap: 24px;
+}
+
+.dl-detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.dl-detail-label {
+    font-size: 7px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #888;
+}
+
+.dl-detail-value {
+    font-size: 12px;
+    font-weight: bold;
+    color: #222;
+}
+
+/* Expired stamp */
+.dl-expired-stamp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-20deg);
+    font-size: 36px;
+    font-weight: bold;
+    color: rgba(200, 0, 0, 0.3);
+    border: 4px solid rgba(200, 0, 0, 0.3);
+    padding: 4px 16px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    pointer-events: none;
+    z-index: 999;
+}
+</style>
+</head>
+<body>
+<div class="dl-card">
+    <div class="watermark"></div>
+    {% if expired %}
+    <div class="dl-expired-stamp">EXPIRED</div>
+    {% endif %}
+
+    <div class="dl-header">
+        <div>
+            <div class="dl-state-name">State of {{ state_name }}</div>
+            <div class="dl-doc-type">Driver License</div>
+        </div>
+    </div>
+
+    <div class="dl-photo">
+        <div class="dl-photo-silhouette"></div>
+    </div>
+
+    <div class="dl-body">
+        <div class="dl-field">
+            <div class="dl-label">DL</div>
+            <div class="dl-value number">{{ id_number }}</div>
+        </div>
+
+        <div class="dl-row">
+            <div class="dl-field">
+                <div class="dl-label">Class</div>
+                <div class="dl-value">{{ dl_class }}</div>
+            </div>
+            <div class="dl-field">
+                <div class="dl-label">Exp</div>
+                <div class="dl-value">{{ expiry_formatted }}</div>
+            </div>
+        </div>
+
+        <div class="dl-field">
+            <div class="dl-label">Name</div>
+            <div class="dl-name">{{ last_name }}, {{ first_name }}{% if middle_name %} {{ middle_initial }}{% endif %}{% if suffix %} {{ suffix }}{% endif %}</div>
+        </div>
+
+        <div class="dl-field">
+            <div class="dl-label">Address</div>
+            <div class="dl-address">
+                {{ address_street }}{% if address_apt %}, {{ address_apt }}{% endif %}<br>
+                {{ address_city }}, {{ address_state }} {{ address_zip }}
+            </div>
+        </div>
+    </div>
+
+    <div class="dl-details">
+        <div class="dl-detail-item">
+            <div class="dl-detail-label">DOB</div>
+            <div class="dl-detail-value">{{ dob_formatted }}</div>
+        </div>
+        <div class="dl-detail-item">
+            <div class="dl-detail-label">Sex</div>
+            <div class="dl-detail-value">{{ sex }}</div>
+        </div>
+        <div class="dl-detail-item">
+            <div class="dl-detail-label">ISS</div>
+            <div class="dl-detail-value">{{ issue_formatted }}</div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
