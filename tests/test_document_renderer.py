@@ -1,13 +1,11 @@
-"""Tests for training/document_renderer.py — Sprint 5.
+"""Tests for training/document_renderer.py.
 
-Tests the DocumentRenderer class, templates, and Jinja2 rendering.
-WeasyPrint tests are skipped if the library is not installed.
+Tests the DocumentRenderer class, Jinja2 templates, and HTML rendering.
 """
 
 import re
 from datetime import date
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,37 +21,13 @@ from training.document_renderer import (
 
 
 # =========================================================================
-# Check if WeasyPrint is available
-# =========================================================================
-
-try:
-    import weasyprint  # noqa: F401
-    HAS_WEASYPRINT = True
-except ImportError:
-    HAS_WEASYPRINT = False
-
-skip_without_weasyprint = pytest.mark.skipif(
-    not HAS_WEASYPRINT,
-    reason="WeasyPrint not installed",
-)
-
-
-# =========================================================================
 # Fixtures
 # =========================================================================
 
 @pytest.fixture
-def output_dir(tmp_path: Path) -> Path:
-    """Temporary directory for rendered output."""
-    d = tmp_path / "docs"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def renderer(output_dir: Path) -> DocumentRenderer:
-    """DocumentRenderer pointing at a temp directory."""
-    return DocumentRenderer(output_dir=str(output_dir))
+def renderer(tmp_path: Path) -> DocumentRenderer:
+    """DocumentRenderer instance."""
+    return DocumentRenderer(output_dir=str(tmp_path / "docs"))
 
 
 @pytest.fixture
@@ -156,7 +130,7 @@ def sample_household(adult_with_dl, adult_with_state_id, child) -> Household:
 
 
 # =========================================================================
-# Helper function tests (no WeasyPrint needed)
+# Helper function tests
 # =========================================================================
 
 class TestHelpers:
@@ -186,7 +160,7 @@ class TestHelpers:
 
 
 # =========================================================================
-# Jinja2 template rendering (HTML output, no WeasyPrint)
+# Jinja2 template rendering (HTML output)
 # =========================================================================
 
 class TestTemplateRendering:
@@ -237,7 +211,6 @@ class TestTemplateRendering:
         assert "Hawaii" in html
         assert "Driver License" in html
         assert "H12345678" in html
-        # Name rendered as-is; CSS text-transform uppercases visually
         assert "Smith" in html
         assert "John" in html
         assert "Honolulu" in html
@@ -317,7 +290,6 @@ class TestTemplateRendering:
         assert "Hawaii" in html
         assert "Identification Card" in html
         assert "H87654321" in html
-        # Name rendered as-is; CSS text-transform uppercases visually
         assert "Smith" in html
         assert "Jane" in html
         assert "Driver License" not in html
@@ -348,114 +320,45 @@ class TestTemplateRendering:
 
 
 # =========================================================================
-# DocumentRenderer methods (mock WeasyPrint)
+# DocumentRenderer HTML methods
 # =========================================================================
 
-class TestRendererWithMockedWeasyPrint:
-    """Test the renderer class by mocking the WeasyPrint HTML-to-PDF step."""
+class TestRendererHTMLMethods:
+    """Test the renderer's HTML rendering methods."""
 
-    def _mock_render(self, renderer):
-        """Patch _render_html_to_pdf to write a dummy file."""
-        def fake_render(html, out_path):
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text("FAKE_PDF")
-        return patch.object(renderer, "_render_html_to_pdf", side_effect=fake_render)
+    def test_render_ssn_card_html(self, renderer, adult_with_dl) -> None:
+        html = renderer.render_ssn_card_html(adult_with_dl)
+        assert "900-12-3456" in html
+        assert "John Robert Smith" in html
 
-    def test_render_ssn_card(self, renderer, adult_with_dl, output_dir) -> None:
-        with self._mock_render(renderer):
-            path = renderer.render_ssn_card(adult_with_dl)
-        assert path.exists()
-        assert path.name == "ssn_p-1.pdf"
-        assert path.parent == output_dir
+    def test_render_photo_id_html_dl(self, renderer, adult_with_dl) -> None:
+        html = renderer.render_photo_id_html(adult_with_dl)
+        assert html is not None
+        assert "Driver License" in html
+        assert "H12345678" in html
+        assert "Smith" in html
 
-    def test_render_drivers_license(self, renderer, adult_with_dl, output_dir) -> None:
-        with self._mock_render(renderer):
-            path = renderer.render_drivers_license(adult_with_dl)
-        assert path.exists()
-        assert path.name == "dl_p-1.pdf"
+    def test_render_photo_id_html_state_id(self, renderer, adult_with_state_id) -> None:
+        html = renderer.render_photo_id_html(adult_with_state_id)
+        assert html is not None
+        assert "Identification Card" in html
+        assert "H87654321" in html
 
-    def test_render_state_id(self, renderer, adult_with_state_id, output_dir) -> None:
-        with self._mock_render(renderer):
-            path = renderer.render_state_id(adult_with_state_id)
-        assert path.exists()
-        assert path.name == "sid_p-2.pdf"
+    def test_render_photo_id_html_no_id(self, renderer, child) -> None:
+        html = renderer.render_photo_id_html(child)
+        assert html is None
 
-    def test_render_photo_id_dispatches_to_dl(self, renderer, adult_with_dl) -> None:
-        with self._mock_render(renderer):
-            path = renderer.render_photo_id(adult_with_dl)
-        assert path is not None
-        assert "dl_" in path.name
-
-    def test_render_photo_id_dispatches_to_state_id(self, renderer, adult_with_state_id) -> None:
-        with self._mock_render(renderer):
-            path = renderer.render_photo_id(adult_with_state_id)
-        assert path is not None
-        assert "sid_" in path.name
-
-    def test_render_photo_id_returns_none_for_no_id(self, renderer, child) -> None:
-        path = renderer.render_photo_id(child)
-        assert path is None
-
-    def test_render_household_documents(self, renderer, sample_household, output_dir) -> None:
-        with self._mock_render(renderer):
-            paths = renderer.render_household_documents(sample_household)
-
-        # 3 SSN cards (all members) + 2 photo IDs (2 adults)
-        assert len(paths) == 5
-        assert "ssn_p-1" in paths
-        assert "ssn_p-2" in paths
-        assert "ssn_p-3" in paths
-        assert "id_p-1" in paths   # DL
-        assert "id_p-2" in paths   # State ID
-
-    def test_render_household_documents_files_exist(
-        self, renderer, sample_household, output_dir,
-    ) -> None:
-        with self._mock_render(renderer):
-            paths = renderer.render_household_documents(sample_household)
-        for label, path in paths.items():
-            assert path.exists(), f"{label}: {path} does not exist"
-
-    def test_future_stubs_raise(self, renderer, sample_household, adult_with_dl) -> None:
-        with pytest.raises(NotImplementedError):
-            renderer.render_intake_form(sample_household)
-        with pytest.raises(NotImplementedError):
-            renderer.render_w2(adult_with_dl)
-        with pytest.raises(NotImplementedError):
-            renderer.render_1040_header(sample_household)
-
-
-# =========================================================================
-# Full rendering (requires WeasyPrint)
-# =========================================================================
-
-@skip_without_weasyprint
-class TestFullRendering:
-    """End-to-end rendering tests that produce real PDF files."""
-
-    def test_ssn_card_pdf_created(self, renderer, adult_with_dl, output_dir) -> None:
-        path = renderer.render_ssn_card(adult_with_dl)
-        assert path.exists()
-        assert path.suffix == ".pdf"
-        # PDF files start with %PDF
-        data = path.read_bytes()
-        assert data[:5] == b"%PDF-"
-
-    def test_dl_pdf_created(self, renderer, adult_with_dl, output_dir) -> None:
-        path = renderer.render_drivers_license(adult_with_dl)
-        assert path.exists()
-        data = path.read_bytes()
-        assert data[:5] == b"%PDF-"
-
-    def test_state_id_pdf_created(self, renderer, adult_with_state_id, output_dir) -> None:
-        path = renderer.render_state_id(adult_with_state_id)
-        assert path.exists()
-        data = path.read_bytes()
-        assert data[:5] == b"%PDF-"
-
-    def test_household_all_pdfs(self, renderer, sample_household, output_dir) -> None:
-        paths = renderer.render_household_documents(sample_household)
-        for label, path in paths.items():
-            assert path.exists(), f"{label} missing"
-            data = path.read_bytes()
-            assert data[:5] == b"%PDF-", f"{label} is not a valid PDF"
+    def test_render_id_card_html_expired(self, renderer) -> None:
+        person = Person(
+            person_id="p-exp",
+            id_type="drivers_license",
+            id_state="HI",
+            id_number="H00000001",
+            id_expiry=date(2020, 1, 1),
+            legal_first_name="Old",
+            legal_last_name="Timer",
+            id_address=Address(street="1 St", city="Hilo", state="HI", zip_code="96720"),
+        )
+        html = renderer.render_photo_id_html(person)
+        assert html is not None
+        assert "EXPIRED" in html

@@ -1,16 +1,13 @@
 """
-Form field name constants for the 13614-C Part I fillable PDF.
+Form field name constants for the 13614-C Part I.
 
 These constants define the contract between:
-- build_form_template.py (creates the PDF with these field names)
-- form_populator.py (fills field values for review mode)
-- grader.py (reads submitted PDF fields to grade)
+- form_populator.py (builds field values for the answer key)
+- the HTML intake form (uses these names as input field IDs)
+- grader.py (compares submitted values against the answer key)
 
 Field names use dot-separated namespaces matching form sections:
     section.subsection.field_name
-
-All constants are plain strings so they can be serialized to JSON
-and used as PDF AcroForm field names.
 """
 
 from typing import Dict, List

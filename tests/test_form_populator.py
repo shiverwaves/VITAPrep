@@ -1,10 +1,8 @@
-"""Tests for the form populator — Sprint 6 Step 2.
+"""Tests for the form populator.
 
 Validates:
 - build_field_values() maps household data to correct field names/values
-- populate_form() produces a valid filled PDF
-- pypdf can read back the filled values (round-trip)
-- Edge cases: no spouse, no dependents, multiple dependents, overrides
+- Edge cases: no spouse, no dependents, multiple dependents
 """
 
 from datetime import date
@@ -12,7 +10,6 @@ from pathlib import Path
 from typing import Dict
 
 import pytest
-from pypdf import PdfReader
 
 from generator.models import (
     Address,
@@ -58,7 +55,6 @@ from training.form_fields import (
 )
 from training.form_populator import (
     build_field_values,
-    populate_form,
     _format_date,
     _middle_initial,
     _relationship_label,
@@ -68,11 +64,6 @@ from training.form_populator import (
 # =========================================================================
 # Fixtures
 # =========================================================================
-
-TEMPLATE_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "training" / "templates" / "form_13614c_p1.pdf"
-)
 
 
 @pytest.fixture
@@ -318,7 +309,7 @@ class TestGetDependents:
 # =========================================================================
 
 class TestBuildFieldValues:
-    """Test the household → field value mapping."""
+    """Test the household -> field value mapping."""
 
     def test_single_adult_section_a(
         self, single_adult_household: Household,
@@ -464,96 +455,3 @@ class TestBuildFieldValues:
     def test_apt_empty_when_none(self, married_household: Household) -> None:
         vals = build_field_values(married_household)
         assert vals.get("addr.apt") == ""
-
-
-# =========================================================================
-# populate_form PDF round-trip tests
-# =========================================================================
-
-class TestPopulateForm:
-    """Test populate_form() end-to-end with PDF round-trip."""
-
-    def test_creates_file(
-        self, tmp_path: Path, single_adult_household: Household,
-    ) -> None:
-        out = tmp_path / "filled.pdf"
-        result = populate_form(single_adult_household, out)
-        assert result == out
-        assert out.exists()
-
-    def test_output_is_pdf(
-        self, tmp_path: Path, single_adult_household: Household,
-    ) -> None:
-        out = tmp_path / "filled.pdf"
-        populate_form(single_adult_household, out)
-        assert out.read_bytes()[:5] == b"%PDF-"
-
-    def test_roundtrip_text_fields(
-        self, tmp_path: Path, single_adult_household: Household,
-    ) -> None:
-        out = tmp_path / "filled.pdf"
-        populate_form(single_adult_household, out)
-
-        reader = PdfReader(str(out))
-        fields = reader.get_fields()
-        assert fields is not None
-
-        assert fields[YOU_FIRST_NAME].get("/V") == "Jane"
-        assert fields[YOU_LAST_NAME].get("/V") == "Doe"
-        assert fields[YOU_DOB].get("/V") == "05/15/1992"
-        assert fields[YOU_SSN].get("/V") == "900-12-3456"
-        assert fields[ADDR_STREET].get("/V") == "123 Aloha St"
-        assert fields[ADDR_CITY].get("/V") == "Honolulu"
-
-    def test_roundtrip_spouse_fields(
-        self, tmp_path: Path, married_household: Household,
-    ) -> None:
-        out = tmp_path / "filled.pdf"
-        populate_form(married_household, out)
-
-        reader = PdfReader(str(out))
-        fields = reader.get_fields()
-        assert fields[SPOUSE_FIRST_NAME].get("/V") == "Mary"
-        assert fields[SPOUSE_SSN].get("/V") == "900-22-2222"
-
-    def test_roundtrip_dependent_fields(
-        self, tmp_path: Path, married_household: Household,
-    ) -> None:
-        out = tmp_path / "filled.pdf"
-        populate_form(married_household, out)
-
-        reader = PdfReader(str(out))
-        fields = reader.get_fields()
-        # First dependent row = Emma (older)
-        assert fields[dep_field(0, DEP_FIRST_NAME)].get("/V") == "Emma"
-        assert fields[dep_field(1, DEP_FIRST_NAME)].get("/V") == "Jake"
-
-    def test_field_overrides(
-        self, tmp_path: Path, single_adult_household: Household,
-    ) -> None:
-        out = tmp_path / "override.pdf"
-        populate_form(
-            single_adult_household, out,
-            field_overrides={YOU_FIRST_NAME: "WRONG_NAME"},
-        )
-
-        reader = PdfReader(str(out))
-        fields = reader.get_fields()
-        assert fields[YOU_FIRST_NAME].get("/V") == "WRONG_NAME"
-
-    def test_creates_parent_dirs(
-        self, tmp_path: Path, single_adult_household: Household,
-    ) -> None:
-        out = tmp_path / "deep" / "nested" / "dir" / "form.pdf"
-        populate_form(single_adult_household, out)
-        assert out.exists()
-
-    def test_missing_template_raises(
-        self, tmp_path: Path, single_adult_household: Household,
-    ) -> None:
-        out = tmp_path / "form.pdf"
-        with pytest.raises(FileNotFoundError, match="Template not found"):
-            populate_form(
-                single_adult_household, out,
-                template_path=Path("/nonexistent/template.pdf"),
-            )
