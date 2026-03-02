@@ -1,15 +1,5 @@
 FROM python:3.11-slim
 
-# WeasyPrint system dependencies (pango, harfbuzz, font rendering)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libffi-dev \
-    libcairo2 \
-    fonts-dejavu-core \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY requirements.txt .
@@ -17,7 +7,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# data/scenarios.sqlite is created at runtime in the volume
+# Mount ./data to provide distribution DBs and persist runtime scenarios.
+# Any .sqlite files added to data/ (e.g. distributions_ca_2023.sqlite)
+# are automatically available without rebuilding.
 VOLUME ["/app/data"]
 
 EXPOSE 8000
