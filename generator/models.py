@@ -337,6 +337,21 @@ class FilingUnit:
 
 
 @dataclass
+class ClientFact:
+    """A verbal fact the client provides during the VITA intake interview.
+
+    These are facts that cannot be verified from identity documents alone
+    and must be obtained by asking the client directly.
+    """
+    category: str = ""  # "citizenship", "contact", "employment", "dependent", "filing"
+    question: str = ""  # What the volunteer would ask
+    answer: str = ""  # What the client responds
+    form_field: str = ""  # PDF field name this maps to
+    person_id: str = ""  # Which person this fact is about
+    required: bool = True  # Whether this fact is needed to complete the form
+
+
+@dataclass
 class InjectedError:
     """A deliberate discrepancy seeded for verification exercises."""
     error_id: str = ""
@@ -371,7 +386,8 @@ class Scenario:
     difficulty: str = ""  # "easy", "medium", "hard"
     household: Optional[Household] = None
     injected_errors: List[InjectedError] = field(default_factory=list)
-    document_paths: dict = field(default_factory=dict)  # {"ssn_primary": "/path/to.png", ...}
+    client_facts: List[ClientFact] = field(default_factory=list)
+    document_paths: dict = field(default_factory=dict)  # {"ssn_primary": "/path/to.pdf", ...}
     created_at: Optional[str] = None
 
 
