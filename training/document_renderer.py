@@ -79,6 +79,21 @@ class DocumentRenderer:
     # SSN Card
     # =================================================================
 
+    def render_ssn_card_html(self, person: Person) -> str:
+        """Render an SSN card as an HTML string for browser display.
+
+        Args:
+            person: Person with ssn and name fields populated.
+
+        Returns:
+            Rendered HTML string.
+        """
+        template = self._env.get_template("ssn_card.html")
+        return template.render(
+            ssn=person.ssn,
+            full_name=person.full_legal_name(),
+        )
+
     def render_ssn_card(self, person: Person) -> Path:
         """Render an SSN card as PDF.
 
@@ -88,11 +103,7 @@ class DocumentRenderer:
         Returns:
             Path to the generated PDF file.
         """
-        template = self._env.get_template("ssn_card.html")
-        html = template.render(
-            ssn=person.ssn,
-            full_name=person.full_legal_name(),
-        )
+        html = self.render_ssn_card_html(person)
         filename = f"ssn_{person.person_id}.pdf"
         out_path = self.output_dir / filename
         self._render_html_to_pdf(html, out_path)
@@ -202,15 +213,15 @@ class DocumentRenderer:
     # Internal helpers
     # =================================================================
 
-    def _render_id_card(self, person: Person, id_type: str) -> Path:
-        """Render a DL or state ID card using the appropriate template.
+    def _render_id_card_html(self, person: Person, id_type: str) -> str:
+        """Render a DL or state ID card as an HTML string.
 
         Args:
             person: Person with PII and ID fields populated.
             id_type: 'drivers_license' or 'state_id'.
 
         Returns:
-            Path to the generated PDF file.
+            Rendered HTML string.
         """
         if id_type == "state_id":
             template = self._env.get_template("state_id.html")
@@ -221,12 +232,11 @@ class DocumentRenderer:
         state_name = _STATE_NAMES.get(person.id_state, person.id_state)
         issue_date = _estimate_issue_date(person.id_expiry)
 
-        # Determine if expired relative to a reasonable "current" date.
         expired = False
         if person.id_expiry is not None:
             expired = person.id_expiry < date.today()
 
-        html = template.render(
+        return template.render(
             state_name=state_name,
             id_number=person.id_number,
             dl_class="3",
@@ -246,6 +256,33 @@ class DocumentRenderer:
             sex=person.sex,
             expired=expired,
         )
+
+    def render_photo_id_html(self, person: Person) -> Optional[str]:
+        """Render the person's photo ID as HTML based on id_type.
+
+        Args:
+            person: Person with id_type and PII populated.
+
+        Returns:
+            Rendered HTML string, or None if person has no ID.
+        """
+        if person.id_type == "drivers_license":
+            return self._render_id_card_html(person, "drivers_license")
+        elif person.id_type == "state_id":
+            return self._render_id_card_html(person, "state_id")
+        return None
+
+    def _render_id_card(self, person: Person, id_type: str) -> Path:
+        """Render a DL or state ID card using the appropriate template.
+
+        Args:
+            person: Person with PII and ID fields populated.
+            id_type: 'drivers_license' or 'state_id'.
+
+        Returns:
+            Path to the generated PDF file.
+        """
+        html = self._render_id_card_html(person, id_type)
 
         label = "dl" if id_type == "drivers_license" else "sid"
         filename = f"{label}_{person.person_id}.pdf"
