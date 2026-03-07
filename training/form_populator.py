@@ -1,24 +1,17 @@
 """
-Form populator — fills the blank 13614-C Part I PDF with household data.
+Form field value builder — maps household data to 13614-C field names.
 
-Takes a ``Household`` (with PII populated) and the blank template PDF,
-clones it via pypdf, and writes the correct values into every AcroForm field.
-
-Two uses:
-1. **Answer key** — the ground-truth filled form used by the grader.
-2. **Review mode handout** — given to the student (may later have errors
-   injected by ``error_injector.py``).
+Produces a dict of ``{field_name: value}`` from a Household, used by:
+1. The interactive HTML form (pre-filling in verify mode).
+2. The grader (answer key via ``build_field_values``).
 
 The field name constants from ``training.form_fields`` are the shared
-contract between this module, the template builder, and the grader.
+contract between this module, the HTML form, and the grader.
 """
 
 import logging
 from datetime import date
-from pathlib import Path
 from typing import Dict, List, Optional
-
-from pypdf import PdfReader, PdfWriter
 
 from generator.models import (
     FilingStatus,
@@ -51,7 +44,6 @@ from training.form_fields import (
     MAX_DEPENDENTS,
     NOT_CLAIMED_AS_DEPENDENT,
     NOT_PRIOR_YEAR_DEPENDENT,
-    PRIOR_YEAR_DEPENDENT,
     SPOUSE_DOB,
     SPOUSE_FIRST_NAME,
     SPOUSE_JOB_TITLE,
@@ -64,7 +56,6 @@ from training.form_fields import (
     YOU_JOB_TITLE,
     YOU_LAST_NAME,
     YOU_MIDDLE_INITIAL,
-    YOU_NOT_US_CITIZEN,
     YOU_PHONE,
     YOU_SSN,
     YOU_US_CITIZEN,
@@ -73,12 +64,7 @@ from training.form_fields import (
 
 logger = logging.getLogger(__name__)
 
-# Default template location (committed artifact from build_form_template.py)
-_DEFAULT_TEMPLATE = (
-    Path(__file__).resolve().parent / "templates" / "form_13614c_p1.pdf"
-)
-
-# Mapping from FilingStatus enum to PDF radio button export values
+# Mapping from FilingStatus enum to form radio button values
 _FILING_STATUS_MAP: Dict[FilingStatus, str] = {
     FilingStatus.SINGLE: FS_SINGLE,
     FilingStatus.MARRIED_FILING_JOINTLY: FS_MFJ,
@@ -135,10 +121,10 @@ def _get_dependents(household: Household) -> List[Person]:
 
 
 def build_field_values(household: Household) -> Dict[str, str]:
-    """Build a dict mapping PDF field names to their string values.
+    """Build a dict mapping form field names to their string values.
 
-    This is the core mapping logic, separated from the PDF writing so it
-    can be tested independently and reused by the grader.
+    This is the core mapping logic used by the HTML form (pre-fill in
+    verify mode) and the grader (answer key generation).
 
     Args:
         household: Household with PII fully populated.
@@ -230,53 +216,3 @@ def build_field_values(household: Household) -> Dict[str, str]:
     values[NOT_PRIOR_YEAR_DEPENDENT] = "Yes"
 
     return values
-
-
-def populate_form(
-    household: Household,
-    output_path: Path,
-    template_path: Optional[Path] = None,
-    field_overrides: Optional[Dict[str, str]] = None,
-) -> Path:
-    """Clone the blank template and fill it with household data.
-
-    Args:
-        household: Household with PII fully populated.
-        output_path: Where to write the filled PDF.
-        template_path: Path to the blank template. Defaults to the
-            committed artifact at ``training/templates/form_13614c_p1.pdf``.
-        field_overrides: Optional dict of ``{field_name: value}`` to
-            override computed values. Used by the error injector to
-            introduce deliberate mistakes.
-
-    Returns:
-        The output path.
-    """
-    template = template_path or _DEFAULT_TEMPLATE
-    if not template.exists():
-        raise FileNotFoundError(
-            f"Template not found: {template}. "
-            "Run 'python scripts/build_form_template.py' first."
-        )
-
-    reader = PdfReader(str(template))
-    writer = PdfWriter()
-    writer.append(reader)
-
-    # Build field values from household data
-    values = build_field_values(household)
-
-    # Apply any overrides (e.g. injected errors)
-    if field_overrides:
-        values.update(field_overrides)
-
-    # Write text fields
-    writer.update_page_form_field_values(writer.pages[0], values)
-
-    # Write to disk
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "wb") as f:
-        writer.write(f)
-
-    logger.info("Populated form: %s (%d fields)", output_path, len(values))
-    return output_path

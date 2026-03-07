@@ -1,10 +1,10 @@
-"""TDD tests for the exercise engine — Sprint 6 Step 3.
+"""TDD tests for the exercise engine.
 
 The ExerciseEngine orchestrates the full pipeline:
-generate → PII → render docs → inject errors → client profile → package.
+generate → PII → inject errors → client profile → package.
 
-These tests mock the heavy dependencies (HouseholdGenerator,
-DocumentRenderer) so they run fast without SQLite or WeasyPrint.
+These tests mock the heavy dependencies (HouseholdGenerator)
+so they run fast without SQLite data.
 
 Contract
 --------
@@ -14,22 +14,19 @@ ExerciseEngine.generate_scenario(mode, difficulty, error_count, pattern, seed)
 Requirements:
 1. Returns a Scenario with a unique scenario_id and created_at timestamp.
 2. Household is fully populated (demographics + PII).
-3. document_paths is a non-empty dict of {label: path_string}.
-4. Mode "intake":
+3. Mode "intake":
    - injected_errors is empty (student fills from clean docs).
    - client_facts populated and filtered by difficulty.
-5. Mode "verify":
+4. Mode "verify":
    - injected_errors populated with error_count errors.
    - client_facts populated.
-6. Mode "crosscheck": reserved for future — should raise or fallback.
-7. difficulty propagates to error injection and client fact filtering.
-8. pattern is forwarded to the household generator.
-9. seed is forwarded for reproducibility.
+5. difficulty propagates to error injection and client fact filtering.
+6. pattern is forwarded to the household generator.
+7. seed is forwarded for reproducibility.
 """
 
 from datetime import date
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -108,31 +105,19 @@ def _make_household(pattern: str = "single_adult") -> Household:
     )
 
 
-def _mock_doc_paths() -> Dict[str, Path]:
-    return {
-        "ssn_p-01": Path("/tmp/docs/ssn_p-01.pdf"),
-        "id_p-01": Path("/tmp/docs/dl_p-01.pdf"),
-    }
-
-
 # =========================================================================
 # Fixtures — patch heavy dependencies
 # =========================================================================
 
 @pytest.fixture
 def engine():
-    """Create an ExerciseEngine with mocked generator and renderer."""
-    with patch("training.exercise_engine.HouseholdGenerator") as MockGen, \
-         patch("training.exercise_engine.DocumentRenderer") as MockRend:
+    """Create an ExerciseEngine with mocked generator."""
+    with patch("training.exercise_engine.HouseholdGenerator") as MockGen:
         mock_gen_instance = MockGen.return_value
         mock_gen_instance.generate_with_pii.return_value = _make_household()
 
-        mock_rend_instance = MockRend.return_value
-        mock_rend_instance.render_household_documents.return_value = _mock_doc_paths()
-
         eng = ExerciseEngine.__new__(ExerciseEngine)
         eng.generator = mock_gen_instance
-        eng.renderer = mock_rend_instance
         eng.error_injector = MagicMock()
         # Make error_injector.inject return a realistic result
         eng.error_injector.inject.side_effect = _mock_inject
@@ -217,28 +202,7 @@ class TestHousehold:
 
 
 # =========================================================================
-# 3. Document paths
-# =========================================================================
-
-class TestDocuments:
-
-    def test_document_paths_populated(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
-        assert len(result.document_paths) > 0
-
-    def test_document_paths_are_strings(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
-        for key, val in result.document_paths.items():
-            assert isinstance(key, str)
-            assert isinstance(val, str)
-
-    def test_renderer_called(self, engine: ExerciseEngine) -> None:
-        engine.generate_scenario(mode="intake", difficulty="easy")
-        engine.renderer.render_household_documents.assert_called_once()
-
-
-# =========================================================================
-# 4. Intake mode specifics
+# 3. Intake mode specifics
 # =========================================================================
 
 class TestIntakeMode:
