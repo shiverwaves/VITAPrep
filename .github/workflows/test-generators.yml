@@ -1,9 +1,8 @@
-# Generate a sample household, render identity documents, and display
-# the full output.
+# Generate a sample household and display the full output.
 #
 # Dispatch-only. Runs the full generation pipeline against the real
-# SQLite distribution data shipped in data/, renders SSN cards and
-# photo IDs via WeasyPrint, and uploads the PNGs as workflow artifacts.
+# SQLite distribution data shipped in data/ and displays the
+# generated household as JSON.
 
 name: Generate Household
 
@@ -40,11 +39,6 @@ on:
         required: false
         default: ""
         type: string
-      render-docs:
-        description: "Render SSN cards and photo IDs as PNG files"
-        required: false
-        default: true
-        type: boolean
       run-tests:
         description: "Also run the generator test suite"
         required: false
@@ -68,12 +62,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas numpy sqlalchemy faker pytest
-          if [ "${{ inputs.render-docs }}" = "true" ]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq libpango1.0-dev libharfbuzz-dev libffi-dev libjpeg-dev libopenjp2-7-dev
-            pip install weasyprint Jinja2 Pillow
-          fi
+          pip install pandas numpy sqlalchemy faker pytest Jinja2
 
       # ── Parameters ───────────────────────────────────────────────
       - name: Show parameters
@@ -87,7 +76,6 @@ jobs:
           echo "| Pattern | \`${{ inputs.pattern }}\` |" >> "$GITHUB_STEP_SUMMARY"
           SEED="${{ inputs.seed }}"
           echo "| Seed | \`${SEED:-<random>}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Render docs | \`${{ inputs.render-docs }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Run tests | \`${{ inputs.run-tests }}\` |" >> "$GITHUB_STEP_SUMMARY"
           COMMIT=$(git rev-parse --short HEAD)
           echo "| Commit | \`$COMMIT\` |" >> "$GITHUB_STEP_SUMMARY"
@@ -193,94 +181,6 @@ jobs:
           python -m json.tool /tmp/household.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "</details>" >> "$GITHUB_STEP_SUMMARY"
-
-      # ── Render documents ────────────────────────────────────────
-      - name: Render identity documents
-        if: inputs.render-docs
-        run: |
-          python -c "
-          import json, sys
-          sys.path.insert(0, '.')
-          from generator.models import Household, Person, Address, RelationshipType
-          from training.document_renderer import DocumentRenderer
-          from datetime import date
-
-          d = json.load(open('/tmp/household.json'))
-
-          # Reconstruct Household from JSON
-          members = []
-          for m in d['members']:
-              addr = None
-              if m.get('id_address'):
-                  a = m['id_address']
-                  addr = Address(street=a['street'], apt=a.get('apt'), city=a['city'], state=a['state'], zip_code=a['zip_code'])
-              p = Person(
-                  person_id=m['person_id'],
-                  relationship=RelationshipType(m['relationship']),
-                  age=m['age'],
-                  sex=m['sex'],
-                  race=m.get('race', ''),
-                  legal_first_name=m['legal_first_name'],
-                  legal_middle_name=m.get('legal_middle_name', ''),
-                  legal_last_name=m['legal_last_name'],
-                  suffix=m.get('suffix', ''),
-                  ssn=m['ssn'],
-                  dob=date.fromisoformat(m['dob']) if m.get('dob') else None,
-                  id_type=m.get('id_type', ''),
-                  id_state=m.get('id_state', ''),
-                  id_number=m.get('id_number', ''),
-                  id_expiry=date.fromisoformat(m['id_expiry']) if m.get('id_expiry') else None,
-                  id_address=addr,
-              )
-              members.append(p)
-
-          hh_addr = None
-          if d.get('address'):
-              a = d['address']
-              hh_addr = Address(street=a['street'], apt=a.get('apt'), city=a['city'], state=a['state'], zip_code=a['zip_code'])
-
-          hh = Household(
-              household_id=d.get('household_id', 'hh-workflow'),
-              state=d.get('state', 'HI'),
-              year=d.get('year', 2022),
-              pattern=d.get('pattern', ''),
-              members=members,
-              address=hh_addr,
-          )
-
-          renderer = DocumentRenderer(output_dir='/tmp/rendered_docs')
-          paths = renderer.render_household_documents(hh)
-          print(f'Rendered {len(paths)} documents')
-          for label, path in sorted(paths.items()):
-              print(f'  {label}: {path}')
-          "
-
-      - name: List rendered documents in summary
-        if: inputs.render-docs
-        run: |
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "---" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Rendered Documents" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Document | File |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|----------|------|" >> "$GITHUB_STEP_SUMMARY"
-          for f in /tmp/rendered_docs/*.pdf; do
-            if [ -f "$f" ]; then
-              NAME=$(basename "$f")
-              SIZE=$(du -h "$f" | cut -f1)
-              echo "| \`$NAME\` | $SIZE |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Download the rendered documents from the **Artifacts** section below." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload rendered documents
-        if: inputs.render-docs
-        uses: actions/upload-artifact@v4
-        with:
-          name: rendered-documents
-          path: /tmp/rendered_docs/*.pdf
-          retention-days: 14
 
       # ── Optional tests ───────────────────────────────────────────
       - name: Run generator tests

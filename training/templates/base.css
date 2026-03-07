@@ -1,6 +1,6 @@
 /* Shared styles for all rendered documents */
 
-/* Reset — WeasyPrint renders from scratch so keep this minimal */
+/* Reset */
 * {
     margin: 0;
     padding: 0;
