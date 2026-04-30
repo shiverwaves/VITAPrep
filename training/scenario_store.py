@@ -31,12 +31,19 @@ from typing import Any, Dict, List, Optional
 from generator.models import (
     Address,
     ClientFact,
+    Employer,
+    Form1099DIV,
+    Form1099INT,
+    Form1099NEC,
+    Form1099R,
     GradingResult,
     Household,
     InjectedError,
     Person,
     RelationshipType,
+    SSA1099,
     Scenario,
+    W2,
 )
 
 logger = logging.getLogger(__name__)
@@ -116,9 +123,55 @@ def _serialize_doc_paths(paths: dict) -> str:
     return json.dumps(paths)
 
 
+def _deserialize_employer(d: dict) -> Employer:
+    """Rebuild an Employer from its dict."""
+    addr = d.get("address")
+    return Employer(
+        name=d.get("name", ""),
+        ein=d.get("ein", ""),
+        address=Address(**addr) if addr else None,
+    )
+
+
+def _deserialize_w2(d: dict) -> W2:
+    """Rebuild a W2 from its dict."""
+    emp = d.get("employer")
+    box_12_raw = d.get("box_12", [])
+    box_12 = []
+    for item in box_12_raw:
+        if isinstance(item, dict):
+            box_12.append((item["code"], item["amount"]))
+        else:
+            box_12.append((item[0], item[1]))
+    return W2(
+        employer=_deserialize_employer(emp) if emp else None,
+        wages=d.get("wages", 0),
+        federal_tax_withheld=d.get("federal_tax_withheld", 0),
+        social_security_wages=d.get("social_security_wages", 0),
+        social_security_tax=d.get("social_security_tax", 0),
+        medicare_wages=d.get("medicare_wages", 0),
+        medicare_tax=d.get("medicare_tax", 0),
+        box_12=box_12,
+        state=d.get("state", ""),
+        state_wages=d.get("state_wages", 0),
+        state_tax=d.get("state_tax", 0),
+        control_number=d.get("control_number", ""),
+    )
+
+
 def _deserialize_person(d: dict) -> Person:
     """Rebuild a Person from its dict representation."""
     id_addr = d.get("id_address")
+
+    # Income documents
+    w2s = [_deserialize_w2(w) for w in d.get("w2s", [])]
+    form_1099_ints = [Form1099INT(**f) for f in d.get("form_1099_ints", [])]
+    form_1099_divs = [Form1099DIV(**f) for f in d.get("form_1099_divs", [])]
+    form_1099_rs = [Form1099R(**f) for f in d.get("form_1099_rs", [])]
+    ssa_raw = d.get("ssa_1099")
+    ssa_1099 = SSA1099(**ssa_raw) if ssa_raw else None
+    form_1099_necs = [Form1099NEC(**f) for f in d.get("form_1099_necs", [])]
+
     return Person(
         person_id=d.get("person_id", ""),
         relationship=RelationshipType(d["relationship"]) if d.get("relationship") else RelationshipType.HOUSEHOLDER,
@@ -159,6 +212,12 @@ def _deserialize_person(d: dict) -> Person:
         student_loan_interest=d.get("student_loan_interest", 0),
         educator_expenses=d.get("educator_expenses", 0),
         ira_contributions=d.get("ira_contributions", 0),
+        w2s=w2s,
+        form_1099_ints=form_1099_ints,
+        form_1099_divs=form_1099_divs,
+        form_1099_rs=form_1099_rs,
+        ssa_1099=ssa_1099,
+        form_1099_necs=form_1099_necs,
     )
 
 
