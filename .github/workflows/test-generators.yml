@@ -270,6 +270,7 @@ jobs:
           python -m pytest tests/test_employment.py \
                            tests/test_income.py \
                            tests/test_extract_part2.py \
+                           tests/test_extract_part3.py \
                            -v --tb=short 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 

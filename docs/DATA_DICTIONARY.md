@@ -108,16 +108,31 @@
 | SSA-1099 | `ssa_1099.html` | `SSA1099` | total_benefits (Box 3), benefits_repaid (4), net_benefits (5) |
 | 1099-NEC | `1099_nec.html` | `Form1099NEC` | nonemployee_compensation (Box 1), federal withheld (4) |
 
-## Part 3/4: Deductions and Credits (Future)
+## Part 3: Housing & Deductions
 
-| Table Name | PUMS Fields | Purpose |
-|------------|------------|---------|
-| `homeownership_rates` | TEN, AGEP, HINCP | Owner vs renter by demographics |
-| `property_taxes` | TAXAMT, TEN | Property tax distribution |
-| `mortgage_interest` | (derived) | Mortgage costs by income bracket |
+### Distribution Tables
 
-> **Note**: These housing-related tables were originally planned as Part 2 but have
-> been deferred to Part 3 extraction since they relate to deductions, not income.
+| Table Name | Source | PUMS Fields Used | Columns | Purpose |
+|------------|--------|-----------------|---------|---------|
+| `homeownership_rates` | Household + Person | TEN, AGEP, HINCP, WGTP | age_bracket, income_bracket, tenure, weighted_count, proportion | Owner vs renter probability by age × income |
+| `property_taxes` | Household | TAXAMT, TEN, HINCP, WGTP | income_bracket, mean_amount, median_amount, p25, p75, count, weight | Property tax distribution for homeowners |
+| `mortgage_costs` | Household + Person | MRGP, TEN, HINCP, AGEP, WGTP | income_bracket, age_bracket, mean_monthly, median_monthly, p25, p75, count, weight | Monthly mortgage payment by income × age |
+
+### Key PUMS Variables for Part 3
+
+| PUMS Variable | Description | Values | Maps To |
+|--------------|-------------|--------|---------|
+| `TEN` | Tenure | 1=Owned with mortgage, 2=Owned free & clear, 3=Rented, 4=No rent | Homeownership determination |
+| `TAXAMT` | Property taxes (annual) | 0/NaN=N/A, 1=None, 2+=Dollar amount | Household.property_taxes |
+| `MRGP` | First mortgage payment (monthly) | 0/NaN=N/A, 1+=Dollar amount | Household.mortgage_interest (derived) |
+| `SMOCP` | Selected monthly owner costs | Mortgage + insurance + taxes bundled | Future use (loaded but not yet extracted) |
+| `HINCP` | Household income (past 12 months) | Dollar amount (can be negative) | Income bracket grouping |
+
+> **Note on mortgage interest**: PUMS has no direct mortgage-interest field.
+> `MRGP` is the total monthly payment (principal + interest). The expense
+> generator estimates the interest fraction using an amortization heuristic
+> based on householder age as a proxy for loan maturity: younger householders
+> (~70-80% interest), older householders (~20-30% interest).
 
 ## State-Specific ID Number Formats
 

@@ -30,9 +30,9 @@ on:
         default: "2022"
         type: string
       parts:
-        description: "Extraction parts to run, space-separated (e.g., '1' or '1 2')"
+        description: "Extraction parts to run, space-separated (e.g., '1' or '1 2 3')"
         required: false
-        default: "1"
+        default: "1 2 3"
         type: string
       create_pr:
         description: "Create a PR with extracted data (extract only)"
