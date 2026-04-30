@@ -12,6 +12,9 @@ import pytest
 from generator.models import (
     Address,
     Employer,
+    Form1098,
+    Form1098E,
+    Form1098T,
     Form1099DIV,
     Form1099INT,
     Form1099NEC,
@@ -720,3 +723,125 @@ class TestIntakeP2Rendering:
         html = renderer.render_intake_p2_html(sample_household, {}, tax_year=2022)
         assert "13614-C" in html
         assert "2022" in html
+
+
+# =========================================================================
+# Form 1098 Rendering
+# =========================================================================
+
+class TestForm1098Rendering:
+
+    @pytest.fixture
+    def sample_1098(self) -> Form1098:
+        return Form1098(
+            lender_name="First Hawaiian Bank",
+            lender_tin="99-1234567",
+            mortgage_interest=12500,
+            outstanding_principal=285000,
+            mortgage_origination_date="01/15/2018",
+            property_taxes=3200,
+        )
+
+    def test_contains_lender(self, renderer, adult_with_dl, sample_1098) -> None:
+        html = renderer.render_1098_html(adult_with_dl, sample_1098)
+        assert "First Hawaiian Bank" in html
+        assert "99-1234567" in html
+
+    def test_contains_borrower(self, renderer, adult_with_dl, sample_1098) -> None:
+        html = renderer.render_1098_html(adult_with_dl, sample_1098)
+        assert "John Robert Smith" in html
+        assert "900-12-3456" in html
+
+    def test_contains_amounts(self, renderer, adult_with_dl, sample_1098) -> None:
+        html = renderer.render_1098_html(adult_with_dl, sample_1098)
+        assert "$12,500" in html
+        assert "$285,000" in html
+        assert "$3,200" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1098) -> None:
+        html = renderer.render_1098_html(adult_with_dl, sample_1098)
+        assert "Form 1098" in html
+        assert "Mortgage Interest" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1098) -> None:
+        html = renderer.render_1098_html(adult_with_dl, sample_1098)
+        assert "watermark" in html
+
+
+# =========================================================================
+# Form 1098-E Rendering
+# =========================================================================
+
+class TestForm1098ERendering:
+
+    @pytest.fixture
+    def sample_1098e(self) -> Form1098E:
+        return Form1098E(
+            lender_name="Nelnet",
+            lender_tin="88-7654321",
+            student_loan_interest=1850,
+        )
+
+    def test_contains_lender(self, renderer, adult_with_dl, sample_1098e) -> None:
+        html = renderer.render_1098e_html(adult_with_dl, sample_1098e)
+        assert "Nelnet" in html
+        assert "88-7654321" in html
+
+    def test_contains_borrower(self, renderer, adult_with_dl, sample_1098e) -> None:
+        html = renderer.render_1098e_html(adult_with_dl, sample_1098e)
+        assert "John Robert Smith" in html
+        assert "900-12-3456" in html
+
+    def test_contains_interest(self, renderer, adult_with_dl, sample_1098e) -> None:
+        html = renderer.render_1098e_html(adult_with_dl, sample_1098e)
+        assert "$1,850" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1098e) -> None:
+        html = renderer.render_1098e_html(adult_with_dl, sample_1098e)
+        assert "Form 1098-E" in html
+        assert "Student Loan Interest" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1098e) -> None:
+        html = renderer.render_1098e_html(adult_with_dl, sample_1098e)
+        assert "watermark" in html
+
+
+# =========================================================================
+# Form 1098-T Rendering
+# =========================================================================
+
+class TestForm1098TRendering:
+
+    @pytest.fixture
+    def sample_1098t(self) -> Form1098T:
+        return Form1098T(
+            institution_name="University of Hawaii at Manoa",
+            institution_tin="99-0000001",
+            amounts_billed=9500,
+            scholarships=2000,
+            student_ssn="900-12-3456",
+        )
+
+    def test_contains_institution(self, renderer, adult_with_dl, sample_1098t) -> None:
+        html = renderer.render_1098t_html(adult_with_dl, sample_1098t)
+        assert "University of Hawaii at Manoa" in html
+        assert "99-0000001" in html
+
+    def test_contains_student(self, renderer, adult_with_dl, sample_1098t) -> None:
+        html = renderer.render_1098t_html(adult_with_dl, sample_1098t)
+        assert "John Robert Smith" in html
+        assert "900-12-3456" in html
+
+    def test_contains_amounts(self, renderer, adult_with_dl, sample_1098t) -> None:
+        html = renderer.render_1098t_html(adult_with_dl, sample_1098t)
+        assert "$9,500" in html
+        assert "$2,000" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1098t) -> None:
+        html = renderer.render_1098t_html(adult_with_dl, sample_1098t)
+        assert "Form 1098-T" in html
+        assert "Tuition Statement" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1098t) -> None:
+        html = renderer.render_1098t_html(adult_with_dl, sample_1098t)
+        assert "watermark" in html

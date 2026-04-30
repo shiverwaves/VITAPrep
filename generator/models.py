@@ -240,6 +240,61 @@ class Form1099NEC:
 
 
 @dataclass
+class Form1098:
+    """IRS Form 1098: Mortgage Interest Statement."""
+    lender_name: str = ""
+    lender_tin: str = ""
+    mortgage_interest: int = 0  # Box 1
+    outstanding_principal: int = 0  # Box 2
+    mortgage_origination_date: str = ""  # Box 3
+    property_taxes: int = 0  # Box 10
+
+    def to_dict(self) -> dict:
+        return {
+            "lender_name": self.lender_name,
+            "lender_tin": self.lender_tin,
+            "mortgage_interest": self.mortgage_interest,
+            "outstanding_principal": self.outstanding_principal,
+            "mortgage_origination_date": self.mortgage_origination_date,
+            "property_taxes": self.property_taxes,
+        }
+
+
+@dataclass
+class Form1098E:
+    """IRS Form 1098-E: Student Loan Interest Statement."""
+    lender_name: str = ""
+    lender_tin: str = ""
+    student_loan_interest: int = 0  # Box 1
+
+    def to_dict(self) -> dict:
+        return {
+            "lender_name": self.lender_name,
+            "lender_tin": self.lender_tin,
+            "student_loan_interest": self.student_loan_interest,
+        }
+
+
+@dataclass
+class Form1098T:
+    """IRS Form 1098-T: Tuition Statement."""
+    institution_name: str = ""
+    institution_tin: str = ""
+    amounts_billed: int = 0  # Box 1
+    scholarships: int = 0  # Box 5
+    student_ssn: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "institution_name": self.institution_name,
+            "institution_tin": self.institution_tin,
+            "amounts_billed": self.amounts_billed,
+            "scholarships": self.scholarships,
+            "student_ssn": self.student_ssn,
+        }
+
+
+@dataclass
 class Person:
     """
     Represents one individual in a household.
@@ -307,10 +362,15 @@ class Person:
     ssa_1099: Optional[SSA1099] = None
     form_1099_necs: List[Form1099NEC] = field(default_factory=list)
 
-    # === Expenses (populated by expenses.py — future) ===
+    # === Expenses (populated by expenses.py — Sprint 12) ===
     student_loan_interest: int = 0
     educator_expenses: int = 0
     ira_contributions: int = 0
+
+    # === Expense Documents (populated by expenses.py — Sprint 12) ===
+    form_1098s: List[Form1098] = field(default_factory=list)
+    form_1098_es: List[Form1098E] = field(default_factory=list)
+    form_1098_ts: List[Form1098T] = field(default_factory=list)
 
     # --- Helper Methods ---
 
@@ -386,6 +446,9 @@ class Person:
             "student_loan_interest": self.student_loan_interest,
             "educator_expenses": self.educator_expenses,
             "ira_contributions": self.ira_contributions,
+            "form_1098s": [f.to_dict() for f in self.form_1098s],
+            "form_1098_es": [f.to_dict() for f in self.form_1098_es],
+            "form_1098_ts": [f.to_dict() for f in self.form_1098_ts],
             "total_income": self.total_income(),
             "is_adult": self.is_adult(),
         }

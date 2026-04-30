@@ -1021,10 +1021,12 @@ ALL_FIELDS = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
 **Checkpoint**: `PART1_FIELDS + PART2_FIELDS + PART3_FIELDS == ALL_FIELDS`,
 no overlap between sections.
 
-### Step 12.D: Answer Key + Grading
+### Step 12.D: Answer Key + Grading ✅ (completed as part of 12.C)
 
-Update `form_populator.py` to build Part 3 answer key entries from household
-expense fields. The grader already supports `fields=PART3_FIELDS` scoping.
+*This step was fully implemented during 12.C.* Both `_build_expense_key()` in
+`grader.py` and `_populate_expense_fields()` in `form_populator.py` were added
+alongside the field constants, since the grader answer key and populator logic
+are tightly coupled to the field definitions.
 
 Key grading logic for standard vs itemized:
 - Calculate total itemized deductions (SALT-capped + mortgage + medical floor + charitable)
@@ -1033,7 +1035,7 @@ Key grading logic for standard vs itemized:
 - Grade the student's choice of standard vs itemized
 
 **Checkpoint**: `grader.grade_intake(submission, hh, fields=PART3_FIELDS)`
-correctly scores expense fields including deduction type choice.
+correctly scores expense fields including deduction type choice. ✅
 
 ### Step 12.E: Document Rendering — Expense Documents
 
