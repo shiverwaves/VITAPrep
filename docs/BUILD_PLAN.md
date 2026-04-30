@@ -1200,6 +1200,60 @@ all income and expense document links. Document routes render correctly.
 
 ---
 
+## Future: Scenario Validation & Realism
+
+The current pipeline is a solid baseline — it generates households, assigns
+income/expenses, renders documents, and grades forms end-to-end. The issues
+below were identified during local testing of the Sprint 12 build. They
+require careful design to resolve gracefully without over-constraining the
+generator or adding brittle validation logic.
+
+### Zero-Income Scenarios
+
+The generator can produce households where no member has any income at all.
+In real life, virtually every VITA client has at least one income source —
+that's why they're filing. The only legitimate zero-income filing is to
+claim refundable credits (CTC, EITC with prior-year earned income), which
+should be a deliberate scenario pattern, not an accidental artifact.
+
+Possible approaches (needs design work):
+- Pipeline retry with fallback income assignment
+- Exercise engine gate with max attempts
+- Explicit `"zero_income_credits"` pattern for the intentional case
+- Minimum income guarantee per household pattern
+
+### Missing Client Interview Facts for Expenses
+
+The 13614-C Page 3 left column is client self-reported questions ("Did you
+pay mortgage interest?", "Did you make charitable contributions?", "Did you
+pay child/dependent care?", etc.). Currently, `exercise_engine.py` generates
+client facts for Part 1 (demographics) and Part 2 (income) but not Part 3.
+Without expense interview notes, the student has no way to discover expenses
+that lack a formal document (charitable, medical, child care) in intake mode.
+
+Facts needed (from 13614-C Page 3 left column):
+- "Did you pay mortgage interest on your home?" → Yes/No
+- "Did you pay property taxes?" → Yes/No
+- "Did you have unreimbursed medical or dental expenses?" → Yes/No
+- "Did you make charitable contributions?" → Yes/No + approximate amount
+- "Did you pay student loan interest?" → Yes/No
+- "Did you pay child or dependent care expenses?" → Yes/No
+- "Did you pay for higher education tuition?" → Yes/No
+- "Did you contribute to an IRA or retirement account?" → Yes/No
+- "Are you a K-12 educator who paid classroom expenses?" → Yes/No
+
+### Expense Document Consistency
+
+Scenarios can generate with zero expense documents. Unlike zero-income, this
+is often legitimate (renters with no student loans or college students). But
+the generation logic should be verified to ensure it isn't short-circuiting —
+e.g., a homeowner with mortgage interest should always produce a Form 1098,
+employed persons should always have W-2s, etc. A lightweight post-generation
+validation pass could catch these inconsistencies without adding complexity
+to the generators themselves.
+
+---
+
 ## Future: State Tax Generalization
 
 The expense generator currently uses hardcoded Hawaii state tax brackets.
