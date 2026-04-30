@@ -60,6 +60,16 @@ from training.form_fields import (
 
 logger = logging.getLogger(__name__)
 
+_DEPENDENT_RELATIONSHIPS: Dict[str, str] = {
+    "biological_child": "Son/Daughter",
+    "adopted_child": "Son/Daughter",
+    "stepchild": "Stepchild",
+    "grandchild": "Grandchild",
+    "sibling": "Sibling",
+    "parent": "Parent",
+    "other_relative": "Other",
+}
+
 
 # =========================================================================
 # Answer key extraction
@@ -131,8 +141,9 @@ def _build_answer_key(household: Household) -> Dict[str, str]:
         key[dep_field(i, DEP_LAST_NAME)] = dep.legal_last_name
         key[dep_field(i, DEP_DOB)] = _format_dob(dep)
         rel = dep.relationship
-        key[dep_field(i, DEP_RELATIONSHIP)] = (
-            rel.value if isinstance(rel, RelationshipType) else str(rel)
+        rel_val = rel.value if isinstance(rel, RelationshipType) else str(rel)
+        key[dep_field(i, DEP_RELATIONSHIP)] = _DEPENDENT_RELATIONSHIPS.get(
+            rel_val, "Other"
         )
         key[dep_field(i, DEP_MONTHS)] = str(dep.months_in_home)
 

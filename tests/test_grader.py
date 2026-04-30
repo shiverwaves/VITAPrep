@@ -203,7 +203,7 @@ def _perfect_married_submission() -> Dict[str, str]:
         dep_field(0, DEP_FIRST_NAME): "Jake",
         dep_field(0, DEP_LAST_NAME): "Smith",
         dep_field(0, DEP_DOB): "01/05/2012",
-        dep_field(0, DEP_RELATIONSHIP): "biological_child",
+        dep_field(0, DEP_RELATIONSHIP): "Son/Daughter",
         dep_field(0, DEP_MONTHS): "12",
     }
 
