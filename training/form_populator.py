@@ -72,6 +72,26 @@ from training.form_fields import (
     YOU_PHONE,
     YOU_SSN,
     YOU_US_CITIZEN,
+    EXPENSE_MORTGAGE_INTEREST,
+    EXPENSE_MORTGAGE_INTEREST_AMOUNT,
+    EXPENSE_PROPERTY_TAXES,
+    EXPENSE_PROPERTY_TAXES_AMOUNT,
+    EXPENSE_MEDICAL,
+    EXPENSE_CHARITABLE,
+    EXPENSE_CHARITABLE_AMOUNT,
+    EXPENSE_DEDUCTION_TYPE,
+    EXPENSE_STUDENT_LOAN,
+    EXPENSE_STUDENT_LOAN_AMOUNT,
+    EXPENSE_CHILD_CARE,
+    EXPENSE_CHILD_CARE_AMOUNT,
+    EXPENSE_EDUCATOR,
+    EXPENSE_EDUCATOR_AMOUNT,
+    EXPENSE_IRA,
+    EXPENSE_IRA_AMOUNT,
+    EXPENSE_EDUCATION,
+    EXPENSE_EDUCATION_AMOUNT,
+    DEDUCTION_TYPE_STANDARD,
+    DEDUCTION_TYPE_ITEMIZED,
     dep_field,
 )
 
@@ -233,6 +253,11 @@ def build_field_values(household: Household) -> Dict[str, str]:
     # =================================================================
     _populate_income_fields(values, household)
 
+    # =================================================================
+    # Part III: Expenses, Deductions & Credits
+    # =================================================================
+    _populate_expense_fields(values, household)
+
     return values
 
 
@@ -299,3 +324,65 @@ def _populate_income_fields(
     total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
     if total > 0:
         values[INCOME_TOTAL] = str(total)
+
+
+def _populate_expense_fields(
+    values: Dict[str, str], household: Household,
+) -> None:
+    """Populate Part III expense/deduction fields from household data.
+
+    Args:
+        values: Field dict to populate (mutated in place).
+        household: Household with expense data populated.
+    """
+    if household.mortgage_interest > 0:
+        values[EXPENSE_MORTGAGE_INTEREST] = "Yes"
+        values[EXPENSE_MORTGAGE_INTEREST_AMOUNT] = str(household.mortgage_interest)
+
+    if household.property_taxes > 0:
+        values[EXPENSE_PROPERTY_TAXES] = "Yes"
+        values[EXPENSE_PROPERTY_TAXES_AMOUNT] = str(household.property_taxes)
+
+    if household.medical_expenses > 0:
+        values[EXPENSE_MEDICAL] = "Yes"
+
+    if household.charitable_contributions > 0:
+        values[EXPENSE_CHARITABLE] = "Yes"
+        values[EXPENSE_CHARITABLE_AMOUNT] = str(household.charitable_contributions)
+
+    values[EXPENSE_DEDUCTION_TYPE] = (
+        DEDUCTION_TYPE_STANDARD
+        if household.uses_standard_deduction
+        else DEDUCTION_TYPE_ITEMIZED
+    )
+
+    filers = []
+    householder = household.get_householder()
+    spouse = household.get_spouse()
+    if householder:
+        filers.append(householder)
+    if spouse:
+        filers.append(spouse)
+
+    total_student_loan = sum(p.student_loan_interest for p in filers)
+    if total_student_loan > 0:
+        values[EXPENSE_STUDENT_LOAN] = "Yes"
+        values[EXPENSE_STUDENT_LOAN_AMOUNT] = str(total_student_loan)
+
+    total_educator = sum(p.educator_expenses for p in filers)
+    if total_educator > 0:
+        values[EXPENSE_EDUCATOR] = "Yes"
+        values[EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+
+    total_ira = sum(p.ira_contributions for p in filers)
+    if total_ira > 0:
+        values[EXPENSE_IRA] = "Yes"
+        values[EXPENSE_IRA_AMOUNT] = str(total_ira)
+
+    if household.child_care_expenses > 0:
+        values[EXPENSE_CHILD_CARE] = "Yes"
+        values[EXPENSE_CHILD_CARE_AMOUNT] = str(household.child_care_expenses)
+
+    if household.education_expenses > 0:
+        values[EXPENSE_EDUCATION] = "Yes"
+        values[EXPENSE_EDUCATION_AMOUNT] = str(household.education_expenses)

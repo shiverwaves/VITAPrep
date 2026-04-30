@@ -11,6 +11,7 @@ Field names use dot-separated namespaces matching form sections:
 
 Part I: Sections A–F (personal information)
 Part II: Income (wages, interest, dividends, SS, retirement, SE)
+Part III: Expenses, deductions & credits (mortgage, taxes, charitable, etc.)
 """
 
 from typing import Dict, List
@@ -165,6 +166,76 @@ INCOME_AMOUNT_FIELDS: List[str] = [
 ]
 
 # =========================================================================
+# Part III — Expenses, Deductions & Credits
+# =========================================================================
+# Form 13614-C Part III (Page 3) has a two-column layout: client questions
+# on the left, volunteer-completed fields on the right.  We model it the
+# same way as Part II: checkbox + amount pairs.  Client questions are
+# conveyed through scenario interview notes; the volunteer fields here
+# are what the student fills in and the grader scores.
+
+# Itemized deductions
+EXPENSE_MORTGAGE_INTEREST = "expense.mortgage_interest"
+EXPENSE_MORTGAGE_INTEREST_AMOUNT = "expense.mortgage_interest.amount"
+
+EXPENSE_PROPERTY_TAXES = "expense.property_taxes"
+EXPENSE_PROPERTY_TAXES_AMOUNT = "expense.property_taxes.amount"
+
+EXPENSE_MEDICAL = "expense.medical"
+
+EXPENSE_CHARITABLE = "expense.charitable"
+EXPENSE_CHARITABLE_AMOUNT = "expense.charitable.amount"
+
+# Standard vs Itemized (radio: "standard" / "itemized")
+EXPENSE_DEDUCTION_TYPE = "expense.deduction_type"
+
+DEDUCTION_TYPE_STANDARD = "standard"
+DEDUCTION_TYPE_ITEMIZED = "itemized"
+DEDUCTION_TYPE_CHOICES = [DEDUCTION_TYPE_STANDARD, DEDUCTION_TYPE_ITEMIZED]
+
+# Above-the-line deductions
+EXPENSE_STUDENT_LOAN = "expense.student_loan"
+EXPENSE_STUDENT_LOAN_AMOUNT = "expense.student_loan.amount"
+
+EXPENSE_CHILD_CARE = "expense.child_care"
+EXPENSE_CHILD_CARE_AMOUNT = "expense.child_care.amount"
+
+EXPENSE_EDUCATOR = "expense.educator"
+EXPENSE_EDUCATOR_AMOUNT = "expense.educator.amount"
+
+EXPENSE_IRA = "expense.ira"
+EXPENSE_IRA_AMOUNT = "expense.ira.amount"
+
+# Education credits
+EXPENSE_EDUCATION = "expense.education"
+EXPENSE_EDUCATION_AMOUNT = "expense.education.amount"
+
+# All expense checkbox fields
+EXPENSE_CHECKBOX_FIELDS: List[str] = [
+    EXPENSE_MORTGAGE_INTEREST,
+    EXPENSE_PROPERTY_TAXES,
+    EXPENSE_MEDICAL,
+    EXPENSE_CHARITABLE,
+    EXPENSE_STUDENT_LOAN,
+    EXPENSE_CHILD_CARE,
+    EXPENSE_EDUCATOR,
+    EXPENSE_IRA,
+    EXPENSE_EDUCATION,
+]
+
+# All expense amount fields
+EXPENSE_AMOUNT_FIELDS: List[str] = [
+    EXPENSE_MORTGAGE_INTEREST_AMOUNT,
+    EXPENSE_PROPERTY_TAXES_AMOUNT,
+    EXPENSE_CHARITABLE_AMOUNT,
+    EXPENSE_STUDENT_LOAN_AMOUNT,
+    EXPENSE_CHILD_CARE_AMOUNT,
+    EXPENSE_EDUCATOR_AMOUNT,
+    EXPENSE_IRA_AMOUNT,
+    EXPENSE_EDUCATION_AMOUNT,
+]
+
+# =========================================================================
 # Helpers — enumerate all fields
 # =========================================================================
 
@@ -202,5 +273,10 @@ PART1_FIELDS: List[str] = TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
 # Part II fields only (income checkboxes + amounts)
 PART2_FIELDS: List[str] = INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
 
+# Part III fields only (expense checkboxes + amounts + deduction type)
+PART3_FIELDS: List[str] = (
+    EXPENSE_CHECKBOX_FIELDS + EXPENSE_AMOUNT_FIELDS + [EXPENSE_DEDUCTION_TYPE]
+)
+
 # All field names combined
-ALL_FIELDS: List[str] = PART1_FIELDS + PART2_FIELDS
+ALL_FIELDS: List[str] = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
