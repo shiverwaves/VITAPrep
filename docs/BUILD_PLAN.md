@@ -979,12 +979,24 @@ Extract distribution tables from PUMS for expense generation:
 
 | Table | PUMS Variables | Purpose |
 |-------|---------------|---------|
-| `homeownership_rates` | TEN, AGEP, HINCP | Owner vs renter probability by age/income |
-| `property_taxes` | TAXAMT, TEN | Property tax amounts by income bracket |
-| `mortgage_interest` | (derived from SMOCP, TEN) | Mortgage costs by income bracket |
+| `homeownership_rates` | TEN, AGEP, HINCP | Owner vs renter probability by age × income bracket |
+| `property_taxes` | TAXAMT, TEN, HINCP | Property tax amounts by income bracket (owners only) |
+| `mortgage_costs` | MRGP, TEN, HINCP, AGEP | Monthly mortgage payment by income × age bracket |
 
+**Mortgage interest note**: PUMS does not provide a direct mortgage-interest
+variable. `MRGP` gives the total first-mortgage monthly payment (principal +
+interest combined). We extract the raw MRGP distribution by income and age
+bracket. The expense generator then estimates the interest portion using a
+standard amortization heuristic: younger householders are earlier in their loan
+term, so ~70-80% of the payment is interest; older householders have paid down
+more principal, so ~20-30% is interest. This is a reasonable approximation
+for VITA training scenarios. `SMOCP` (selected monthly owner costs, which
+bundles mortgage + insurance + taxes) is also loaded for potential future use.
+
+Implementation:
 - Wire into `extract_all.py` as `part == 3`
-- Update `data-management.yml` to support `--parts 1 2 3`
+- Add `MRGP` and `SMOCP` to household columns in `pums_download.py`
+- Update `data-management.yml` default parts to `1 2 3`
 - Run via GitHub Actions workflow, merge resulting SQLite update
 
 **Checkpoint**: `data/distributions_hi_2022.sqlite` has 27+ tables (24 existing + 3 new).

@@ -189,7 +189,7 @@ def load_pums_data(
     Returns:
         Tuple of (households_df, persons_df).
     """
-    # Household columns needed for Part 1 + Part 2
+    # Household columns needed for Part 1 + Part 2 + Part 3
     household_cols = [
         "SERIALNO",  # Household serial number (join key)
         "WGTP",      # Household weight
@@ -198,9 +198,11 @@ def load_pums_data(
         "TEN",       # Tenure (own/rent)
         "TAXAMT",    # Property tax amount
         "HINCP",     # Household income
+        "MRGP",      # First mortgage monthly payment (Part 3)
+        "SMOCP",     # Selected monthly owner costs (Part 3)
     ]
 
-    # Person columns needed for Part 1 + Part 2
+    # Person columns needed for Part 1 + Part 2 + Part 3
     person_cols = [
         "SERIALNO",  # Household serial number (join key)
         "SPORDER",   # Person number within household

@@ -1,14 +1,13 @@
 """
 Convenience runner — extracts all distribution tables.
 
-Runs all available extraction modules (Part 1, and Part 2 when implemented)
-for a given state and year. This is the script called by the GitHub Actions
-extraction workflow.
+Runs all available extraction modules (Parts 1, 2, and 3) for a given state
+and year. This is the script called by the GitHub Actions extraction workflow.
 
 Usage:
     python -m extraction.extract_all --state HI --year 2022
     python -m extraction.extract_all --state HI --year 2022 --parts 1
-    python -m extraction.extract_all --state HI --year 2022 --parts 1 2
+    python -m extraction.extract_all --state HI --year 2022 --parts 1 2 3
 """
 
 import argparse
@@ -41,7 +40,7 @@ def run_extraction(
         ValueError: If an unsupported part number is requested.
     """
     if parts is None:
-        parts = [1, 2]
+        parts = [1, 2, 3]
 
     output_path = None
 
@@ -52,8 +51,11 @@ def run_extraction(
         elif part == 2:
             from .extract_part2 import extract_all_part2
             output_path = extract_all_part2(state, year, output_path or output)
+        elif part == 3:
+            from .extract_part3 import extract_all_part3
+            output_path = extract_all_part3(state, year, output_path or output)
         else:
-            raise ValueError(f"Unknown extraction part: {part}. Valid: 1, 2")
+            raise ValueError(f"Unknown extraction part: {part}. Valid: 1, 2, 3")
 
     if output_path is None:
         raise RuntimeError("No extraction parts were run successfully")
