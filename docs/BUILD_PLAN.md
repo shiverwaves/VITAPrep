@@ -882,5 +882,38 @@ The `ExerciseEngine` decides whether a scenario is useful for training.
 
 ---
 
+## Future: Revisit Difficulty Design
+
+The current difficulty system (`easy`, `medium`, `hard`) only controls
+which client facts (verbal interview notes) are shown to the student.
+This is a narrow definition — at `hard`, facts like employment status
+are withheld, but the student can still read it directly off the W-2.
+The difficulty lever doesn't meaningfully change how hard the exercise
+actually is.
+
+In a real VITA training context, difficulty could come from multiple
+dimensions:
+
+| Dimension | Easy | Medium | Hard |
+|-----------|------|--------|------|
+| **Information availability** | All client facts provided | Required facts only | Minimal/no verbal facts |
+| **Household complexity** | Single adult, one W-2 | Married couple, 2–3 income sources | Blended family, dependents with income, multiple filing status considerations |
+| **Income diversity** | Wages only | Wages + interest/dividends | Wages + SS + retirement + self-employment + investment |
+| **Document volume** | 2–3 documents | 4–6 documents | 7+ documents to cross-reference |
+| **Error subtlety** (verify mode) | Obvious errors (wrong name) | Plausible errors (transposed digits) | Subtle errors (wrong filing status, missed dependent) |
+| **Ambiguity** | Clear-cut scenarios | Some judgment calls | Edge cases (who qualifies as dependent, HOH vs single) |
+
+### Recommended approach
+
+Redesign difficulty as a composite score rather than a single toggle.
+The `ExerciseEngine` would select household patterns, income profiles,
+and error types based on the target difficulty, producing scenarios
+that are genuinely harder — not just less informed.
+
+**Files:** `training/exercise_engine.py`, `training/client_profile.py`,
+`training/error_injector.py`
+
+---
+
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
