@@ -41,7 +41,7 @@ def run_extraction(
         ValueError: If an unsupported part number is requested.
     """
     if parts is None:
-        parts = [1]  # Only Part 1 is implemented; add 2 when ready
+        parts = [1, 2]
 
     output_path = None
 
@@ -50,12 +50,8 @@ def run_extraction(
             from .extract_part1 import extract_all_part1
             output_path = extract_all_part1(state, year, output)
         elif part == 2:
-            # TODO: Uncomment when Sprint 9 is implemented
-            # from .extract_part2 import extract_all_part2
-            # output_path = extract_all_part2(state, year, output_path or output)
-            logger.warning(
-                "Part 2 extraction is not yet implemented (Sprint 9). Skipping."
-            )
+            from .extract_part2 import extract_all_part2
+            output_path = extract_all_part2(state, year, output_path or output)
         else:
             raise ValueError(f"Unknown extraction part: {part}. Valid: 1, 2")
 

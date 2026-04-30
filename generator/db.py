@@ -39,7 +39,7 @@ PART1_TABLES = [
     "couple_sex_patterns",
 ]
 
-# Part 2 tables (income/employment — 14 tables)
+# Part 2 tables (income/employment — 12 tables)
 PART2_TABLES = [
     "employment_by_age",
     "education_by_age",
@@ -49,13 +49,10 @@ PART2_TABLES = [
     "interest_and_dividend_income",
     "other_income_by_employment_status",
     "public_assistance_income",
-    "homeownership_rates",
-    "property_taxes",
-    "mortgage_interest",
-    "bls_occupation_wages",
+    "occupation_wages",
     "education_occupation_probabilities",
     "age_income_adjustments",
-    "occupation_self_employment_probability",
+    "occupation_self_employment_rates",
 ]
 
 
