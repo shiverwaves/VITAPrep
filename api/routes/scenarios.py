@@ -37,8 +37,14 @@ GET  /scenarios/{scenario_id}/documents/1099-nec/{person_id}/{index}
 GET  /scenarios/{scenario_id}/form
     Interactive 13614-C Part I form with <input> fields.
 
+GET  /scenarios/{scenario_id}/form/income
+    Interactive 13614-C Part II income form.
+
 POST /scenarios/{scenario_id}/submit
-    Grade the submission server-side, return results page.
+    Grade Part I submission server-side, return results page.
+
+POST /scenarios/{scenario_id}/submit/income
+    Grade Part II income submission server-side, return results page.
 
 GET  /api/v1/scenarios
     List existing scenarios (JSON).
@@ -64,6 +70,21 @@ from training.form_fields import (
     TEXT_FIELDS,
     CHECKBOX_FIELDS,
     ALL_FIELDS,
+    INCOME_CHECKBOX_FIELDS,
+    INCOME_AMOUNT_FIELDS,
+    INCOME_WAGES,
+    INCOME_WAGES_AMOUNT,
+    INCOME_INTEREST,
+    INCOME_INTEREST_AMOUNT,
+    INCOME_DIVIDENDS,
+    INCOME_DIVIDENDS_AMOUNT,
+    INCOME_SOCIAL_SECURITY,
+    INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_RETIREMENT,
+    INCOME_RETIREMENT_AMOUNT,
+    INCOME_SELF_EMPLOYMENT,
+    INCOME_SELF_EMPLOYMENT_AMOUNT,
+    INCOME_TOTAL,
     MAX_DEPENDENTS,
     dep_field,
     DEP_FIRST_NAME,
@@ -432,7 +453,8 @@ a {{ color: #2c5f8a; }}
 table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
 th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
 th {{ background: #f0f4f8; }}
-.form-link {{ display: inline-block; margin-top: 24px; padding: 14px 28px;
+.form-sections {{ display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }}
+.form-link {{ display: inline-block; padding: 14px 28px;
               background: #1a3a5c; color: white; text-decoration: none;
               font-size: 16px; border-radius: 4px; }}
 .form-link:hover {{ background: #2c5f8a; }}
@@ -456,9 +478,15 @@ th {{ background: #f0f4f8; }}
 </ul>
 {"<h2>Income Documents</h2><ul>" + "".join(income_doc_links) + "</ul>" if income_doc_links else ""}
 {facts_html}
-<a class="form-link" href="/scenarios/{scenario_id}/form">
-    Open Intake Form (13614-C Part I)
-</a>
+<h2>Intake Form Sections</h2>
+<div class="form-sections">
+    <a class="form-link" href="/scenarios/{scenario_id}/form">
+        Part I — Personal Information
+    </a>
+    <a class="form-link" href="/scenarios/{scenario_id}/form/income">
+        Part II — Income
+    </a>
+</div>
 </body>
 </html>"""
     return HTMLResponse(content=html)
@@ -742,6 +770,35 @@ async def page_intake_form(
 
 
 # =========================================================================
+# HTML: Part II income form
+# =========================================================================
+
+@router.get(
+    "/scenarios/{scenario_id}/form/income",
+    response_class=HTMLResponse,
+)
+async def page_income_form(
+    request: Request,
+    scenario_id: str,
+) -> HTMLResponse:
+    """Interactive 13614-C Part II income form."""
+    store = request.app.state.store
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    hh = scenario.household
+    prefill: Dict[str, str] = {}
+
+    if scenario.mode == "verify" and hh:
+        from training.form_populator import build_field_values
+        prefill = build_field_values(hh)
+
+    html = _build_income_form_html(scenario_id, scenario.mode, prefill)
+    return HTMLResponse(content=html)
+
+
+# =========================================================================
 # Form submission + grading
 # =========================================================================
 
@@ -795,6 +852,46 @@ async def page_submit(
 
     # Render results page
     html = _build_results_html(scenario_id, scenario.mode, result)
+    return HTMLResponse(content=html)
+
+
+@router.post(
+    "/scenarios/{scenario_id}/submit/income",
+    response_class=HTMLResponse,
+)
+async def page_submit_income(
+    request: Request,
+    scenario_id: str,
+) -> HTMLResponse:
+    """Grade Part II income submission."""
+    store = request.app.state.store
+    grader = request.app.state.grader
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    form_data = await request.form()
+    submission: Dict[str, str] = {}
+
+    income_fields = INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
+    for field_name in income_fields:
+        val = form_data.get(field_name, "")
+        if isinstance(val, str) and val.strip():
+            submission[field_name] = val.strip()
+
+    result = grader.grade_intake(submission, scenario.household)
+
+    store.save_grade(scenario_id, result)
+
+    logger.info(
+        "Graded income for scenario %s: %d/%d (%.0f%%)",
+        scenario_id, result.score, result.max_score, result.accuracy * 100,
+    )
+
+    html = _build_results_html(
+        scenario_id, scenario.mode, result, section="income",
+    )
     return HTMLResponse(content=html)
 
 
@@ -921,10 +1018,20 @@ td input {{ width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3p
                       cursor: pointer; font-size: 16px; border-radius: 4px; }}
 .submit-bar button:hover {{ background: #2c5f8a; }}
 .back-link {{ display: inline-block; margin-bottom: 16px; color: #2c5f8a; }}
+.section-nav {{ display: flex; gap: 0; margin-bottom: 24px; border-bottom: 3px solid #1a3a5c; }}
+.section-nav a {{ padding: 10px 20px; text-decoration: none; color: #555; font-weight: bold;
+                   font-size: 14px; border: 1px solid #ddd; border-bottom: none; border-radius: 6px 6px 0 0;
+                   background: #f0f4f8; margin-right: 4px; }}
+.section-nav a.active {{ background: #1a3a5c; color: white; border-color: #1a3a5c; }}
+.section-nav a:hover:not(.active) {{ background: #e0e7ef; }}
 </style>
 </head>
 <body>
 <a class="back-link" href="/scenarios/{scenario_id}">&larr; Back to scenario</a>
+<nav class="section-nav">
+    <a href="/scenarios/{scenario_id}/form" class="active">Part I — Personal Info</a>
+    <a href="/scenarios/{scenario_id}/form/income">Part II — Income</a>
+</nav>
 <h1>Form 13614-C — Part I: Your Personal Information</h1>
 <div class="instructions">{mode_label}</div>
 
@@ -994,13 +1101,142 @@ td input {{ width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3p
 </html>"""
 
 
-def _build_results_html(scenario_id: str, mode: str, result) -> str:
+_INCOME_ROWS = [
+    (INCOME_WAGES, INCOME_WAGES_AMOUNT, "Wages, salaries, tips (W-2)"),
+    (INCOME_INTEREST, INCOME_INTEREST_AMOUNT, "Interest income (1099-INT)"),
+    (INCOME_DIVIDENDS, INCOME_DIVIDENDS_AMOUNT, "Dividend income (1099-DIV)"),
+    (INCOME_SOCIAL_SECURITY, INCOME_SOCIAL_SECURITY_AMOUNT, "Social Security benefits (SSA-1099)"),
+    (INCOME_RETIREMENT, INCOME_RETIREMENT_AMOUNT, "Retirement, pension, annuity (1099-R)"),
+    (INCOME_SELF_EMPLOYMENT, INCOME_SELF_EMPLOYMENT_AMOUNT, "Self-employment / contract (1099-NEC)"),
+]
+
+
+def _build_income_form_html(
+    scenario_id: str,
+    mode: str,
+    prefill: Dict[str, str],
+) -> str:
+    """Build the interactive 13614-C Part II income form.
+
+    Args:
+        scenario_id: Scenario identifier.
+        mode: Exercise mode ("intake" or "verify").
+        prefill: Pre-filled field values (empty for intake mode).
+
+    Returns:
+        Complete HTML page string.
+    """
+    income_rows = ""
+    for cb_field, amt_field, label in _INCOME_ROWS:
+        checked = ' checked' if prefill.get(cb_field) == "Yes" else ""
+        amt_val = prefill.get(amt_field, "")
+        income_rows += f"""\
+<tr>
+    <td class="cb-cell">
+        <input type="checkbox" name="{cb_field}" value="Yes"{checked}>
+    </td>
+    <td class="source-label">{label}</td>
+    <td class="amt-cell">
+        <input type="text" name="{amt_field}" value="{amt_val}"
+               placeholder="$0" inputmode="numeric">
+    </td>
+</tr>
+"""
+
+    total_val = prefill.get(INCOME_TOTAL, "")
+    mode_label = (
+        "Using the income documents provided, check each income source "
+        "that applies and enter the total amount."
+        if mode == "intake"
+        else "Review the pre-filled income fields and correct any errors."
+    )
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Income Form — Scenario {scenario_id[:12]}</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
+h1 {{ color: #1a3a5c; font-size: 22px; }}
+.instructions {{ background: #fff3cd; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px;
+                 border-left: 4px solid #ffc107; }}
+.back-link {{ display: inline-block; margin-bottom: 16px; color: #2c5f8a; }}
+.section-nav {{ display: flex; gap: 0; margin-bottom: 24px; border-bottom: 3px solid #1a3a5c; }}
+.section-nav a {{ padding: 10px 20px; text-decoration: none; color: #555; font-weight: bold;
+                   font-size: 14px; border: 1px solid #ddd; border-bottom: none; border-radius: 6px 6px 0 0;
+                   background: #f0f4f8; margin-right: 4px; }}
+.section-nav a.active {{ background: #1a3a5c; color: white; border-color: #1a3a5c; }}
+.section-nav a:hover:not(.active) {{ background: #e0e7ef; }}
+table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
+th {{ background: #f0f4f8; font-size: 11px; text-transform: uppercase; padding: 8px 12px;
+      text-align: left; }}
+td {{ padding: 8px 12px; border-bottom: 1px solid #eee; }}
+.cb-cell {{ width: 40px; text-align: center; }}
+.cb-cell input {{ transform: scale(1.3); }}
+.source-label {{ font-size: 14px; }}
+.amt-cell {{ width: 160px; }}
+.amt-cell input {{ width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;
+                    font-size: 14px; box-sizing: border-box; text-align: right; }}
+.total-row {{ border-top: 3px solid #1a3a5c; font-weight: bold; }}
+.total-row td {{ padding-top: 12px; }}
+.submit-bar {{ margin-top: 32px; text-align: center; }}
+.submit-bar button {{ padding: 14px 40px; background: #1a3a5c; color: white; border: none;
+                      cursor: pointer; font-size: 16px; border-radius: 4px; }}
+.submit-bar button:hover {{ background: #2c5f8a; }}
+</style>
+</head>
+<body>
+<a class="back-link" href="/scenarios/{scenario_id}">&larr; Back to scenario</a>
+<nav class="section-nav">
+    <a href="/scenarios/{scenario_id}/form">Part I — Personal Info</a>
+    <a href="/scenarios/{scenario_id}/form/income" class="active">Part II — Income</a>
+</nav>
+<h1>Form 13614-C — Part II: Income</h1>
+<div class="instructions">{mode_label}</div>
+
+<form method="post" action="/scenarios/{scenario_id}/submit/income">
+
+<table>
+<thead>
+<tr>
+    <th>Received?</th>
+    <th>Income Source</th>
+    <th>Amount</th>
+</tr>
+</thead>
+<tbody>
+{income_rows}
+<tr class="total-row">
+    <td></td>
+    <td>Total Income</td>
+    <td class="amt-cell">
+        <input type="text" name="{INCOME_TOTAL}" value="{total_val}"
+               placeholder="$0" inputmode="numeric">
+    </td>
+</tr>
+</tbody>
+</table>
+
+<div class="submit-bar">
+    <button type="submit">Submit for Grading</button>
+</div>
+</form>
+</body>
+</html>"""
+
+
+def _build_results_html(
+    scenario_id: str, mode: str, result, section: str = "intake",
+) -> str:
     """Build the grading results HTML page.
 
     Args:
         scenario_id: Scenario identifier.
         mode: Exercise mode.
         result: GradingResult object.
+        section: Which form section ("intake" or "income").
 
     Returns:
         Complete HTML page string.
@@ -1104,7 +1340,7 @@ ul {{ line-height: 1.8; }}
 {flags_html}
 <div class="actions">
     <a href="/scenarios/{scenario_id}">Back to Scenario</a>
-    <a href="/scenarios/{scenario_id}/form" class="secondary">Try Again</a>
+    <a href="/scenarios/{scenario_id}/form{"/income" if section == "income" else ""}" class="secondary">Try Again</a>
     <a href="/scenarios/new" class="secondary">New Scenario</a>
 </div>
 </body>
