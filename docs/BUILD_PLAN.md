@@ -917,3 +917,250 @@ that are genuinely harder — not just less informed.
 
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
+
+---
+
+## Sprint 12: Part 3 — Expenses, Deductions & Credits
+
+Part 3 of the 13614-C (Page 3) covers expenses and tax-related events. The
+client checks which expenses apply; the volunteer identifies deductions,
+credits, and supporting documents. This sprint adds expense generation,
+document rendering, and a graded Part III form section.
+
+**Reference**: HouseholdRNG `generator/expense_generator.py` — full working
+implementation (~550 lines) covering housing, state tax, medical, charitable,
+above-the-line deductions, and credit-related expenses. Port and adapt.
+
+**Key curriculum element**: Standard vs itemized deduction. The student must
+evaluate whether the taxpayer benefits more from the standard deduction or
+itemizing. This is a core VITA competency and should be graded.
+
+### 13614-C Page 3 Field Mapping
+
+#### Itemized Deductions (Schedule A)
+
+| Client Question (left) | Volunteer Field (right) | Generator Source |
+|------------------------|------------------------|-----------------|
+| Mortgage interest | 1098 checkbox + amount | `household.mortgage_interest` |
+| State/local/RE/sales taxes | (SALT, subject to $10K cap) | `household.state_income_tax + property_taxes` |
+| Medical/dental/prescription | Standard deduction ☐ / Itemized deduction ☐ | `household.medical_expenses` |
+| Charitable contributions | (included in Schedule A) | `household.charitable_contributions` |
+
+#### Above-the-Line Deductions (Adjustments to Income)
+
+| Client Question (left) | Volunteer Field (right) | Generator Source |
+|------------------------|------------------------|-----------------|
+| Student loan interest | 1098-E checkbox | `person.student_loan_interest` |
+| Child and dependent care | Child and dependent care credit | `household.child_care_expenses` |
+| Retirement contributions | IRA (Basic/Roth/401K) | `person.ira_contributions` |
+| Educator expenses (K-12) | Educator expenses deduction + amount | `person.educator_expenses` |
+| Alimony payments | Alimony with spouse's SSN + amount | (future — rare in VITA) |
+
+#### Life Events & Credits
+
+| Client Question (left) | Volunteer Field (right) | Priority |
+|------------------------|------------------------|----------|
+| Educational classes | 1098-T, education credit/deduction | High |
+| Home sale | 1099-S | Medium |
+| HSA | HSA contributions / distributions | Medium |
+| Marketplace insurance | 1095-A | High (ACA) |
+| Energy-efficient improvements | Form 5695, Part II | Low |
+| Vehicle purchase | VIN # | Low |
+| Cancelled/forgiven debt | 1099-C | Low |
+| Federal disaster loss | 1099-A | Low |
+| Prior disallowed credits | EITC/CTC/AOTC/HOH year + reason | Medium |
+| IRS letters/bills | (informational) | Medium |
+| Estimated tax payments | Amount fields | Medium |
+| Last year's return | (informational) | Low |
+
+### Step 12.A: Part 3 Extraction (`extraction/extract_part3.py`)
+
+Extract distribution tables from PUMS for expense generation:
+
+| Table | PUMS Variables | Purpose |
+|-------|---------------|---------|
+| `homeownership_rates` | TEN, AGEP, HINCP | Owner vs renter probability by age/income |
+| `property_taxes` | TAXAMT, TEN | Property tax amounts by income bracket |
+| `mortgage_interest` | (derived from SMOCP, TEN) | Mortgage costs by income bracket |
+
+- Wire into `extract_all.py` as `part == 3`
+- Update `data-management.yml` to support `--parts 1 2 3`
+- Run via GitHub Actions workflow, merge resulting SQLite update
+
+**Checkpoint**: `data/distributions_hi_2022.sqlite` has 27+ tables (24 existing + 3 new).
+
+### Step 12.B: Expense Generator (`generator/expenses.py`)
+
+Port from HouseholdRNG `expense_generator.py`. The generator assigns expenses
+to households based on demographics, income, and distribution data.
+
+```
+class ExpenseGenerator:
+    def __init__(self, distributions, state='HI')
+    def assign_expenses(self, household) -> Household
+
+    # 1. Housing expenses
+    _determine_homeownership(household) -> bool
+    _sample_property_taxes(household) -> int
+    _sample_mortgage_interest(household) -> int
+
+    # 2. State income tax (progressive brackets)
+    _assign_state_income_tax(household)
+
+    # 3. Medical expenses (probabilistic, 7.5% AGI floor)
+    _assign_medical_expenses(household)
+
+    # 4. Charitable contributions (income-based rates)
+    _assign_charitable_contributions(household)
+
+    # 5. Above-the-line deductions (per-person)
+    _calculate_student_loan_interest(person) -> int
+    _calculate_educator_expenses(person) -> int
+    _calculate_ira_contributions(person) -> int
+
+    # 6. Credit-related expenses
+    _calculate_child_care_expenses(household) -> int
+    _calculate_education_expenses(household) -> int
+
+    # 7. Standard vs itemized determination
+    _calculate_totals(household)
+```
+
+Add `generate_part3(household)` to `HouseholdGenerator` in `pipeline.py`.
+Update `generate_with_pii()` to call Part 3 after Part 2.
+
+**Checkpoint**: Generated households have realistic expense fields populated.
+Running `generate_sample.py` shows expense data in the JSON output.
+
+### Step 12.C: Part 3 Form Fields (`training/form_fields.py`)
+
+Define `PART3_FIELDS` constants for Page 3 of the 13614-C. Phase 1 covers
+common VITA scenarios:
+
+```python
+# Itemized deductions
+EXPENSE_MORTGAGE_INTEREST = "expense.mortgage_interest"
+EXPENSE_MORTGAGE_AMOUNT = "expense.mortgage_interest.amount"
+EXPENSE_PROPERTY_TAXES = "expense.property_taxes"
+EXPENSE_MEDICAL = "expense.medical"
+EXPENSE_CHARITABLE = "expense.charitable"
+EXPENSE_CHARITABLE_AMOUNT = "expense.charitable.amount"
+EXPENSE_DEDUCTION_TYPE = "expense.deduction_type"  # standard / itemized
+
+# Above-the-line
+EXPENSE_STUDENT_LOAN = "expense.student_loan"
+EXPENSE_STUDENT_LOAN_AMOUNT = "expense.student_loan.amount"
+EXPENSE_CHILD_CARE = "expense.child_care"
+EXPENSE_CHILD_CARE_AMOUNT = "expense.child_care.amount"
+EXPENSE_EDUCATOR = "expense.educator"
+EXPENSE_EDUCATOR_AMOUNT = "expense.educator.amount"
+EXPENSE_IRA = "expense.ira"
+EXPENSE_IRA_AMOUNT = "expense.ira.amount"
+
+# Education credits
+EXPENSE_EDUCATION = "expense.education"
+EXPENSE_EDUCATION_AMOUNT = "expense.education.amount"
+
+PART3_FIELDS = [...]
+ALL_FIELDS = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
+```
+
+**Checkpoint**: `PART1_FIELDS + PART2_FIELDS + PART3_FIELDS == ALL_FIELDS`,
+no overlap between sections.
+
+### Step 12.D: Answer Key + Grading
+
+Update `form_populator.py` to build Part 3 answer key entries from household
+expense fields. The grader already supports `fields=PART3_FIELDS` scoping.
+
+Key grading logic for standard vs itemized:
+- Calculate total itemized deductions (SALT-capped + mortgage + medical floor + charitable)
+- Compare against standard deduction for filing status
+- Correct answer is whichever is larger
+- Grade the student's choice of standard vs itemized
+
+**Checkpoint**: `grader.grade_intake(submission, hh, fields=PART3_FIELDS)`
+correctly scores expense fields including deduction type choice.
+
+### Step 12.E: Document Rendering — Expense Documents
+
+Render mock documents referenced by Page 3. Phase 1 (common):
+
+| Document | Template | Data Source |
+|----------|----------|-------------|
+| Form 1098 (Mortgage Interest) | `templates/form_1098.html` | `household.mortgage_interest` |
+| Form 1098-E (Student Loan Interest) | `templates/form_1098e.html` | `person.student_loan_interest` |
+| Form 1098-T (Tuition) | `templates/form_1098t.html` | `household.education_expenses` |
+| Form 1095-A (Marketplace Insurance) | `templates/form_1095a.html` | (future generator) |
+
+Phase 2 (less common, deferred):
+- 1099-S (home sale), 1099-C (cancelled debt), 1099-A (disaster)
+
+Each document gets the standard "SAMPLE — FOR TRAINING USE ONLY" watermark.
+
+**Checkpoint**: Landing page shows expense documents alongside identity and
+income documents when the household has relevant expenses.
+
+### Step 12.F: Part III Form + Route
+
+- HTML template `form_13614c_p3.html` for Page 3 fields
+- Route: `GET /scenarios/{id}/form/expenses` → Part III form
+- Route: `POST /scenarios/{id}/submit/expenses` → grade Part III
+- Section nav updated: Part I | Part II | Part III
+- Landing page shows Part III grade card
+
+**Checkpoint**: Full user flow works: generate scenario → review expense
+documents → fill Part III form → submit → see expense-specific feedback
+with standard vs itemized determination.
+
+### Step 12.G: Tests
+
+- `test_expenses.py`: expense generator unit tests (housing, deductions, credits)
+- `test_extract_part3.py`: Part 3 extraction table validation
+- Update `test_multi_section_ui.py`: Part III form, submission, grading, nav
+- Update `test_grader.py`: Part 3 field filtering, standard vs itemized grading
+
+**Checkpoint**: All tests pass. 13614-C coverage extends through Page 3.
+
+---
+
+## Future: State Tax Generalization
+
+The expense generator currently uses hardcoded Hawaii state tax brackets.
+To support multiple states:
+
+1. Extract state income tax brackets from a reference source (Tax Foundation,
+   state revenue department publications) into a config file or database table
+2. Make `ExpenseGenerator` load brackets dynamically by state code
+3. Property tax and housing cost distributions already come from PUMS and are
+   state-specific by extraction
+4. Consider a `config/state_taxes/` directory with YAML files per state,
+   or a single `state_tax_brackets` table in the distribution database
+
+This is a prerequisite for expanding beyond Hawaii to other VITA sites.
+
+---
+
+## Future: OpenTaxEngine Integration
+
+When the curriculum expands from intake form exercises to full 1040 completion,
+a tax calculation engine becomes valuable. The open-source
+[OpenTaxEngine](https://github.com/cameronehrlich/opentaxengine) is a candidate:
+
+- Python, rule-based, YAML-defined tax form specifications
+- Supports Form 1040, 1120-S, 1065
+- CLI with compute, fill, explain, inspect commands
+- Very early stage (as of 2026): limited to 2025 tax year, minimal test coverage
+
+**Integration point**: After the student completes the 1040, pass the same
+household data through the tax engine to compute the correct answer. Compare
+the student's line-by-line entries against engine output for grading.
+
+**Prerequisites before integrating**:
+- Engine must support the tax year matching our PUMS data (currently 2022)
+- Engine must handle all VITA Basic/Advanced form scenarios
+- Alternatively, write a focused tax calculator for the specific VITA scope
+
+**Current state**: VITAPrep grading is field-matching (did you copy the W-2
+correctly?), not tax computation. A tax engine only adds value when grading
+computed lines (AGI, taxable income, tax owed, refund amount).
