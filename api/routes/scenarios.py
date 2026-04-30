@@ -428,29 +428,21 @@ async def page_exercise(
 
     # Check for existing per-section grades
     section_grades = store.get_section_grades(scenario_id)
-    grades_html = ""
-    if section_grades:
-        parts = []
-        for sec_key, sec_label in [("intake", "Part I"), ("income", "Part II")]:
-            if sec_key in section_grades:
-                g = section_grades[sec_key]
-                parts.append(
-                    f"<strong>{sec_label}:</strong> {g.score}/{g.max_score} "
-                    f"({g.accuracy:.0%})"
-                )
+
+    def _section_badge(sec_key: str) -> str:
+        if sec_key in section_grades:
+            g = section_grades[sec_key]
+            if g.accuracy >= 0.9:
+                color = "#4caf50"
+            elif g.accuracy >= 0.7:
+                color = "#ff9800"
             else:
-                parts.append(f"<strong>{sec_label}:</strong> not yet submitted")
-        # Also handle legacy unsectioned grades
-        if "" in section_grades and "intake" not in section_grades:
-            g = section_grades[""]
-            parts = [
-                f"<strong>Overall:</strong> {g.score}/{g.max_score} "
-                f"({g.accuracy:.0%})"
-            ]
-        grades_html = f"""\
-<div class="grade-banner">
-    {" &nbsp;|&nbsp; ".join(parts)}
-</div>"""
+                color = "#f44336"
+            return (
+                f'<span class="section-score" style="color:{color}">'
+                f'{g.score}/{g.max_score} ({g.accuracy:.0%})</span>'
+            )
+        return '<span class="section-score pending">Not yet submitted</span>'
 
     html = f"""\
 <!DOCTYPE html>
@@ -470,12 +462,13 @@ table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
 th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
 th {{ background: #f0f4f8; }}
 .form-sections {{ display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }}
-.form-link {{ display: inline-block; padding: 14px 28px;
-              background: #1a3a5c; color: white; text-decoration: none;
-              font-size: 16px; border-radius: 4px; }}
-.form-link:hover {{ background: #2c5f8a; }}
-.grade-banner {{ background: #e8f5e9; padding: 12px 16px; border-radius: 6px;
-                 margin-bottom: 16px; border-left: 4px solid #4caf50; }}
+.form-card {{ display: flex; flex-direction: column; align-items: center; padding: 20px 28px;
+              background: #f0f4f8; border-radius: 8px; text-decoration: none; min-width: 200px;
+              border: 2px solid #ddd; transition: border-color 0.2s; }}
+.form-card:hover {{ border-color: #1a3a5c; }}
+.form-card .card-title {{ font-size: 16px; font-weight: bold; color: #1a3a5c; margin-bottom: 8px; }}
+.section-score {{ font-size: 13px; font-weight: bold; }}
+.section-score.pending {{ color: #999; font-weight: normal; }}
 </style>
 </head>
 <body>
@@ -486,7 +479,6 @@ th {{ background: #f0f4f8; }}
     <span><strong>Pattern:</strong> {hh.pattern if hh else "—"}</span>
     <span><strong>Members:</strong> {len(hh.members) if hh else 0}</span>
 </div>
-{grades_html}
 <h2>Identity Documents</h2>
 <p>Open each document in a new tab to review:</p>
 <ul>
@@ -496,11 +488,13 @@ th {{ background: #f0f4f8; }}
 {facts_html}
 <h2>Intake Form Sections</h2>
 <div class="form-sections">
-    <a class="form-link" href="/scenarios/{scenario_id}/form">
-        Part I — Personal Information
+    <a class="form-card" href="/scenarios/{scenario_id}/form">
+        <span class="card-title">Part I — Personal Information</span>
+        {_section_badge("intake")}
     </a>
-    <a class="form-link" href="/scenarios/{scenario_id}/form/income">
-        Part II — Income
+    <a class="form-card" href="/scenarios/{scenario_id}/form/income">
+        <span class="card-title">Part II — Income</span>
+        {_section_badge("income")}
     </a>
 </div>
 </body>
