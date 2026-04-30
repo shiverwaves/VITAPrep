@@ -1,7 +1,13 @@
 # Unified data management workflow: inventory existing data or extract new
-# distributions.
+# distributions from Census PUMS microdata.
 #
-# Replaces the separate "Data Inventory" and "Extract Distributions" workflows.
+# Two modes:
+#   - inventory: Scan data/ and report which tables exist, row counts, and
+#                completeness per extraction part (P1/P2/P3).
+#   - extract:   Download PUMS files for the given state(s)/year, run the
+#                extraction pipeline, and optionally open a PR with the
+#                resulting SQLite file(s).
+#
 # Dispatch-only — choose what you want to do via the action input.
 
 name: Data Management
@@ -10,7 +16,10 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "What to do"
+        # "inventory" audits existing SQLite files in data/ without downloading
+        # anything.  "extract" downloads PUMS data and builds distribution
+        # tables for the selected state(s), year, and parts.
+        description: "inventory = audit existing data  |  extract = download PUMS & build tables"
         required: true
         default: "inventory"
         type: choice
@@ -18,29 +27,39 @@ on:
           - inventory
           - extract
       states:
-        description: >
-          Comma-separated state abbreviations (e.g., "HI" or "HI,CA,TX").
-          Only used for extract actions.
+        # One or more U.S. state abbreviations.  Each state runs as a
+        # parallel matrix job during extraction.  Ignored for inventory.
+        description: "State(s) to extract — comma-separated FIPS abbreviations (extract only)"
         required: false
         default: "HI"
         type: string
       year:
-        description: "ACS 5-Year PUMS data year (extract only)"
+        # The ACS 5-Year PUMS release year.  Census publishes annually;
+        # 2022 is the latest release with full coverage.
+        description: "ACS 5-Year PUMS release year (extract only)"
         required: false
         default: "2022"
         type: string
       parts:
-        description: "Extraction parts to run, space-separated (e.g., '1' or '1 2 3')"
+        # Part 1 = demographics/household structure (12 tables)
+        # Part 2 = employment/income (12 tables)
+        # Part 3 = housing/deductions (3 tables)
+        # Space-separated; e.g. "1 2 3" extracts all, "3" extracts only Part 3.
+        description: "Which extraction parts to run: 1=demographics  2=income  3=expenses"
         required: false
         default: "1 2 3"
         type: string
       create_pr:
-        description: "Create a PR with extracted data (extract only)"
+        # When true, the workflow commits the SQLite file(s) to a new branch
+        # and opens a PR.  Set to false for dry-run extraction without PR.
+        description: "Open a PR with the extracted SQLite file(s) (extract only)"
         required: false
         default: true
         type: boolean
       format:
-        description: "Inventory output format"
+        # Controls how the inventory report is rendered in the job summary.
+        # "markdown" is best for GitHub Actions; "json" for scripted consumers.
+        description: "Inventory output format (inventory only)"
         required: false
         default: "markdown"
         type: choice

@@ -54,13 +54,16 @@ PART2_TABLES = [
     "interest_and_dividend_income",
     "other_income_by_employment_status",
     "public_assistance_income",
-    "homeownership_rates",
-    "property_taxes",
-    "mortgage_interest",
-    "bls_occupation_wages",
+    "occupation_wages",
     "education_occupation_probabilities",
     "age_income_adjustments",
-    "occupation_self_employment_probability",
+    "occupation_self_employment_rates",
+]
+
+PART3_TABLES = [
+    "homeownership_rates",
+    "property_taxes",
+    "mortgage_costs",
 ]
 
 
@@ -71,7 +74,7 @@ class TableInfo:
     row_count: int
     column_count: int
     columns: List[str]
-    part: Optional[str] = None  # "part1", "part2", or None
+    part: Optional[str] = None  # "part1", "part2", "part3", or None
 
 
 @dataclass
@@ -88,6 +91,7 @@ class DatabaseInfo:
     parts_present: List[str] = field(default_factory=list)
     part1_complete: bool = False
     part2_complete: bool = False
+    part3_complete: bool = False
 
 
 def parse_filename(filename: str) -> Optional[tuple]:
@@ -110,18 +114,20 @@ def parse_filename(filename: str) -> Optional[tuple]:
 
 
 def classify_table(table_name: str) -> Optional[str]:
-    """Classify a table as part1, part2, or unknown.
+    """Classify a table as part1, part2, part3, or unknown.
 
     Args:
         table_name: Name of the database table.
 
     Returns:
-        'part1', 'part2', or None.
+        'part1', 'part2', 'part3', or None.
     """
     if table_name in PART1_TABLES:
         return "part1"
     if table_name in PART2_TABLES:
         return "part2"
+    if table_name in PART3_TABLES:
+        return "part3"
     return None
 
 
@@ -185,6 +191,9 @@ def inspect_database(db_path: Path) -> Optional[DatabaseInfo]:
         part2_tables_present = {
             t.name for t in tables if t.part == "part2"
         }
+        part3_tables_present = {
+            t.name for t in tables if t.part == "part3"
+        }
 
         return DatabaseInfo(
             filename=db_path.name,
@@ -198,6 +207,7 @@ def inspect_database(db_path: Path) -> Optional[DatabaseInfo]:
             parts_present=sorted(parts_seen),
             part1_complete=part1_tables_present == set(PART1_TABLES),
             part2_complete=part2_tables_present == set(PART2_TABLES),
+            part3_complete=part3_tables_present == set(PART3_TABLES),
         )
     finally:
         conn.close()
@@ -258,6 +268,8 @@ def format_text(databases: List[DatabaseInfo]) -> str:
             complete_parts.append("P1")
         if db.part2_complete:
             complete_parts.append("P2")
+        if db.part3_complete:
+            complete_parts.append("P3")
         complete_str = ", ".join(complete_parts) if complete_parts else "-"
 
         lines.append(
@@ -305,6 +317,8 @@ def format_markdown(databases: List[DatabaseInfo]) -> str:
             complete_parts.append("P1")
         if db.part2_complete:
             complete_parts.append("P2")
+        if db.part3_complete:
+            complete_parts.append("P3")
         complete_str = ", ".join(complete_parts) if complete_parts else "-"
 
         lines.append(
