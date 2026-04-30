@@ -840,5 +840,80 @@ keyed by field name.
 
 ---
 
+## Future: Zero-Income Household Filtering
+
+About 10% of generated households end up with zero income and no tax
+documents. This happens when all adults are sampled as `unemployed` or
+`not_in_labor_force` and the probabilistic investment/SS/retirement
+income assignments also produce nothing.
+
+In real life, these households typically **don't need to file** (below
+the filing threshold) and wouldn't visit a VITA site — unless filing
+voluntarily for refundable credits (EITC, CTC, recovery rebate).
+Either way, a zero-income scenario makes for a poor training exercise
+since there's nothing to practice on the income form.
+
+### Recommended approach
+
+Filter at the **exercise level**, not the generator level. Keep the
+generators statistically honest — they produce what the data says.
+The `ExerciseEngine` decides whether a scenario is useful for training.
+
+**Implementation:**
+- In `ExerciseEngine.generate_scenario()`, after generation, check
+  whether the household has at least one income document (W-2, 1099,
+  or SSA-1099)
+- If not, regenerate with a new seed (up to N retries, e.g. 5)
+- If all retries produce zero income, accept the scenario but add a
+  client fact noting "Client is filing to claim refundable credits"
+- Optionally log a warning so we can tune the distributions if the
+  retry rate is too high
+
+**Files:** `training/exercise_engine.py`
+
+**Why not fix in the generators:**
+- The employment/income distributions reflect real Census data — some
+  people genuinely have no income
+- Special-casing "force at least one employed adult" distorts the
+  demographics and creates odd scenarios (e.g. forcing a 75-year-old
+  retiree into employment)
+- Filtering at the exercise layer cleanly separates statistical
+  accuracy from training usefulness
+
+---
+
+## Future: Revisit Difficulty Design
+
+The current difficulty system (`easy`, `medium`, `hard`) only controls
+which client facts (verbal interview notes) are shown to the student.
+This is a narrow definition — at `hard`, facts like employment status
+are withheld, but the student can still read it directly off the W-2.
+The difficulty lever doesn't meaningfully change how hard the exercise
+actually is.
+
+In a real VITA training context, difficulty could come from multiple
+dimensions:
+
+| Dimension | Easy | Medium | Hard |
+|-----------|------|--------|------|
+| **Information availability** | All client facts provided | Required facts only | Minimal/no verbal facts |
+| **Household complexity** | Single adult, one W-2 | Married couple, 2–3 income sources | Blended family, dependents with income, multiple filing status considerations |
+| **Income diversity** | Wages only | Wages + interest/dividends | Wages + SS + retirement + self-employment + investment |
+| **Document volume** | 2–3 documents | 4–6 documents | 7+ documents to cross-reference |
+| **Error subtlety** (verify mode) | Obvious errors (wrong name) | Plausible errors (transposed digits) | Subtle errors (wrong filing status, missed dependent) |
+| **Ambiguity** | Clear-cut scenarios | Some judgment calls | Edge cases (who qualifies as dependent, HOH vs single) |
+
+### Recommended approach
+
+Redesign difficulty as a composite score rather than a single toggle.
+The `ExerciseEngine` would select household patterns, income profiles,
+and error types based on the target difficulty, producing scenarios
+that are genuinely harder — not just less informed.
+
+**Files:** `training/exercise_engine.py`, `training/client_profile.py`,
+`training/error_injector.py`
+
+---
+
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
