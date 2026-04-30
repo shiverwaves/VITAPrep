@@ -40,11 +40,17 @@ GET  /scenarios/{scenario_id}/form
 GET  /scenarios/{scenario_id}/form/income
     Interactive 13614-C Part II income form.
 
+GET  /scenarios/{scenario_id}/form/expenses
+    Interactive 13614-C Part III expenses form.
+
 POST /scenarios/{scenario_id}/submit
     Grade Part I submission server-side, return results page.
 
 POST /scenarios/{scenario_id}/submit/income
     Grade Part II income submission server-side, return results page.
+
+POST /scenarios/{scenario_id}/submit/expenses
+    Grade Part III expenses submission server-side, return results page.
 
 GET  /api/v1/scenarios
     List existing scenarios (JSON).
@@ -72,6 +78,7 @@ from training.form_fields import (
     ALL_FIELDS,
     PART1_FIELDS,
     PART2_FIELDS,
+    PART3_FIELDS,
     INCOME_CHECKBOX_FIELDS,
     INCOME_AMOUNT_FIELDS,
     INCOME_WAGES,
@@ -87,6 +94,26 @@ from training.form_fields import (
     INCOME_SELF_EMPLOYMENT,
     INCOME_SELF_EMPLOYMENT_AMOUNT,
     INCOME_TOTAL,
+    EXPENSE_MORTGAGE_INTEREST,
+    EXPENSE_MORTGAGE_INTEREST_AMOUNT,
+    EXPENSE_PROPERTY_TAXES,
+    EXPENSE_PROPERTY_TAXES_AMOUNT,
+    EXPENSE_MEDICAL,
+    EXPENSE_CHARITABLE,
+    EXPENSE_CHARITABLE_AMOUNT,
+    EXPENSE_DEDUCTION_TYPE,
+    EXPENSE_STUDENT_LOAN,
+    EXPENSE_STUDENT_LOAN_AMOUNT,
+    EXPENSE_CHILD_CARE,
+    EXPENSE_CHILD_CARE_AMOUNT,
+    EXPENSE_EDUCATOR,
+    EXPENSE_EDUCATOR_AMOUNT,
+    EXPENSE_IRA,
+    EXPENSE_IRA_AMOUNT,
+    EXPENSE_EDUCATION,
+    EXPENSE_EDUCATION_AMOUNT,
+    DEDUCTION_TYPE_STANDARD,
+    DEDUCTION_TYPE_ITEMIZED,
     MAX_DEPENDENTS,
     dep_field,
     DEP_FIRST_NAME,
@@ -521,6 +548,10 @@ th {{ background: #f0f4f8; }}
     <a class="form-card" href="/scenarios/{scenario_id}/form/income">
         <span class="card-title">Part II — Income</span>
         {_section_badge("income")}
+    </a>
+    <a class="form-card" href="/scenarios/{scenario_id}/form/expenses">
+        <span class="card-title">Part III — Expenses</span>
+        {_section_badge("expenses")}
     </a>
 </div>
 </body>
@@ -1026,6 +1057,76 @@ async def page_submit_income(
     return HTMLResponse(content=html)
 
 
+# =========================================================================
+# HTML: Part III expenses form
+# =========================================================================
+
+@router.get(
+    "/scenarios/{scenario_id}/form/expenses",
+    response_class=HTMLResponse,
+)
+async def page_expense_form(
+    request: Request,
+    scenario_id: str,
+) -> HTMLResponse:
+    """Interactive 13614-C Part III expenses form."""
+    store = request.app.state.store
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    hh = scenario.household
+    prefill: Dict[str, str] = {}
+
+    if scenario.mode == "verify" and hh:
+        from training.form_populator import build_field_values
+        prefill = build_field_values(hh)
+
+    html = _build_expense_form_html(scenario_id, scenario.mode, prefill)
+    return HTMLResponse(content=html)
+
+
+@router.post(
+    "/scenarios/{scenario_id}/submit/expenses",
+    response_class=HTMLResponse,
+)
+async def page_submit_expenses(
+    request: Request,
+    scenario_id: str,
+) -> HTMLResponse:
+    """Grade Part III expenses submission."""
+    store = request.app.state.store
+    grader = request.app.state.grader
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    form_data = await request.form()
+    submission: Dict[str, str] = {}
+
+    for field_name in PART3_FIELDS:
+        val = form_data.get(field_name, "")
+        if isinstance(val, str) and val.strip():
+            submission[field_name] = val.strip()
+
+    result = grader.grade_intake(
+        submission, scenario.household, fields=PART3_FIELDS,
+    )
+
+    store.save_grade(scenario_id, result, section="expenses")
+
+    logger.info(
+        "Graded expenses for scenario %s: %d/%d (%.0f%%)",
+        scenario_id, result.score, result.max_score, result.accuracy * 100,
+    )
+
+    html = _build_results_html(
+        scenario_id, scenario.mode, result, section="expenses",
+    )
+    return HTMLResponse(content=html)
+
+
 @router.get(
     "/scenarios/{scenario_id}/results",
     response_class=HTMLResponse,
@@ -1169,6 +1270,7 @@ td input {{ width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3p
 <nav class="section-nav">
     <a href="/scenarios/{scenario_id}/form" class="active">Part I — Personal Info</a>
     <a href="/scenarios/{scenario_id}/form/income">Part II — Income</a>
+    <a href="/scenarios/{scenario_id}/form/expenses">Part III — Expenses</a>
 </nav>
 <h1>Form 13614-C — Part I: Your Personal Information</h1>
 <div class="instructions">{mode_label}</div>
@@ -1330,6 +1432,7 @@ td {{ padding: 8px 12px; border-bottom: 1px solid #eee; }}
 <nav class="section-nav">
     <a href="/scenarios/{scenario_id}/form">Part I — Personal Info</a>
     <a href="/scenarios/{scenario_id}/form/income" class="active">Part II — Income</a>
+    <a href="/scenarios/{scenario_id}/form/expenses">Part III — Expenses</a>
 </nav>
 <h1>Form 13614-C — Part II: Income</h1>
 <div class="instructions">{mode_label}</div>
@@ -1356,6 +1459,153 @@ td {{ padding: 8px 12px; border-bottom: 1px solid #eee; }}
 </tr>
 </tbody>
 </table>
+
+<div class="submit-bar">
+    <button type="submit">Submit for Grading</button>
+</div>
+</form>
+</body>
+</html>"""
+
+
+_EXPENSE_ROWS = [
+    (EXPENSE_MORTGAGE_INTEREST, EXPENSE_MORTGAGE_INTEREST_AMOUNT, "Mortgage interest (Form 1098)"),
+    (EXPENSE_PROPERTY_TAXES, EXPENSE_PROPERTY_TAXES_AMOUNT, "Property taxes"),
+    (EXPENSE_CHARITABLE, EXPENSE_CHARITABLE_AMOUNT, "Charitable contributions"),
+    (EXPENSE_STUDENT_LOAN, EXPENSE_STUDENT_LOAN_AMOUNT, "Student loan interest (Form 1098-E)"),
+    (EXPENSE_EDUCATOR, EXPENSE_EDUCATOR_AMOUNT, "Educator expenses"),
+    (EXPENSE_IRA, EXPENSE_IRA_AMOUNT, "IRA contributions"),
+    (EXPENSE_CHILD_CARE, EXPENSE_CHILD_CARE_AMOUNT, "Child/dependent care"),
+    (EXPENSE_EDUCATION, EXPENSE_EDUCATION_AMOUNT, "Education expenses (Form 1098-T)"),
+]
+
+_EXPENSE_CHECKBOX_ONLY_ROWS = [
+    (EXPENSE_MEDICAL, "Unreimbursed medical/dental expenses"),
+]
+
+
+def _build_expense_form_html(
+    scenario_id: str,
+    mode: str,
+    prefill: Dict[str, str],
+) -> str:
+    """Build the interactive 13614-C Part III expenses form."""
+    expense_rows = ""
+    for cb_field, amt_field, label in _EXPENSE_ROWS:
+        checked = ' checked' if prefill.get(cb_field) == "Yes" else ""
+        amt_val = prefill.get(amt_field, "")
+        expense_rows += f"""\
+<tr>
+    <td class="cb-cell">
+        <input type="checkbox" name="{cb_field}" value="Yes"{checked}>
+    </td>
+    <td class="source-label">{label}</td>
+    <td class="amt-cell">
+        <input type="text" name="{amt_field}" value="{amt_val}"
+               placeholder="$0" inputmode="numeric">
+    </td>
+</tr>
+"""
+
+    for cb_field, label in _EXPENSE_CHECKBOX_ONLY_ROWS:
+        checked = ' checked' if prefill.get(cb_field) == "Yes" else ""
+        expense_rows += f"""\
+<tr>
+    <td class="cb-cell">
+        <input type="checkbox" name="{cb_field}" value="Yes"{checked}>
+    </td>
+    <td class="source-label" colspan="2">{label}</td>
+</tr>
+"""
+
+    deduction_val = prefill.get(EXPENSE_DEDUCTION_TYPE, "")
+    std_checked = ' checked' if deduction_val == DEDUCTION_TYPE_STANDARD else ""
+    item_checked = ' checked' if deduction_val == DEDUCTION_TYPE_ITEMIZED else ""
+
+    mode_label = (
+        "Using the expense documents and client interview notes, check each "
+        "expense that applies and enter the amounts. Then choose Standard or "
+        "Itemized deduction."
+        if mode == "intake"
+        else "Review the pre-filled expense fields and correct any errors."
+    )
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Expenses Form — Scenario {scenario_id[:12]}</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
+h1 {{ color: #1a3a5c; font-size: 22px; }}
+h2 {{ color: #2c5f8a; margin-top: 28px; font-size: 18px; }}
+.instructions {{ background: #fff3cd; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px;
+                 border-left: 4px solid #ffc107; }}
+.back-link {{ display: inline-block; margin-bottom: 16px; color: #2c5f8a; }}
+.section-nav {{ display: flex; gap: 0; margin-bottom: 24px; border-bottom: 3px solid #1a3a5c; }}
+.section-nav a {{ padding: 10px 20px; text-decoration: none; color: #555; font-weight: bold;
+                   font-size: 14px; border: 1px solid #ddd; border-bottom: none; border-radius: 6px 6px 0 0;
+                   background: #f0f4f8; margin-right: 4px; }}
+.section-nav a.active {{ background: #1a3a5c; color: white; border-color: #1a3a5c; }}
+.section-nav a:hover:not(.active) {{ background: #e0e7ef; }}
+table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
+th {{ background: #f0f4f8; font-size: 11px; text-transform: uppercase; padding: 8px 12px;
+      text-align: left; }}
+td {{ padding: 8px 12px; border-bottom: 1px solid #eee; }}
+.cb-cell {{ width: 40px; text-align: center; }}
+.cb-cell input {{ transform: scale(1.3); }}
+.source-label {{ font-size: 14px; }}
+.amt-cell {{ width: 160px; }}
+.amt-cell input {{ width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 3px;
+                    font-size: 14px; box-sizing: border-box; text-align: right; }}
+.deduction-choice {{ margin-top: 28px; padding: 20px; background: #f0f4f8; border-radius: 8px; }}
+.deduction-choice label {{ font-size: 15px; margin-right: 32px; cursor: pointer; }}
+.deduction-choice input {{ transform: scale(1.3); margin-right: 6px; }}
+.submit-bar {{ margin-top: 32px; text-align: center; }}
+.submit-bar button {{ padding: 14px 40px; background: #1a3a5c; color: white; border: none;
+                      cursor: pointer; font-size: 16px; border-radius: 4px; }}
+.submit-bar button:hover {{ background: #2c5f8a; }}
+</style>
+</head>
+<body>
+<a class="back-link" href="/scenarios/{scenario_id}">&larr; Back to scenario</a>
+<nav class="section-nav">
+    <a href="/scenarios/{scenario_id}/form">Part I — Personal Info</a>
+    <a href="/scenarios/{scenario_id}/form/income">Part II — Income</a>
+    <a href="/scenarios/{scenario_id}/form/expenses" class="active">Part III — Expenses</a>
+</nav>
+<h1>Form 13614-C — Part III: Expenses &amp; Deductions</h1>
+<div class="instructions">{mode_label}</div>
+
+<form method="post" action="/scenarios/{scenario_id}/submit/expenses">
+
+<table>
+<thead>
+<tr>
+    <th>Applies?</th>
+    <th>Expense / Deduction</th>
+    <th>Amount</th>
+</tr>
+</thead>
+<tbody>
+{expense_rows}
+</tbody>
+</table>
+
+<div class="deduction-choice">
+    <h2>Deduction Type</h2>
+    <label>
+        <input type="radio" name="{EXPENSE_DEDUCTION_TYPE}"
+               value="{DEDUCTION_TYPE_STANDARD}"{std_checked}>
+        Standard Deduction
+    </label>
+    <label>
+        <input type="radio" name="{EXPENSE_DEDUCTION_TYPE}"
+               value="{DEDUCTION_TYPE_ITEMIZED}"{item_checked}>
+        Itemized Deduction
+    </label>
+</div>
 
 <div class="submit-bar">
     <button type="submit">Submit for Grading</button>
@@ -1436,7 +1686,12 @@ def _build_results_html(
 <tbody>{field_rows}</tbody>
 </table>"""
 
-    section_label = "Part II — Income" if section == "income" else "Part I — Personal Info"
+    section_labels = {
+        "intake": "Part I — Personal Info",
+        "income": "Part II — Income",
+        "expenses": "Part III — Expenses",
+    }
+    section_label = section_labels.get(section, f"Section: {section}")
 
     return f"""\
 <!DOCTYPE html>
