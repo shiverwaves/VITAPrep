@@ -971,14 +971,29 @@ Running `generate_sample.py` shows expense data in the JSON output.
 
 ### Step 12.C: Part 3 Form Fields (`training/form_fields.py`)
 
-Define `PART3_FIELDS` constants for Page 3 of the 13614-C. Phase 1 covers
-common VITA scenarios:
+Define `PART3_FIELDS` constants for Page 3 of the 13614-C.
+
+**Design decision**: Page 3 of the 13614-C has a two-column layout — left
+column is client questions, right column is volunteer-completed fields. We
+model Part 3 the same way as Part 2: checkbox + amount pairs for each expense
+category. The client questions are conveyed through scenario interview notes
+(not graded); the volunteer fields (checkboxes, amounts, and the standard vs
+itemized choice) are what the student fills in and the grader scores. This
+keeps the form field contract simple and consistent across all sections. If
+the two-column structure needs richer modeling later (e.g., separating client
+prompts from volunteer responses), the field names can be extended without
+breaking existing grading logic.
+
+Property taxes are included as a separate amount field because the volunteer
+needs that value to evaluate the SALT cap ($10K) and determine whether
+itemizing beats the standard deduction.
 
 ```python
 # Itemized deductions
 EXPENSE_MORTGAGE_INTEREST = "expense.mortgage_interest"
-EXPENSE_MORTGAGE_AMOUNT = "expense.mortgage_interest.amount"
+EXPENSE_MORTGAGE_INTEREST_AMOUNT = "expense.mortgage_interest.amount"
 EXPENSE_PROPERTY_TAXES = "expense.property_taxes"
+EXPENSE_PROPERTY_TAXES_AMOUNT = "expense.property_taxes.amount"
 EXPENSE_MEDICAL = "expense.medical"
 EXPENSE_CHARITABLE = "expense.charitable"
 EXPENSE_CHARITABLE_AMOUNT = "expense.charitable.amount"
@@ -998,7 +1013,8 @@ EXPENSE_IRA_AMOUNT = "expense.ira.amount"
 EXPENSE_EDUCATION = "expense.education"
 EXPENSE_EDUCATION_AMOUNT = "expense.education.amount"
 
-PART3_FIELDS = [...]
+PART3_FIELDS = EXPENSE_CHECKBOX_FIELDS + EXPENSE_AMOUNT_FIELDS
+    + [EXPENSE_DEDUCTION_TYPE]
 ALL_FIELDS = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
 ```
 

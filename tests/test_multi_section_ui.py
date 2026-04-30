@@ -26,6 +26,9 @@ from generator.models import (
     W2,
 )
 from training.form_fields import (
+    EXPENSE_CHARITABLE,
+    EXPENSE_DEDUCTION_TYPE,
+    EXPENSE_MORTGAGE_INTEREST,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
     INCOME_INTEREST,
@@ -33,6 +36,7 @@ from training.form_fields import (
     INCOME_TOTAL,
     PART1_FIELDS,
     PART2_FIELDS,
+    PART3_FIELDS,
     ALL_FIELDS,
 )
 
@@ -328,13 +332,21 @@ class TestVerifyModeIncome:
 # =========================================================================
 
 class TestFieldLists:
-    """Test that PART1_FIELDS + PART2_FIELDS == ALL_FIELDS."""
+    """Test that PART1_FIELDS + PART2_FIELDS + PART3_FIELDS == ALL_FIELDS."""
 
     def test_partition_covers_all(self):
-        assert set(PART1_FIELDS + PART2_FIELDS) == set(ALL_FIELDS)
+        assert set(PART1_FIELDS + PART2_FIELDS + PART3_FIELDS) == set(ALL_FIELDS)
 
-    def test_no_overlap(self):
+    def test_no_overlap_p1_p2(self):
         overlap = set(PART1_FIELDS) & set(PART2_FIELDS)
+        assert overlap == set()
+
+    def test_no_overlap_p1_p3(self):
+        overlap = set(PART1_FIELDS) & set(PART3_FIELDS)
+        assert overlap == set()
+
+    def test_no_overlap_p2_p3(self):
+        overlap = set(PART2_FIELDS) & set(PART3_FIELDS)
         assert overlap == set()
 
     def test_part1_has_personal_fields(self):
@@ -347,6 +359,11 @@ class TestFieldLists:
         assert INCOME_WAGES_AMOUNT in PART2_FIELDS
         assert INCOME_TOTAL in PART2_FIELDS
 
+    def test_part3_has_expense_fields(self):
+        assert EXPENSE_MORTGAGE_INTEREST in PART3_FIELDS
+        assert EXPENSE_CHARITABLE in PART3_FIELDS
+        assert EXPENSE_DEDUCTION_TYPE in PART3_FIELDS
+
     def test_part1_excludes_income(self):
         assert INCOME_WAGES not in PART1_FIELDS
         assert INCOME_TOTAL not in PART1_FIELDS
@@ -354,6 +371,10 @@ class TestFieldLists:
     def test_part2_excludes_personal(self):
         assert "you.first_name" not in PART2_FIELDS
         assert "filing_status" not in PART2_FIELDS
+
+    def test_part3_excludes_personal_and_income(self):
+        assert "you.first_name" not in PART3_FIELDS
+        assert INCOME_WAGES not in PART3_FIELDS
 
 
 # =========================================================================
@@ -444,3 +465,46 @@ class TestGraderFieldsFilter:
         }
         result = grader.grade_intake(submission, hh, fields=PART2_FIELDS)
         assert result.accuracy == 1.0
+
+    def test_grade_part3_only(self):
+        from training.grader import Grader
+        hh = _make_household()
+        # Give the household some expenses
+        hh.mortgage_interest = 8000
+        hh.property_taxes = 3000
+        hh.charitable_contributions = 1000
+        hh.uses_standard_deduction = True
+        grader = Grader()
+
+        part3_result = grader.grade_intake({}, hh, fields=PART3_FIELDS)
+        p3_fields = {fb["field"] for fb in part3_result.field_feedback}
+        assert all(f.startswith("expense.") for f in p3_fields)
+        # Should not have personal or income fields
+        assert not any(f.startswith("you.") for f in p3_fields)
+        assert not any(f.startswith("income.") for f in p3_fields)
+
+    def test_grade_part3_excludes_from_part1(self):
+        from training.grader import Grader
+        hh = _make_household()
+        hh.mortgage_interest = 5000
+        hh.uses_standard_deduction = True
+        grader = Grader()
+
+        part1_result = grader.grade_intake({}, hh, fields=PART1_FIELDS)
+        p1_fields = {fb["field"] for fb in part1_result.field_feedback}
+        assert not any(f.startswith("expense.") for f in p1_fields)
+
+    def test_grade_part3_deduction_type(self):
+        from training.grader import Grader
+        hh = _make_household()
+        hh.uses_standard_deduction = True
+        grader = Grader()
+
+        submission = {EXPENSE_DEDUCTION_TYPE: "standard"}
+        result = grader.grade_intake(submission, hh, fields=PART3_FIELDS)
+        deduction_fb = [
+            fb for fb in result.field_feedback
+            if fb["field"] == EXPENSE_DEDUCTION_TYPE
+        ]
+        assert len(deduction_fb) == 1
+        assert deduction_fb[0]["status"] == "correct"

@@ -75,6 +75,8 @@ from training.form_fields import (
     DEP_DOB,
     DEP_RELATIONSHIP,
     DEP_MONTHS,
+    EXPENSE_DEDUCTION_TYPE,
+    DEDUCTION_TYPE_STANDARD,
 )
 from training.grader import Grader
 
@@ -179,6 +181,7 @@ def _perfect_single_submission() -> Dict[str, str]:
         ADDR_STATE: "HI",
         ADDR_ZIP: "96816",
         FILING_STATUS: "single",
+        EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
     }
 
 
@@ -205,6 +208,7 @@ def _perfect_married_submission() -> Dict[str, str]:
         dep_field(0, DEP_DOB): "01/05/2012",
         dep_field(0, DEP_RELATIONSHIP): "Son/Daughter",
         dep_field(0, DEP_MONTHS): "12",
+        EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
     }
 
 
@@ -624,6 +628,7 @@ class TestGradeIntakeIncome:
             INCOME_INTEREST: "Yes",
             INCOME_INTEREST_AMOUNT: "800",
             INCOME_TOTAL: "55800",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
         result = grader.grade_intake(sub, income_household)
         assert result.accuracy == 1.0
@@ -692,6 +697,7 @@ class TestGradeIntakeIncome:
             INCOME_INTEREST: "Yes",
             INCOME_INTEREST_AMOUNT: "800",
             INCOME_TOTAL: "55800",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
         result = grader.grade_intake(sub, income_household)
         assert result.accuracy == 1.0

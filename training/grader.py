@@ -22,11 +22,31 @@ from training.form_fields import (
     ADDR_ZIP,
     ADDR_APT,
     CLAIMED_AS_DEPENDENT,
+    DEDUCTION_TYPE_ITEMIZED,
+    DEDUCTION_TYPE_STANDARD,
     DEP_DOB,
     DEP_FIRST_NAME,
     DEP_LAST_NAME,
     DEP_MONTHS,
     DEP_RELATIONSHIP,
+    EXPENSE_CHARITABLE,
+    EXPENSE_CHARITABLE_AMOUNT,
+    EXPENSE_CHILD_CARE,
+    EXPENSE_CHILD_CARE_AMOUNT,
+    EXPENSE_DEDUCTION_TYPE,
+    EXPENSE_EDUCATION,
+    EXPENSE_EDUCATION_AMOUNT,
+    EXPENSE_EDUCATOR,
+    EXPENSE_EDUCATOR_AMOUNT,
+    EXPENSE_IRA,
+    EXPENSE_IRA_AMOUNT,
+    EXPENSE_MEDICAL,
+    EXPENSE_MORTGAGE_INTEREST,
+    EXPENSE_MORTGAGE_INTEREST_AMOUNT,
+    EXPENSE_PROPERTY_TAXES,
+    EXPENSE_PROPERTY_TAXES_AMOUNT,
+    EXPENSE_STUDENT_LOAN,
+    EXPENSE_STUDENT_LOAN_AMOUNT,
     FILING_STATUS,
     INCOME_DIVIDENDS,
     INCOME_DIVIDENDS_AMOUNT,
@@ -150,6 +170,9 @@ def _build_answer_key(household: Household) -> Dict[str, str]:
     # Part II: Income
     _build_income_key(key, household)
 
+    # Part III: Expenses
+    _build_expense_key(key, household)
+
     return key
 
 
@@ -192,6 +215,65 @@ def _build_income_key(key: Dict[str, str], household: Household) -> None:
     total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
     if total > 0:
         key[INCOME_TOTAL] = str(total)
+
+
+def _build_expense_key(key: Dict[str, str], household: Household) -> None:
+    """Add expense/deduction fields to the answer key."""
+    # Itemized deduction items
+    if household.mortgage_interest > 0:
+        key[EXPENSE_MORTGAGE_INTEREST] = "Yes"
+        key[EXPENSE_MORTGAGE_INTEREST_AMOUNT] = str(household.mortgage_interest)
+
+    if household.property_taxes > 0:
+        key[EXPENSE_PROPERTY_TAXES] = "Yes"
+        key[EXPENSE_PROPERTY_TAXES_AMOUNT] = str(household.property_taxes)
+
+    if household.medical_expenses > 0:
+        key[EXPENSE_MEDICAL] = "Yes"
+
+    if household.charitable_contributions > 0:
+        key[EXPENSE_CHARITABLE] = "Yes"
+        key[EXPENSE_CHARITABLE_AMOUNT] = str(household.charitable_contributions)
+
+    # Standard vs itemized
+    key[EXPENSE_DEDUCTION_TYPE] = (
+        DEDUCTION_TYPE_STANDARD
+        if household.uses_standard_deduction
+        else DEDUCTION_TYPE_ITEMIZED
+    )
+
+    # Above-the-line deductions (summed across filers)
+    filers = []
+    householder = household.get_householder()
+    spouse = household.get_spouse()
+    if householder:
+        filers.append(householder)
+    if spouse:
+        filers.append(spouse)
+
+    total_student_loan = sum(p.student_loan_interest for p in filers)
+    if total_student_loan > 0:
+        key[EXPENSE_STUDENT_LOAN] = "Yes"
+        key[EXPENSE_STUDENT_LOAN_AMOUNT] = str(total_student_loan)
+
+    total_educator = sum(p.educator_expenses for p in filers)
+    if total_educator > 0:
+        key[EXPENSE_EDUCATOR] = "Yes"
+        key[EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+
+    total_ira = sum(p.ira_contributions for p in filers)
+    if total_ira > 0:
+        key[EXPENSE_IRA] = "Yes"
+        key[EXPENSE_IRA_AMOUNT] = str(total_ira)
+
+    # Credit-related expenses
+    if household.child_care_expenses > 0:
+        key[EXPENSE_CHILD_CARE] = "Yes"
+        key[EXPENSE_CHILD_CARE_AMOUNT] = str(household.child_care_expenses)
+
+    if household.education_expenses > 0:
+        key[EXPENSE_EDUCATION] = "Yes"
+        key[EXPENSE_EDUCATION_AMOUNT] = str(household.education_expenses)
 
 
 # =========================================================================
