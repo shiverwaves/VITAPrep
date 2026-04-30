@@ -295,6 +295,7 @@ jobs:
           python -m pytest tests/test_exercise_engine.py \
                            tests/test_scenario_store.py \
                            tests/test_income_integration.py \
+                           tests/test_multi_section_ui.py \
                            -v --tb=short 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
