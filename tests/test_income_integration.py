@@ -616,3 +616,173 @@ class TestFullPipeline:
         grader = Grader()
         result = grader.grade_intake(correct_values, hh)
         assert result.accuracy == 1.0
+
+
+# =========================================================================
+# 7. End-to-end expense pipeline
+# =========================================================================
+
+class TestExpensePipeline:
+    """End-to-end tests: household with expenses → documents → populate → grade."""
+
+    def _make_expense_household(self) -> Household:
+        """Household with mortgage, student loan, and education expenses."""
+        p = Person(
+            person_id="p-exp",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=38, sex="M", race="white",
+            legal_first_name="Mike",
+            legal_middle_name="T",
+            legal_last_name="Expense",
+            ssn="900-55-4444",
+            dob=date(1984, 8, 12),
+            phone="(808) 555-0099",
+            email="mike@example.com",
+            employment_status="employed",
+            wage_income=75000,
+            interest_income=200,
+            student_loan_interest=1800,
+            educator_expenses=250,
+            w2s=[W2(
+                employer=Employer(
+                    name="Acme Corp",
+                    ein="99-1111111",
+                    address=Address(
+                        street="1 Corp Blvd", city="Honolulu",
+                        state="HI", zip_code="96815",
+                    ),
+                ),
+                wages=75000,
+                federal_tax_withheld=9000,
+                social_security_wages=75000,
+                social_security_tax=4650,
+                medicare_wages=75000,
+                medicare_tax=1087,
+                state="HI",
+                state_wages=75000,
+                state_tax=3000,
+            )],
+            form_1099_ints=[Form1099INT(
+                payer_name="Test Bank",
+                payer_tin="99-2222222",
+                interest_income=200,
+            )],
+        )
+        from generator.models import Form1098, Form1098E
+        p.form_1098s = [Form1098(
+            lender_name="First Hawaiian Bank",
+            lender_tin="99-3333333",
+            mortgage_interest=8500,
+            outstanding_principal=212500,
+            property_taxes=2800,
+        )]
+        p.form_1098_es = [Form1098E(
+            lender_name="Nelnet",
+            lender_tin="99-4444444",
+            student_loan_interest=1800,
+        )]
+
+        return Household(
+            household_id="hh-exp-e2e",
+            state="HI", year=2022,
+            pattern="single_adult",
+            address=Address(
+                street="42 Palm Ave", city="Honolulu",
+                state="HI", zip_code="96815",
+            ),
+            members=[p],
+            is_homeowner=True,
+            mortgage_interest=8500,
+            property_taxes=2800,
+            charitable_contributions=500,
+            uses_standard_deduction=True,
+        )
+
+    def test_expense_documents_render(self) -> None:
+        """All expense documents render without error."""
+        hh = self._make_expense_household()
+        renderer = DocumentRenderer()
+        p = hh.get_householder()
+
+        for f in p.form_1098s:
+            html = renderer.render_1098_html(p, f)
+            assert "Form 1098" in html
+            assert "$8,500" in html
+
+        for f in p.form_1098_es:
+            html = renderer.render_1098e_html(p, f)
+            assert "Form 1098-E" in html
+            assert "$1,800" in html
+
+    def test_expense_fields_in_populator(self) -> None:
+        """build_field_values includes expense fields."""
+        hh = self._make_expense_household()
+        values = build_field_values(hh)
+
+        assert values.get("expense.mortgage_interest") == "Yes"
+        assert values.get("expense.mortgage_interest.amount") == "8500"
+        assert values.get("expense.property_taxes") == "Yes"
+        assert values.get("expense.property_taxes.amount") == "2800"
+        assert values.get("expense.charitable") == "Yes"
+        assert values.get("expense.charitable.amount") == "500"
+        assert values.get("expense.student_loan") == "Yes"
+        assert values.get("expense.student_loan.amount") == "1800"
+        assert values.get("expense.educator") == "Yes"
+        assert values.get("expense.educator.amount") == "250"
+        assert values.get("expense.deduction_type") == "standard"
+
+    def test_expense_perfect_grade(self) -> None:
+        """Submitting exact answer key for expenses gets 100%."""
+        hh = self._make_expense_household()
+        values = build_field_values(hh)
+        grader = Grader()
+        result = grader.grade_intake(values, hh)
+        assert result.accuracy == 1.0
+        assert "Perfect" in result.feedback
+
+    def test_expense_wrong_deduction_type_caught(self) -> None:
+        """Incorrect deduction type is flagged."""
+        hh = self._make_expense_household()
+        values = build_field_values(hh)
+        values["expense.deduction_type"] = "itemized"
+        grader = Grader()
+        result = grader.grade_intake(values, hh)
+        assert result.accuracy < 1.0
+        wrong_fields = {f["field"] for f in result.field_feedback if f["status"] == "incorrect"}
+        assert "expense.deduction_type" in wrong_fields
+
+    def test_expense_wrong_amount_caught(self) -> None:
+        """Incorrect mortgage interest amount is flagged."""
+        hh = self._make_expense_household()
+        values = build_field_values(hh)
+        values["expense.mortgage_interest.amount"] = "99999"
+        grader = Grader()
+        result = grader.grade_intake(values, hh)
+        assert result.accuracy < 1.0
+        wrong_fields = {f["field"] for f in result.field_feedback if f["status"] == "incorrect"}
+        assert "expense.mortgage_interest.amount" in wrong_fields
+
+    def test_full_pipeline_income_plus_expenses(self) -> None:
+        """Full loop: render all docs, populate all fields, grade 100%."""
+        hh = self._make_expense_household()
+        renderer = DocumentRenderer()
+        p = hh.get_householder()
+
+        # Render all documents
+        docs = []
+        docs.append(renderer.render_ssn_card_html(p))
+        for w2 in p.w2s:
+            docs.append(renderer.render_w2_html(p, w2))
+        for f in p.form_1099_ints:
+            docs.append(renderer.render_1099_int_html(p, f))
+        for f in p.form_1098s:
+            docs.append(renderer.render_1098_html(p, f))
+        for f in p.form_1098_es:
+            docs.append(renderer.render_1098e_html(p, f))
+        assert len(docs) >= 4
+
+        # Populate and grade
+        values = build_field_values(hh)
+        grader = Grader()
+        result = grader.grade_intake(values, hh)
+        assert result.accuracy == 1.0

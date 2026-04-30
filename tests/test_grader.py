@@ -76,7 +76,26 @@ from training.form_fields import (
     DEP_RELATIONSHIP,
     DEP_MONTHS,
     EXPENSE_DEDUCTION_TYPE,
+    EXPENSE_MORTGAGE_INTEREST,
+    EXPENSE_MORTGAGE_INTEREST_AMOUNT,
+    EXPENSE_PROPERTY_TAXES,
+    EXPENSE_PROPERTY_TAXES_AMOUNT,
+    EXPENSE_CHARITABLE,
+    EXPENSE_CHARITABLE_AMOUNT,
+    EXPENSE_STUDENT_LOAN,
+    EXPENSE_STUDENT_LOAN_AMOUNT,
+    EXPENSE_CHILD_CARE,
+    EXPENSE_CHILD_CARE_AMOUNT,
+    EXPENSE_EDUCATOR,
+    EXPENSE_EDUCATOR_AMOUNT,
+    EXPENSE_IRA,
+    EXPENSE_IRA_AMOUNT,
+    EXPENSE_EDUCATION,
+    EXPENSE_EDUCATION_AMOUNT,
+    EXPENSE_MEDICAL,
     DEDUCTION_TYPE_STANDARD,
+    DEDUCTION_TYPE_ITEMIZED,
+    PART3_FIELDS,
 )
 from training.grader import Grader
 
@@ -701,3 +720,202 @@ class TestGradeIntakeIncome:
         }
         result = grader.grade_intake(sub, income_household)
         assert result.accuracy == 1.0
+
+
+# =========================================================================
+# Mode 1: grade_intake — expense fields (Part III)
+# =========================================================================
+
+class TestGradeExpenses:
+    """Test grading of Part III expense fields."""
+
+    @pytest.fixture
+    def expense_household(self) -> Household:
+        """Household with mortgage, charitable, and student loan expenses."""
+        p = Person(
+            person_id="p-exp-1",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=40, sex="M", race="white",
+            legal_first_name="Alex",
+            legal_middle_name="J",
+            legal_last_name="Builder",
+            ssn="900-44-5555",
+            dob=date(1982, 3, 20),
+            wage_income=85000,
+            student_loan_interest=1200,
+        )
+        hh = Household(
+            household_id="hh-exp",
+            state="HI", year=2022,
+            pattern="single_adult",
+            address=Address(
+                street="50 Oak Rd", city="Honolulu",
+                state="HI", zip_code="96816",
+            ),
+            members=[p],
+            mortgage_interest=9000,
+            property_taxes=3500,
+            charitable_contributions=2000,
+            uses_standard_deduction=False,
+        )
+        return hh
+
+    def test_perfect_expense_score(
+        self, grader: Grader, expense_household: Household,
+    ) -> None:
+        sub = {
+            EXPENSE_MORTGAGE_INTEREST: "Yes",
+            EXPENSE_MORTGAGE_INTEREST_AMOUNT: "9000",
+            EXPENSE_PROPERTY_TAXES: "Yes",
+            EXPENSE_PROPERTY_TAXES_AMOUNT: "3500",
+            EXPENSE_CHARITABLE: "Yes",
+            EXPENSE_CHARITABLE_AMOUNT: "2000",
+            EXPENSE_STUDENT_LOAN: "Yes",
+            EXPENSE_STUDENT_LOAN_AMOUNT: "1200",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
+        }
+        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        assert result.accuracy == 1.0
+
+    def test_wrong_deduction_type(
+        self, grader: Grader, expense_household: Household,
+    ) -> None:
+        sub = {
+            EXPENSE_MORTGAGE_INTEREST: "Yes",
+            EXPENSE_MORTGAGE_INTEREST_AMOUNT: "9000",
+            EXPENSE_PROPERTY_TAXES: "Yes",
+            EXPENSE_PROPERTY_TAXES_AMOUNT: "3500",
+            EXPENSE_CHARITABLE: "Yes",
+            EXPENSE_CHARITABLE_AMOUNT: "2000",
+            EXPENSE_STUDENT_LOAN: "Yes",
+            EXPENSE_STUDENT_LOAN_AMOUNT: "1200",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
+        }
+        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        assert result.accuracy < 1.0
+        wrong = {fb["field"] for fb in result.field_feedback if fb["status"] == "incorrect"}
+        assert EXPENSE_DEDUCTION_TYPE in wrong
+
+    def test_standard_deduction_correct(self, grader: Grader) -> None:
+        hh = Household(
+            household_id="hh-std",
+            state="HI", year=2022,
+            pattern="single_adult",
+            address=Address(
+                street="1 Elm St", city="Honolulu",
+                state="HI", zip_code="96815",
+            ),
+            members=[Person(
+                person_id="p-std",
+                relationship=RelationshipType.HOUSEHOLDER,
+                age=30, sex="F", race="white",
+                legal_first_name="Pat",
+                legal_last_name="Simple",
+                ssn="900-66-7777",
+                dob=date(1992, 1, 1),
+            )],
+            uses_standard_deduction=True,
+        )
+        sub = {EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD}
+        result = grader.grade_intake(sub, hh, fields=PART3_FIELDS)
+        assert result.accuracy == 1.0
+
+    def test_missing_expense_reduces_score(
+        self, grader: Grader, expense_household: Household,
+    ) -> None:
+        sub = {
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
+        }
+        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        assert result.score < result.max_score
+        wrong_fields = {fb["field"] for fb in result.field_feedback if fb["status"] == "incorrect"}
+        assert EXPENSE_MORTGAGE_INTEREST in wrong_fields
+
+    def test_expense_amount_tolerance(
+        self, grader: Grader, expense_household: Household,
+    ) -> None:
+        sub = {
+            EXPENSE_MORTGAGE_INTEREST: "Yes",
+            EXPENSE_MORTGAGE_INTEREST_AMOUNT: "$9,000",
+            EXPENSE_PROPERTY_TAXES: "Yes",
+            EXPENSE_PROPERTY_TAXES_AMOUNT: "$3,500",
+            EXPENSE_CHARITABLE: "Yes",
+            EXPENSE_CHARITABLE_AMOUNT: "$2,000",
+            EXPENSE_STUDENT_LOAN: "Yes",
+            EXPENSE_STUDENT_LOAN_AMOUNT: "$1,200",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
+        }
+        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        assert result.accuracy == 1.0
+
+    def test_above_line_deductions_graded(self, grader: Grader) -> None:
+        p = Person(
+            person_id="p-abl",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=35, sex="F", race="white",
+            legal_first_name="Edu",
+            legal_last_name="Cator",
+            ssn="900-88-9999",
+            dob=date(1987, 7, 7),
+            educator_expenses=250,
+            ira_contributions=3000,
+        )
+        hh = Household(
+            household_id="hh-abl",
+            state="HI", year=2022,
+            pattern="single_adult",
+            address=Address(
+                street="2 School Ln", city="Kailua",
+                state="HI", zip_code="96734",
+            ),
+            members=[p],
+            uses_standard_deduction=True,
+        )
+        sub = {
+            EXPENSE_EDUCATOR: "Yes",
+            EXPENSE_EDUCATOR_AMOUNT: "250",
+            EXPENSE_IRA: "Yes",
+            EXPENSE_IRA_AMOUNT: "3000",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
+        }
+        result = grader.grade_intake(sub, hh, fields=PART3_FIELDS)
+        assert result.accuracy == 1.0
+
+    def test_credit_expenses_graded(self, grader: Grader) -> None:
+        hh = Household(
+            household_id="hh-cr",
+            state="HI", year=2022,
+            pattern="single_parent",
+            address=Address(
+                street="3 Care Way", city="Honolulu",
+                state="HI", zip_code="96815",
+            ),
+            members=[Person(
+                person_id="p-cr",
+                relationship=RelationshipType.HOUSEHOLDER,
+                age=32, sex="F", race="white",
+                legal_first_name="Care",
+                legal_last_name="Giver",
+                ssn="900-11-3333",
+                dob=date(1990, 4, 4),
+            )],
+            child_care_expenses=5000,
+            education_expenses=8000,
+            uses_standard_deduction=True,
+        )
+        sub = {
+            EXPENSE_CHILD_CARE: "Yes",
+            EXPENSE_CHILD_CARE_AMOUNT: "5000",
+            EXPENSE_EDUCATION: "Yes",
+            EXPENSE_EDUCATION_AMOUNT: "8000",
+            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
+        }
+        result = grader.grade_intake(sub, hh, fields=PART3_FIELDS)
+        assert result.accuracy == 1.0
+
+    def test_empty_expense_submission_scores_zero(
+        self, grader: Grader, expense_household: Household,
+    ) -> None:
+        result = grader.grade_intake({}, expense_household, fields=PART3_FIELDS)
+        assert result.score == 0
+        assert result.accuracy == 0.0

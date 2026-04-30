@@ -565,6 +565,112 @@ class TestFullOverlay:
 # =========================================================================
 
 
+class TestExpenseDocumentCreation:
+    """Test that ExpenseGenerator creates Form 1098/1098-E/1098-T objects."""
+
+    def test_form1098_created_with_mortgage(self) -> None:
+        np.random.seed(10)
+        gen = ExpenseGenerator(_empty_distributions())
+        hh = _make_household(members=[_make_person(wage_income=100000, age=35)])
+        gen.overlay(hh)
+        householder = hh.get_householder()
+        if hh.mortgage_interest > 0:
+            assert len(householder.form_1098s) == 1
+            f = householder.form_1098s[0]
+            assert f.mortgage_interest == hh.mortgage_interest
+            assert f.property_taxes == hh.property_taxes
+            assert f.lender_name != ""
+            assert f.lender_tin != ""
+        else:
+            assert len(householder.form_1098s) == 0
+
+    def test_form1098_not_created_for_renter(self) -> None:
+        np.random.seed(42)
+        gen = ExpenseGenerator(_empty_distributions())
+        hh = _make_household(members=[_make_person(wage_income=15000, age=22)])
+        gen.overlay(hh)
+        householder = hh.get_householder()
+        if not hh.is_homeowner:
+            assert len(householder.form_1098s) == 0
+
+    def test_form1098_outstanding_principal(self) -> None:
+        np.random.seed(10)
+        gen = ExpenseGenerator(_empty_distributions())
+        hh = _make_household(members=[_make_person(wage_income=100000, age=35)])
+        gen.overlay(hh)
+        householder = hh.get_householder()
+        if hh.mortgage_interest > 0:
+            f = householder.form_1098s[0]
+            expected_principal = int(hh.mortgage_interest / 0.04)
+            assert f.outstanding_principal == expected_principal
+
+    def test_form1098e_created_per_person(self) -> None:
+        np.random.seed(42)
+        gen = ExpenseGenerator(_empty_distributions())
+        hh = _make_household(members=[
+            _make_person(wage_income=50000, age=28, education="bachelors"),
+            _make_person(
+                person_id="p-2",
+                relationship=RelationshipType.SPOUSE,
+                sex="F",
+                wage_income=40000, age=27, education="bachelors",
+            ),
+        ], pattern="married_couple")
+        gen.overlay(hh)
+        for person in hh.members:
+            if person.student_loan_interest > 0:
+                assert len(person.form_1098_es) == 1
+                f = person.form_1098_es[0]
+                assert f.student_loan_interest == person.student_loan_interest
+                assert f.lender_name != ""
+                assert f.lender_tin != ""
+            else:
+                assert len(person.form_1098_es) == 0
+
+    def test_form1098t_created_with_education(self) -> None:
+        np.random.seed(42)
+        gen = ExpenseGenerator(_empty_distributions())
+        student = _make_person(
+            person_id="child-1",
+            relationship=RelationshipType.BIOLOGICAL_CHILD,
+            age=19, sex="F",
+            employment_status="",
+            education="some_college",
+            wage_income=0,
+            is_full_time_student=True,
+        )
+        hh = _make_household(
+            members=[_make_person(wage_income=80000), student],
+            pattern="single_parent",
+        )
+        gen.overlay(hh)
+        householder = hh.get_householder()
+        if hh.education_expenses > 0:
+            assert len(householder.form_1098_ts) == 1
+            f = householder.form_1098_ts[0]
+            assert f.amounts_billed == hh.education_expenses
+            assert f.institution_name != ""
+            assert f.institution_tin != ""
+
+    def test_no_documents_for_zero_expenses(self) -> None:
+        np.random.seed(42)
+        gen = ExpenseGenerator(_empty_distributions())
+        hh = _make_household(members=[_make_person(
+            wage_income=0,
+            employment_status=EmploymentStatus.NOT_IN_LABOR_FORCE.value,
+        )])
+        gen.overlay(hh)
+        householder = hh.get_householder()
+        assert len(householder.form_1098s) == 0
+        assert len(householder.form_1098_es) == 0
+        assert len(householder.form_1098_ts) == 0
+
+
+# =========================================================================
+# Bracket helpers
+# =========================================================================
+
+
 class TestBracketHelpers:
     def test_age_brackets(self) -> None:
         assert ExpenseGenerator._age_to_bracket(20) == "<25"
