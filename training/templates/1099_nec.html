@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.form-1099-nec {
+    position: relative;
+    width: 600px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    color: #1a1a1a;
+    border: 2px solid #333;
+    background: #fff;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.form-title-bar {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.form-title-bar .tax-year {
+    font-size: 10px;
+    font-weight: normal;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+.form-cell {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 36px;
+}
+
+.form-cell .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.form-cell .box-num {
+    font-size: 8px;
+    color: #666;
+    font-weight: bold;
+}
+
+.form-cell .value {
+    font-size: 12px;
+    font-weight: bold;
+    font-family: "Courier New", Courier, monospace;
+}
+
+.form-payer-block {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 48px;
+    grid-column: 1 / -1;
+}
+
+.form-payer-block .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.form-payer-block .value {
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.form-footer {
+    font-size: 8px;
+    color: #666;
+    text-align: center;
+    padding: 4px;
+    border-top: 1px solid #999;
+}
+</style>
+</head>
+<body>
+<div class="form-1099-nec">
+    <div class="watermark"></div>
+
+    <div class="form-title-bar">
+        <span>Form 1099-NEC &mdash; Nonemployee Compensation</span>
+        <span class="tax-year">{{ tax_year }}</span>
+    </div>
+
+    <!-- Payer info -->
+    <div class="form-payer-block">
+        <div class="label">Payer's name</div>
+        <div class="value">{{ payer_name }}</div>
+    </div>
+
+    <div class="form-grid">
+        <div class="form-cell">
+            <div class="label">Payer's TIN</div>
+            <div class="value">{{ payer_tin }}</div>
+        </div>
+        <div class="form-cell">
+            <div class="label">Recipient's TIN</div>
+            <div class="value">{{ recipient_tin }}</div>
+        </div>
+    </div>
+
+    <div class="form-payer-block">
+        <div class="label">Recipient's name</div>
+        <div class="value">{{ recipient_name }}</div>
+    </div>
+
+    <!-- Income boxes -->
+    <div class="form-grid">
+        <div class="form-cell">
+            <div class="label"><span class="box-num">1</span> Nonemployee compensation</div>
+            <div class="value">{{ nonemployee_compensation }}</div>
+        </div>
+        <div class="form-cell">
+            <div class="label"><span class="box-num">4</span> Federal income tax withheld</div>
+            <div class="value">{{ federal_tax_withheld }}</div>
+        </div>
+    </div>
+
+    <div class="form-footer">
+        Department of the Treasury — Internal Revenue Service
+    </div>
+</div>
+</body>
+</html>
