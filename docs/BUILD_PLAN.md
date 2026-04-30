@@ -696,5 +696,102 @@ form → grade → get feedback on income fields.
 
 ---
 
+## Sprint 10: Multi-Section Intake UI
+
+The backend pipeline (Sprint 9) generates income data and documents, but
+the web UI only presents Part I of the 13614-C intake form. Sprint 10
+adds the Part II income form as a separate page and establishes the
+multi-section navigation pattern that Part III (expenses) will follow.
+
+### Design
+
+The real IRS Form 13614-C is a multi-page document:
+
+- **Page 1 / Part I** — Personal Information (Sections A–F)
+- **Page 2 / Part II** — Income
+- **Page 3 / Part III** — Expenses & Life Events (future)
+
+The app mirrors this with separate form routes per section:
+
+```
+GET /scenarios/{id}/form           → Part I  (personal info)
+GET /scenarios/{id}/form/income    → Part II (income)
+GET /scenarios/{id}/form/expenses  → Part III (future)
+```
+
+Each form page:
+1. Submits only its own fields to a section-specific endpoint
+2. Shows a section nav bar (Part I / Part II / ...) so students can
+   move between sections in any order
+3. Pre-fills fields in verify mode (same as Part I today)
+4. Grades independently — the grader already handles partial submissions
+
+The exercise landing page shows one button per available section
+instead of a single "Open Intake Form" button.
+
+### Step 10.A: Part II Income Form Page
+
+Add `GET /scenarios/{id}/form/income` route that renders an interactive
+HTML form with:
+- 6 income source rows, each with a checkbox and dollar amount input
+  (wages, interest, dividends, social security, retirement,
+  self-employment)
+- Total income field
+- Section nav bar linking to Part I and Part II
+- Pre-fill support for verify mode
+- POST to a section-aware submit endpoint
+
+**Files**: `api/routes/scenarios.py`
+
+**Checkpoint**: Navigate to `/scenarios/{id}/form/income` in the browser,
+see the income form, fill it in manually.
+
+### Step 10.B: Section-Aware Submission & Grading
+
+Update the submission flow so each section can be graded independently:
+- `POST /scenarios/{id}/submit/intake` — grades Part I fields only
+- `POST /scenarios/{id}/submit/income` — grades Part II fields only
+- Each returns a results page scoped to that section's fields
+- Grades are saved per-section so the landing page can show progress
+  (e.g., "Part I: 95%, Part II: not yet submitted")
+
+Alternatively, keep a single submit endpoint but partition feedback
+by section in the results display.
+
+**Files**: `api/routes/scenarios.py`
+
+**Checkpoint**: Submit the income form, see graded results for income
+fields only.
+
+### Step 10.C: Exercise Landing Page & Navigation
+
+Update the exercise landing page (`GET /scenarios/{id}`) to:
+- Show separate buttons for each form section (Part I, Part II)
+- Display per-section grade status if previously graded
+- Group document links by type (identity docs vs income docs) with
+  clear visual separation
+- Add section nav bar to Part I form page (matching Part II)
+
+**Files**: `api/routes/scenarios.py`
+
+**Checkpoint**: Landing page shows two form buttons. Each form page has
+a nav bar to switch between sections. Previously graded sections show
+scores on the landing page.
+
+### Step 10.D: Tests
+
+- Test Part II form renders with correct field names and pre-fill
+- Test Part II submission parses income fields and grades correctly
+- Test section nav links appear on both form pages
+- Test landing page shows per-section grade status
+- Test verify mode pre-fills income fields with injected errors
+
+**Checkpoint**: All tests pass. Full user flow works in browser:
+generate scenario → review income documents → fill Part II form →
+submit → see income-specific feedback → navigate to Part I → submit →
+see personal info feedback.
+
+---
+
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
