@@ -92,14 +92,18 @@ unmarried_partner_patterns, race_distribution, race_by_age,
 hispanic_origin_by_age, spousal_age_gaps, couple_sex_patterns
 ```
 
-Part 2 tables (14):
+Part 2 tables (12):
 ```
 employment_by_age, education_by_age, disability_by_age,
 social_security, retirement_income, interest_and_dividend_income,
 other_income_by_employment_status, public_assistance_income,
-homeownership_rates, property_taxes, mortgage_interest,
-bls_occupation_wages, education_occupation_probabilities,
-age_income_adjustments, occupation_self_employment_probability
+occupation_wages, education_occupation_probabilities,
+age_income_adjustments, occupation_self_employment_rates
+```
+
+Part 3 tables (3):
+```
+homeownership_rates, property_taxes, mortgage_costs
 ```
 
 Reference: `HouseholdRNG/generator/database.py` — simplify, add SQLite auto-detect.
@@ -1151,6 +1155,48 @@ with standard vs itemized determination.
 - Update `test_grader.py`: Part 3 field filtering, standard vs itemized grading
 
 **Checkpoint**: All tests pass. 13614-C coverage extends through Page 3.
+
+### Post-Sprint 12 Fixes
+
+#### Fix 12.H: Data Inventory — Part 3 support + table name corrections
+
+The `scripts/data_inventory.py` inventory was written before Part 3 extraction
+existed. Three issues fixed:
+
+1. **Wrong table names** in `PART2_TABLES`: `mortgage_interest` →
+   `mortgage_costs`, `bls_occupation_wages` → `occupation_wages`,
+   `occupation_self_employment_probability` → `occupation_self_employment_rates`
+2. **Part 3 tables misclassified**: `homeownership_rates` and `property_taxes`
+   were listed under `PART2_TABLES` — moved to new `PART3_TABLES` list
+3. **No Part 3 completeness check**: added `part3_complete` flag and "P3"
+   badge in text/markdown output
+
+Also added descriptive captions to each input in the GitHub Actions
+`data-management.yml` workflow explaining what each setting controls.
+
+**Files**: `scripts/data_inventory.py`, `.github/workflows/data-management.yml`
+
+#### Fix 12.I: Scenario Store — Document deserialization
+
+Income and expense documents (W-2, 1099-INT, 1099-DIV, 1099-R, SSA-1099,
+1099-NEC, Form 1098, 1098-E, 1098-T) were lost on scenario save/reload.
+
+**Root cause**: `_serialize_household()` uses `dataclasses.asdict()` which
+correctly serializes all nested dataclasses to JSON. But
+`_deserialize_person()` only reconstructed scalar fields — all document
+lists defaulted to empty on reload.
+
+**Fix**: Added deserialization for all 9 document types in
+`_deserialize_person()` plus helper functions `_deserialize_w2()` and
+`_deserialize_employer()` (W-2 has nested Employer with Address, and
+`box_12` stores as list-of-dicts). Also added missing Household fields:
+`is_homeowner`, `total_itemized_deductions`, `total_above_line_deductions`,
+`uses_standard_deduction`.
+
+**Files**: `training/scenario_store.py`
+
+**Checkpoint**: Generate scenario → reload from SQLite → landing page shows
+all income and expense document links. Document routes render correctly.
 
 ---
 
