@@ -32,6 +32,9 @@ from generator.models import (
     Address,
     ClientFact,
     Employer,
+    Form1098,
+    Form1098E,
+    Form1098T,
     Form1099DIV,
     Form1099INT,
     Form1099NEC,
@@ -123,8 +126,10 @@ def _serialize_doc_paths(paths: dict) -> str:
     return json.dumps(paths)
 
 
-def _deserialize_employer(d: dict) -> Employer:
-    """Rebuild an Employer from its dict."""
+def _deserialize_employer(d: Optional[dict]) -> Optional[Employer]:
+    """Rebuild an Employer from its dict representation."""
+    if not d:
+        return None
     addr = d.get("address")
     return Employer(
         name=d.get("name", ""),
@@ -134,17 +139,16 @@ def _deserialize_employer(d: dict) -> Employer:
 
 
 def _deserialize_w2(d: dict) -> W2:
-    """Rebuild a W2 from its dict."""
-    emp = d.get("employer")
+    """Rebuild a W2 from its dict representation."""
     box_12_raw = d.get("box_12", [])
     box_12 = []
     for item in box_12_raw:
         if isinstance(item, dict):
-            box_12.append((item["code"], item["amount"]))
-        else:
+            box_12.append((item.get("code", ""), item.get("amount", 0)))
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
             box_12.append((item[0], item[1]))
     return W2(
-        employer=_deserialize_employer(emp) if emp else None,
+        employer=_deserialize_employer(d.get("employer")),
         wages=d.get("wages", 0),
         federal_tax_withheld=d.get("federal_tax_withheld", 0),
         social_security_wages=d.get("social_security_wages", 0),
@@ -171,6 +175,11 @@ def _deserialize_person(d: dict) -> Person:
     ssa_raw = d.get("ssa_1099")
     ssa_1099 = SSA1099(**ssa_raw) if ssa_raw else None
     form_1099_necs = [Form1099NEC(**f) for f in d.get("form_1099_necs", [])]
+
+    # Expense documents
+    form_1098s = [Form1098(**f) for f in d.get("form_1098s", [])]
+    form_1098_es = [Form1098E(**f) for f in d.get("form_1098_es", [])]
+    form_1098_ts = [Form1098T(**f) for f in d.get("form_1098_ts", [])]
 
     return Person(
         person_id=d.get("person_id", ""),
@@ -209,15 +218,18 @@ def _deserialize_person(d: dict) -> Person:
         dividend_income=d.get("dividend_income", 0),
         other_income=d.get("other_income", 0),
         public_assistance_income=d.get("public_assistance_income", 0),
-        student_loan_interest=d.get("student_loan_interest", 0),
-        educator_expenses=d.get("educator_expenses", 0),
-        ira_contributions=d.get("ira_contributions", 0),
         w2s=w2s,
         form_1099_ints=form_1099_ints,
         form_1099_divs=form_1099_divs,
         form_1099_rs=form_1099_rs,
         ssa_1099=ssa_1099,
         form_1099_necs=form_1099_necs,
+        student_loan_interest=d.get("student_loan_interest", 0),
+        educator_expenses=d.get("educator_expenses", 0),
+        ira_contributions=d.get("ira_contributions", 0),
+        form_1098s=form_1098s,
+        form_1098_es=form_1098_es,
+        form_1098_ts=form_1098_ts,
     )
 
 
@@ -236,6 +248,7 @@ def _deserialize_household(blob: str) -> Household:
         expected_adults=d.get("expected_adults"),
         expected_children_range=tuple(d["expected_children_range"]) if d.get("expected_children_range") else None,
         expected_complexity=d.get("expected_complexity"),
+        is_homeowner=d.get("is_homeowner", False),
         property_taxes=d.get("property_taxes", 0),
         mortgage_interest=d.get("mortgage_interest", 0),
         state_income_tax=d.get("state_income_tax", 0),
@@ -243,6 +256,9 @@ def _deserialize_household(blob: str) -> Household:
         charitable_contributions=d.get("charitable_contributions", 0),
         child_care_expenses=d.get("child_care_expenses", 0),
         education_expenses=d.get("education_expenses", 0),
+        total_itemized_deductions=d.get("total_itemized_deductions", 0),
+        total_above_line_deductions=d.get("total_above_line_deductions", 0),
+        uses_standard_deduction=d.get("uses_standard_deduction", True),
     )
 
 
