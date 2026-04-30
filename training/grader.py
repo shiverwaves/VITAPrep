@@ -202,7 +202,10 @@ class Grader:
     """Grades student submissions against scenario answer keys."""
 
     def grade_intake(
-        self, submission: Dict[str, str], ground_truth: Household,
+        self,
+        submission: Dict[str, str],
+        ground_truth: Household,
+        fields: Optional[List[str]] = None,
     ) -> GradingResult:
         """Grade a student's intake form fill (Mode 1).
 
@@ -213,11 +216,16 @@ class Grader:
             submission: Dict of {field_name: student_value}.
             ground_truth: The original Household (before any error
                 injection).
+            fields: If provided, only grade these field names.
+                Useful for section-scoped grading (e.g. Part I only).
 
         Returns:
             GradingResult with per-field feedback.
         """
         answer_key = _build_answer_key(ground_truth)
+        if fields is not None:
+            allowed = set(fields)
+            answer_key = {k: v for k, v in answer_key.items() if k in allowed}
         max_score = len(answer_key)
         score = 0
         field_feedback: List[dict] = []

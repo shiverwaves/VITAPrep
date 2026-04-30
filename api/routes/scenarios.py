@@ -70,6 +70,8 @@ from training.form_fields import (
     TEXT_FIELDS,
     CHECKBOX_FIELDS,
     ALL_FIELDS,
+    PART1_FIELDS,
+    PART2_FIELDS,
     INCOME_CHECKBOX_FIELDS,
     INCOME_AMOUNT_FIELDS,
     INCOME_WAGES,
@@ -424,16 +426,30 @@ async def page_exercise(
 <tbody>{facts_rows}</tbody>
 </table>"""
 
-    # Check for existing grades
-    grades = store.get_grades(scenario_id)
+    # Check for existing per-section grades
+    section_grades = store.get_section_grades(scenario_id)
     grades_html = ""
-    if grades:
-        latest = grades[-1]
+    if section_grades:
+        parts = []
+        for sec_key, sec_label in [("intake", "Part I"), ("income", "Part II")]:
+            if sec_key in section_grades:
+                g = section_grades[sec_key]
+                parts.append(
+                    f"<strong>{sec_label}:</strong> {g.score}/{g.max_score} "
+                    f"({g.accuracy:.0%})"
+                )
+            else:
+                parts.append(f"<strong>{sec_label}:</strong> not yet submitted")
+        # Also handle legacy unsectioned grades
+        if "" in section_grades and "intake" not in section_grades:
+            g = section_grades[""]
+            parts = [
+                f"<strong>Overall:</strong> {g.score}/{g.max_score} "
+                f"({g.accuracy:.0%})"
+            ]
         grades_html = f"""\
 <div class="grade-banner">
-    <strong>Previously graded:</strong> {latest.score}/{latest.max_score}
-    ({latest.accuracy:.0%} accuracy) —
-    <a href="/scenarios/{scenario_id}/results">View results</a>
+    {" &nbsp;|&nbsp; ".join(parts)}
 </div>"""
 
     html = f"""\
@@ -810,7 +826,7 @@ async def page_submit(
     request: Request,
     scenario_id: str,
 ) -> HTMLResponse:
-    """Grade the submitted form and show results."""
+    """Grade the submitted Part I form and show results."""
     store = request.app.state.store
     grader = request.app.state.grader
 
@@ -818,17 +834,16 @@ async def page_submit(
     if scenario is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    # Parse form data
+    # Parse form data — Part I fields only
     form_data = await request.form()
     submission: Dict[str, str] = {}
-    for field_name in ALL_FIELDS:
+    for field_name in PART1_FIELDS:
         val = form_data.get(field_name, "")
         if isinstance(val, str) and val.strip():
             submission[field_name] = val.strip()
 
     # Grade based on mode
     if scenario.mode == "verify":
-        # In verify mode, student flags fields they think are wrong
         flagged = []
         for key, val in form_data.items():
             if key.startswith("flag_") and val:
@@ -839,19 +854,19 @@ async def page_submit(
                 })
         result = grader.grade_verification(flagged, scenario.injected_errors)
     else:
-        # Intake mode: compare field values
-        result = grader.grade_intake(submission, scenario.household)
+        result = grader.grade_intake(
+            submission, scenario.household, fields=PART1_FIELDS,
+        )
 
-    # Save grade
-    store.save_grade(scenario_id, result)
+    # Save grade with section tag
+    store.save_grade(scenario_id, result, section="intake")
 
     logger.info(
-        "Graded scenario %s: %d/%d (%.0f%%)",
+        "Graded Part I for scenario %s: %d/%d (%.0f%%)",
         scenario_id, result.score, result.max_score, result.accuracy * 100,
     )
 
-    # Render results page
-    html = _build_results_html(scenario_id, scenario.mode, result)
+    html = _build_results_html(scenario_id, scenario.mode, result, section="intake")
     return HTMLResponse(content=html)
 
 
@@ -874,15 +889,16 @@ async def page_submit_income(
     form_data = await request.form()
     submission: Dict[str, str] = {}
 
-    income_fields = INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
-    for field_name in income_fields:
+    for field_name in PART2_FIELDS:
         val = form_data.get(field_name, "")
         if isinstance(val, str) and val.strip():
             submission[field_name] = val.strip()
 
-    result = grader.grade_intake(submission, scenario.household)
+    result = grader.grade_intake(
+        submission, scenario.household, fields=PART2_FIELDS,
+    )
 
-    store.save_grade(scenario_id, result)
+    store.save_grade(scenario_id, result, section="income")
 
     logger.info(
         "Graded income for scenario %s: %d/%d (%.0f%%)",
@@ -902,6 +918,7 @@ async def page_submit_income(
 async def page_results(
     request: Request,
     scenario_id: str,
+    section: str = "",
 ) -> HTMLResponse:
     """Show the most recent grading results for a scenario."""
     store = request.app.state.store
@@ -910,12 +927,18 @@ async def page_results(
     if scenario is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    grades = store.get_grades(scenario_id)
-    if not grades:
-        raise HTTPException(status_code=404, detail="No grades found for this scenario")
+    if section:
+        section_grades = store.get_section_grades(scenario_id)
+        result = section_grades.get(section)
+        if result is None:
+            raise HTTPException(status_code=404, detail="No grades found for this section")
+    else:
+        grades = store.get_grades(scenario_id)
+        if not grades:
+            raise HTTPException(status_code=404, detail="No grades found for this scenario")
+        result = grades[-1]
 
-    result = grades[-1]
-    html = _build_results_html(scenario_id, scenario.mode, result)
+    html = _build_results_html(scenario_id, scenario.mode, result, section=section or "intake")
     return HTMLResponse(content=html)
 
 
@@ -1298,6 +1321,8 @@ def _build_results_html(
 <tbody>{field_rows}</tbody>
 </table>"""
 
+    section_label = "Part II — Income" if section == "income" else "Part I — Personal Info"
+
     return f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -1309,6 +1334,7 @@ body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; pad
 h1 {{ color: #1a3a5c; }}
 h2 {{ color: #2c5f8a; margin-top: 28px; }}
 h3 {{ color: #555; margin-top: 20px; }}
+.section-tag {{ color: #555; font-size: 14px; font-weight: normal; }}
 .score-box {{ text-align: center; padding: 32px; background: #f0f4f8; border-radius: 8px;
               margin-bottom: 24px; }}
 .score-number {{ font-size: 48px; font-weight: bold; color: {score_color}; }}
@@ -1330,7 +1356,7 @@ ul {{ line-height: 1.8; }}
 </style>
 </head>
 <body>
-<h1>Grading Results</h1>
+<h1>Grading Results <span class="section-tag">— {section_label}</span></h1>
 <div class="score-box">
     <div class="score-number">{result.score}/{result.max_score}</div>
     <div class="score-label">{result.accuracy:.0%} accuracy</div>
