@@ -793,5 +793,52 @@ see personal info feedback.
 
 ---
 
+## Future: Additional Income Generators
+
+Sprint 9 covers the six most common VITA Basic income types. The real
+IRS Form 13614-C Part II lists ~15 income categories. The remaining
+types need their own extract → generate → render cycle before they
+can be added to the intake form and graded.
+
+### VITA Basic level (high priority)
+
+| Income Type | Document | Generator Needed | Notes |
+|-------------|----------|-----------------|-------|
+| Tips | W-2 (Box 7/8) | Extend W2 model | Already on W-2, add tip fields |
+| Unemployment | 1099-G | New model + generator | State unemployment benefits |
+| Disability benefits | 1099-R / W-2 | Extend existing | Distribution code "3" on 1099-R |
+
+### VITA Advanced level (medium priority)
+
+| Income Type | Document | Generator Needed | Notes |
+|-------------|----------|-----------------|-------|
+| Stock/bond sales | 1099-B | New model + generator | Cost basis, short/long term |
+| Rental income | Schedule E | New model + generator | Rental expenses offset |
+| Gambling winnings | W-2G | New model + generator | Withholding varies |
+| Alimony | None (verbal) | Client profile fact | Pre-2019 vs post-2019 rules |
+| State/local refund | 1099-G (Box 2) | Extend 1099-G model | Only taxable if itemized prior year |
+
+### Out of scope for VITA
+
+| Income Type | Reason |
+|-------------|--------|
+| 1099-K (payment apps) | Reporting threshold changes; complex |
+| 1099-MISC (miscellaneous) | Mostly replaced by 1099-NEC for VITA |
+| Foreign income | Not in VITA scope |
+| Crypto/digital assets | Not in VITA Basic/Advanced scope |
+
+Each new income type follows the same sprint pattern:
+1. Add model dataclass and document fields
+2. Add distribution data or generation logic
+3. Add Jinja2 template for document rendering
+4. Add form fields, populator entries, and error injection targets
+5. Add grading support and tests
+
+The intake form UI (Sprint 10) is designed to accept new income rows
+without structural changes — each row is a checkbox + amount input
+keyed by field name.
+
+---
+
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
