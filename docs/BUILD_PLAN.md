@@ -840,5 +840,47 @@ keyed by field name.
 
 ---
 
+## Future: Zero-Income Household Filtering
+
+About 10% of generated households end up with zero income and no tax
+documents. This happens when all adults are sampled as `unemployed` or
+`not_in_labor_force` and the probabilistic investment/SS/retirement
+income assignments also produce nothing.
+
+In real life, these households typically **don't need to file** (below
+the filing threshold) and wouldn't visit a VITA site — unless filing
+voluntarily for refundable credits (EITC, CTC, recovery rebate).
+Either way, a zero-income scenario makes for a poor training exercise
+since there's nothing to practice on the income form.
+
+### Recommended approach
+
+Filter at the **exercise level**, not the generator level. Keep the
+generators statistically honest — they produce what the data says.
+The `ExerciseEngine` decides whether a scenario is useful for training.
+
+**Implementation:**
+- In `ExerciseEngine.generate_scenario()`, after generation, check
+  whether the household has at least one income document (W-2, 1099,
+  or SSA-1099)
+- If not, regenerate with a new seed (up to N retries, e.g. 5)
+- If all retries produce zero income, accept the scenario but add a
+  client fact noting "Client is filing to claim refundable credits"
+- Optionally log a warning so we can tune the distributions if the
+  retry rate is too high
+
+**Files:** `training/exercise_engine.py`
+
+**Why not fix in the generators:**
+- The employment/income distributions reflect real Census data — some
+  people genuinely have no income
+- Special-casing "force at least one employed adult" distorts the
+  demographics and creates odd scenarios (e.g. forcing a 75-year-old
+  retiree into employment)
+- Filtering at the exercise layer cleanly separates statistical
+  accuracy from training usefulness
+
+---
+
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
