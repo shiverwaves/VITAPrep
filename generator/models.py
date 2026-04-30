@@ -383,6 +383,9 @@ class Person:
             "form_1099_rs": [f.to_dict() for f in self.form_1099_rs],
             "ssa_1099": self.ssa_1099.to_dict() if self.ssa_1099 else None,
             "form_1099_necs": [f.to_dict() for f in self.form_1099_necs],
+            "student_loan_interest": self.student_loan_interest,
+            "educator_expenses": self.educator_expenses,
+            "ira_contributions": self.ira_contributions,
             "total_income": self.total_income(),
             "is_adult": self.is_adult(),
         }
@@ -410,7 +413,8 @@ class Household:
     expected_children_range: Optional[Tuple[int, int]] = None
     expected_complexity: Optional[str] = None
 
-    # Household-level expenses (Sprint 9+)
+    # Household-level expenses (populated by expenses.py — Sprint 12)
+    is_homeowner: bool = False
     property_taxes: int = 0
     mortgage_interest: int = 0
     state_income_tax: int = 0
@@ -418,6 +422,9 @@ class Household:
     charitable_contributions: int = 0
     child_care_expenses: int = 0
     education_expenses: int = 0
+    total_itemized_deductions: int = 0
+    total_above_line_deductions: int = 0
+    uses_standard_deduction: bool = True
 
     # --- Helper Methods ---
 
@@ -470,6 +477,17 @@ class Household:
             "total_household_income": self.total_household_income(),
             "is_married": self.is_married(),
             "filing_status": self.derive_filing_status().value,
+            "is_homeowner": self.is_homeowner,
+            "property_taxes": self.property_taxes,
+            "mortgage_interest": self.mortgage_interest,
+            "state_income_tax": self.state_income_tax,
+            "medical_expenses": self.medical_expenses,
+            "charitable_contributions": self.charitable_contributions,
+            "child_care_expenses": self.child_care_expenses,
+            "education_expenses": self.education_expenses,
+            "total_itemized_deductions": self.total_itemized_deductions,
+            "total_above_line_deductions": self.total_above_line_deductions,
+            "uses_standard_deduction": self.uses_standard_deduction,
         }
 
 

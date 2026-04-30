@@ -19,6 +19,7 @@ from .db import DistributionLoader
 from .demographics import DemographicsGenerator
 from .children import ChildGenerator
 from .employment import EmploymentGenerator
+from .expenses import ExpenseGenerator
 from .income import IncomeGenerator
 from .pii import PIIGenerator
 from .sampler import weighted_sample, set_random_seed
@@ -63,6 +64,9 @@ class HouseholdGenerator:
         # Initialize Part 2 generators
         self.employment = EmploymentGenerator(self.distributions)
         self.income = IncomeGenerator(self.distributions, tax_year=self.year)
+
+        # Initialize Part 3 generator
+        self.expenses = ExpenseGenerator(self.distributions, state=self.state)
 
         logger.info("Initialized generator for %s (%d)", self.state, self.year)
 
@@ -174,15 +178,37 @@ class HouseholdGenerator:
         )
         return household
 
+    def generate_part3(self, household: Household) -> Household:
+        """Add Part 3 data to a household: expenses and deductions.
+
+        Assigns housing costs, state taxes, medical expenses, charitable
+        contributions, above-the-line deductions, and credit-related
+        expenses.  Determines standard vs itemized deduction.
+
+        Args:
+            household: Household with Part 2 income populated.
+
+        Returns:
+            The same Household with expense fields set.
+        """
+        self.expenses.overlay(household)
+
+        logger.info(
+            "Generated Part 3 for household: itemized=$%s, standard=%s",
+            f"{household.total_itemized_deductions:,}",
+            household.uses_standard_deduction,
+        )
+        return household
+
     def generate_with_pii(
         self,
         pattern: Optional[str] = None,
         seed: Optional[int] = None,
     ) -> Household:
-        """Generate a household with demographics, PII, employment, and income.
+        """Generate a household with demographics, PII, income, and expenses.
 
         Runs the full pipeline: Part 1 (demographics) → PII overlay →
-        Part 2 (employment + income).
+        Part 2 (employment + income) → Part 3 (expenses + deductions).
 
         Args:
             pattern: Specific household pattern (e.g.,
@@ -196,6 +222,7 @@ class HouseholdGenerator:
         household = self.generate_part1(pattern=pattern, seed=seed)
         self.pii.overlay(household)
         self.generate_part2(household)
+        self.generate_part3(household)
 
         logger.info(
             "Generated full household: pattern=%s, members=%d",
