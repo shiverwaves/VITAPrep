@@ -64,6 +64,7 @@ _CREATE_GRADES = """\
 CREATE TABLE IF NOT EXISTS grades (
     grade_id      INTEGER PRIMARY KEY AUTOINCREMENT,
     scenario_id   TEXT NOT NULL REFERENCES scenarios(scenario_id),
+    section       TEXT NOT NULL DEFAULT '',      -- 'intake', 'income', or '' (legacy)
     score         INTEGER NOT NULL,
     max_score     INTEGER NOT NULL,
     accuracy      REAL NOT NULL,
@@ -209,6 +210,14 @@ def _deserialize_grade(row: sqlite3.Row) -> GradingResult:
     )
 
 
+def _grade_section(row: sqlite3.Row) -> str:
+    """Extract the section tag from a grade row."""
+    try:
+        return row["section"] or ""
+    except (IndexError, KeyError):
+        return ""
+
+
 # =========================================================================
 # ScenarioStore
 # =========================================================================
@@ -237,7 +246,19 @@ class ScenarioStore:
     def _create_tables(self) -> None:
         self._conn.execute(_CREATE_SCENARIOS)
         self._conn.execute(_CREATE_GRADES)
+        self._migrate_grades_section()
         self._conn.commit()
+
+    def _migrate_grades_section(self) -> None:
+        """Add 'section' column to grades if it doesn't exist yet."""
+        cols = [
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(grades)").fetchall()
+        ]
+        if "section" not in cols:
+            self._conn.execute(
+                "ALTER TABLE grades ADD COLUMN section TEXT NOT NULL DEFAULT ''"
+            )
 
     # ------------------------------------------------------------------
     # Scenarios
@@ -367,12 +388,18 @@ class ScenarioStore:
     # Grades
     # ------------------------------------------------------------------
 
-    def save_grade(self, scenario_id: str, result: GradingResult) -> int:
+    def save_grade(
+        self,
+        scenario_id: str,
+        result: GradingResult,
+        section: str = "",
+    ) -> int:
         """Save a grading result linked to a scenario.
 
         Args:
             scenario_id: The scenario that was graded.
             result: Grading output from the Grader.
+            section: Form section tag (e.g. "intake", "income").
 
         Returns:
             The auto-incremented grade_id.
@@ -384,13 +411,14 @@ class ScenarioStore:
         cursor = self._conn.execute(
             """\
             INSERT INTO grades
-                (scenario_id, score, max_score, accuracy,
+                (scenario_id, section, score, max_score, accuracy,
                  correct_flags, missed_flags, false_flags,
                  feedback, field_feedback, graded_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scenario_id,
+                section,
                 result.score,
                 result.max_score,
                 result.accuracy,
@@ -405,8 +433,8 @@ class ScenarioStore:
         self._conn.commit()
         grade_id = cursor.lastrowid or 0
         logger.info(
-            "Saved grade %d for scenario %s (score=%d/%d)",
-            grade_id, scenario_id, result.score, result.max_score,
+            "Saved grade %d for scenario %s [%s] (score=%d/%d)",
+            grade_id, scenario_id, section or "all", result.score, result.max_score,
         )
         return grade_id
 
@@ -424,6 +452,33 @@ class ScenarioStore:
             (scenario_id,),
         ).fetchall()
         return [_deserialize_grade(r) for r in rows]
+
+    def get_section_grades(
+        self, scenario_id: str,
+    ) -> Dict[str, GradingResult]:
+        """Get the most recent grade per section for a scenario.
+
+        Args:
+            scenario_id: The scenario to look up.
+
+        Returns:
+            Dict mapping section name to the latest GradingResult
+            for that section. Keys are "intake", "income", or ""
+            (legacy unsectioned grades).
+        """
+        rows = self._conn.execute(
+            """\
+            SELECT * FROM grades
+            WHERE scenario_id = ?
+            ORDER BY graded_at
+            """,
+            (scenario_id,),
+        ).fetchall()
+        by_section: Dict[str, GradingResult] = {}
+        for row in rows:
+            section = _grade_section(row)
+            by_section[section] = _deserialize_grade(row)
+        return by_section
 
     def get_progress(self) -> List[dict]:
         """Get student progress: one summary dict per graded scenario.

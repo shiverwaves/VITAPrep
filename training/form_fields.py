@@ -196,8 +196,11 @@ for _i in range(MAX_DEPENDENTS):
     # single/married radio per dependent
     CHECKBOX_FIELDS.append(dep_field(_i, DEP_SINGLE_OR_MARRIED))
 
+# Part I fields only (Sections A–F: personal info, address, spouse, dependents)
+PART1_FIELDS: List[str] = TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
+
+# Part II fields only (income checkboxes + amounts)
+PART2_FIELDS: List[str] = INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
+
 # All field names combined
-ALL_FIELDS: List[str] = (
-    TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
-    + INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
-)
+ALL_FIELDS: List[str] = PART1_FIELDS + PART2_FIELDS
