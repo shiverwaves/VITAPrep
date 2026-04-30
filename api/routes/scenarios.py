@@ -207,6 +207,9 @@ async def api_get_scenario(
                 "form_1099_r_count": len(p.form_1099_rs),
                 "has_ssa_1099": p.ssa_1099 is not None,
                 "form_1099_nec_count": len(p.form_1099_necs),
+                "form_1098_count": len(p.form_1098s),
+                "form_1098_e_count": len(p.form_1098_es),
+                "form_1098_t_count": len(p.form_1098_ts),
             })
 
     # Build document URLs
@@ -230,6 +233,12 @@ async def api_get_scenario(
                 doc_urls[f"ssa1099_{pid}"] = f"/scenarios/{scenario_id}/documents/ssa-1099/{pid}"
             for i in range(len(p.form_1099_necs)):
                 doc_urls[f"1099nec_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-nec/{pid}/{i}"
+            for i in range(len(p.form_1098s)):
+                doc_urls[f"1098_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1098/{pid}/{i}"
+            for i in range(len(p.form_1098_es)):
+                doc_urls[f"1098e_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1098-e/{pid}/{i}"
+            for i in range(len(p.form_1098_ts)):
+                doc_urls[f"1098t_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1098-t/{pid}/{i}"
 
     return JSONResponse(content={
         "scenario_id": scenario.scenario_id,
@@ -363,6 +372,7 @@ async def page_exercise(
     # Build document links
     doc_links: List[str] = []
     income_doc_links: List[str] = []
+    expense_doc_links: List[str] = []
     if hh:
         for p in hh.members:
             name = p.full_legal_name() or f"Person {p.person_id}"
@@ -409,6 +419,21 @@ async def page_exercise(
                 income_doc_links.append(
                     f'<li><a href="/scenarios/{scenario_id}/documents/1099-nec/{pid}/{i}" '
                     f'target="_blank">1099-NEC — {name}</a></li>'
+                )
+            for i, f1098 in enumerate(p.form_1098s):
+                expense_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1098/{pid}/{i}" '
+                    f'target="_blank">Form 1098 — {name} ({f1098.lender_name})</a></li>'
+                )
+            for i, _ in enumerate(p.form_1098_es):
+                expense_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1098-e/{pid}/{i}" '
+                    f'target="_blank">Form 1098-E — {name}</a></li>'
+                )
+            for i, _ in enumerate(p.form_1098_ts):
+                expense_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1098-t/{pid}/{i}" '
+                    f'target="_blank">Form 1098-T — {name}</a></li>'
                 )
 
     # Client facts
@@ -485,6 +510,7 @@ th {{ background: #f0f4f8; }}
 {"".join(doc_links)}
 </ul>
 {"<h2>Income Documents</h2><ul>" + "".join(income_doc_links) + "</ul>" if income_doc_links else ""}
+{"<h2>Expense Documents</h2><ul>" + "".join(expense_doc_links) + "</ul>" if expense_doc_links else ""}
 {facts_html}
 <h2>Intake Form Sections</h2>
 <div class="form-sections">
@@ -745,6 +771,101 @@ async def page_1099_nec(
         raise HTTPException(status_code=404, detail="1099-NEC index out of range")
 
     html = renderer.render_1099_nec_html(person, person.form_1099_necs[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+# =========================================================================
+# HTML: expense document renders
+# =========================================================================
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1098/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1098(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a Form 1098 (Mortgage Interest Statement) as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1098s):
+        raise HTTPException(status_code=404, detail="Form 1098 index out of range")
+
+    html = renderer.render_1098_html(person, person.form_1098s[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1098-e/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1098e(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a Form 1098-E (Student Loan Interest) as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1098_es):
+        raise HTTPException(status_code=404, detail="Form 1098-E index out of range")
+
+    html = renderer.render_1098e_html(person, person.form_1098_es[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1098-t/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1098t(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a Form 1098-T (Tuition Statement) as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1098_ts):
+        raise HTTPException(status_code=404, detail="Form 1098-T index out of range")
+
+    html = renderer.render_1098t_html(person, person.form_1098_ts[index])
     html = html.replace('href="base.css"', 'href="/static/base.css"')
     return HTMLResponse(content=html)
 

@@ -10,6 +10,9 @@ Uses Jinja2 templates to produce HTML strings for browser display:
 - 1099-R Distributions From Pensions
 - SSA-1099 Social Security Benefit Statement
 - 1099-NEC Nonemployee Compensation
+- Form 1098 Mortgage Interest Statement
+- Form 1098-E Student Loan Interest Statement
+- Form 1098-T Tuition Statement
 
 All documents include "SAMPLE — FOR TRAINING USE ONLY" watermark.
 
@@ -24,6 +27,9 @@ from typing import Dict, Optional
 from jinja2 import Environment, FileSystemLoader
 
 from generator.models import (
+    Form1098,
+    Form1098E,
+    Form1098T,
     Form1099DIV,
     Form1099INT,
     Form1099NEC,
@@ -332,6 +338,91 @@ class DocumentRenderer:
             recipient_tin=person.ssn,
             nonemployee_compensation=_format_dollars(form.nonemployee_compensation),
             federal_tax_withheld=_format_dollars(form.federal_tax_withheld),
+        )
+
+    # =================================================================
+    # Form 1098 — Mortgage Interest Statement
+    # =================================================================
+
+    def render_1098_html(
+        self, person: Person, form: Form1098, tax_year: int = 2022,
+    ) -> str:
+        """Render a Form 1098 (Mortgage Interest Statement) as HTML.
+
+        Args:
+            person: Person (borrower) with PII populated.
+            form: Form1098 dataclass.
+            tax_year: Tax year to display on the form.
+
+        Returns:
+            Rendered HTML string.
+        """
+        template = self._env.get_template("form_1098.html")
+        return template.render(
+            tax_year=tax_year,
+            lender_name=form.lender_name,
+            lender_tin=form.lender_tin,
+            borrower_name=person.full_legal_name(),
+            borrower_tin=person.ssn,
+            mortgage_interest=_format_dollars(form.mortgage_interest),
+            outstanding_principal=_format_dollars(form.outstanding_principal),
+            mortgage_origination_date=form.mortgage_origination_date,
+            property_taxes=_format_dollars(form.property_taxes),
+        )
+
+    # =================================================================
+    # Form 1098-E — Student Loan Interest Statement
+    # =================================================================
+
+    def render_1098e_html(
+        self, person: Person, form: Form1098E, tax_year: int = 2022,
+    ) -> str:
+        """Render a Form 1098-E (Student Loan Interest) as HTML.
+
+        Args:
+            person: Person (borrower) with PII populated.
+            form: Form1098E dataclass.
+            tax_year: Tax year to display on the form.
+
+        Returns:
+            Rendered HTML string.
+        """
+        template = self._env.get_template("form_1098e.html")
+        return template.render(
+            tax_year=tax_year,
+            lender_name=form.lender_name,
+            lender_tin=form.lender_tin,
+            borrower_name=person.full_legal_name(),
+            borrower_tin=person.ssn,
+            student_loan_interest=_format_dollars(form.student_loan_interest),
+        )
+
+    # =================================================================
+    # Form 1098-T — Tuition Statement
+    # =================================================================
+
+    def render_1098t_html(
+        self, person: Person, form: Form1098T, tax_year: int = 2022,
+    ) -> str:
+        """Render a Form 1098-T (Tuition Statement) as HTML.
+
+        Args:
+            person: Person (student) with PII populated.
+            form: Form1098T dataclass.
+            tax_year: Tax year to display on the form.
+
+        Returns:
+            Rendered HTML string.
+        """
+        template = self._env.get_template("form_1098t.html")
+        return template.render(
+            tax_year=tax_year,
+            institution_name=form.institution_name,
+            institution_tin=form.institution_tin,
+            student_name=person.full_legal_name(),
+            student_tin=person.ssn,
+            amounts_billed=_format_dollars(form.amounts_billed),
+            scholarships=_format_dollars(form.scholarships),
         )
 
     # =================================================================

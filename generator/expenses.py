@@ -19,7 +19,20 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .models import EmploymentStatus, Household, Person
+import random
+
+from faker import Faker
+
+from .models import (
+    EmploymentStatus,
+    Form1098,
+    Form1098E,
+    Form1098T,
+    Household,
+    Person,
+)
+
+_fake = Faker()
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +99,34 @@ INTEREST_FRACTION_BY_AGE: Dict[str, float] = {
     "65+": 0.25,
 }
 
+# Lender and institution names for expense document rendering
+_MORTGAGE_LENDERS = [
+    "First Hawaiian Bank", "Bank of Hawaii", "American Savings Bank",
+    "Wells Fargo Home Mortgage", "Chase Home Lending",
+    "Bank of America Home Loans", "US Bank Home Mortgage",
+    "Rocket Mortgage", "PennyMac Loan Services",
+]
+
+_STUDENT_LOAN_SERVICERS = [
+    "Nelnet", "MOHELA", "Aidvantage", "EdFinancial",
+    "Great Lakes Educational Loan Services",
+    "Navient", "FedLoan Servicing",
+]
+
+_UNIVERSITIES = [
+    "University of Hawaii at Manoa", "Hawaii Pacific University",
+    "Chaminade University", "Brigham Young University-Hawaii",
+    "University of Hawaii at Hilo", "Kapiolani Community College",
+    "Leeward Community College", "University of Phoenix",
+    "Western Governors University",
+]
+
+
+def _generate_ein() -> str:
+    prefix = random.randint(10, 99)
+    suffix = random.randint(0, 9_999_999)
+    return f"{prefix:02d}-{suffix:07d}"
+
 
 class ExpenseGenerator:
     """Assigns expenses to household members for tax purposes.
@@ -134,6 +175,7 @@ class ExpenseGenerator:
         self._assign_above_line_deductions(household)
         self._assign_credit_expenses(household)
         self._calculate_totals(household)
+        self._create_expense_documents(household)
 
         logger.info(
             "Expense generation complete: itemized=$%s, above_line=$%s, "
@@ -580,6 +622,45 @@ class ExpenseGenerator:
             standard,
             "standard" if household.uses_standard_deduction else "itemized",
         )
+
+    # =========================================================================
+    # EXPENSE DOCUMENT CREATION
+    # =========================================================================
+
+    def _create_expense_documents(self, household: Household) -> None:
+        """Create Form 1098, 1098-E, and 1098-T documents from assigned expenses."""
+        householder = household.get_householder()
+        if not householder:
+            return
+
+        # Form 1098 — Mortgage Interest Statement (issued to householder)
+        if household.mortgage_interest > 0:
+            principal = int(household.mortgage_interest / 0.04) if household.mortgage_interest > 0 else 0
+            householder.form_1098s.append(Form1098(
+                lender_name=random.choice(_MORTGAGE_LENDERS),
+                lender_tin=_generate_ein(),
+                mortgage_interest=household.mortgage_interest,
+                outstanding_principal=principal,
+                property_taxes=household.property_taxes,
+            ))
+
+        # Form 1098-E — Student Loan Interest (per-person)
+        for person in household.members:
+            if person.student_loan_interest > 0:
+                person.form_1098_es.append(Form1098E(
+                    lender_name=random.choice(_STUDENT_LOAN_SERVICERS),
+                    lender_tin=_generate_ein(),
+                    student_loan_interest=person.student_loan_interest,
+                ))
+
+        # Form 1098-T — Tuition Statement (issued to householder for household education)
+        if household.education_expenses > 0:
+            householder.form_1098_ts.append(Form1098T(
+                institution_name=random.choice(_UNIVERSITIES),
+                institution_tin=_generate_ein(),
+                amounts_billed=household.education_expenses,
+                student_ssn=householder.ssn,
+            ))
 
     # =========================================================================
     # BRACKET HELPERS
