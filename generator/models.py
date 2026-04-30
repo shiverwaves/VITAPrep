@@ -99,6 +99,147 @@ class Address:
 
 
 @dataclass
+class Employer:
+    """An employer or payer that issues tax documents (W-2, 1099)."""
+    name: str = ""
+    ein: str = ""  # Format: XX-XXXXXXX
+    address: Optional[Address] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "ein": self.ein,
+            "address": self.address.to_dict() if self.address else None,
+        }
+
+
+@dataclass
+class W2:
+    """IRS Form W-2: Wage and Tax Statement."""
+    employer: Optional[Employer] = None
+    wages: int = 0  # Box 1
+    federal_tax_withheld: int = 0  # Box 2
+    social_security_wages: int = 0  # Box 3
+    social_security_tax: int = 0  # Box 4
+    medicare_wages: int = 0  # Box 5
+    medicare_tax: int = 0  # Box 6
+    box_12: List[Tuple[str, int]] = field(default_factory=list)  # e.g. [("D", 5000)]
+    state: str = ""  # Box 15
+    state_wages: int = 0  # Box 16
+    state_tax: int = 0  # Box 17
+    control_number: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "employer": self.employer.to_dict() if self.employer else None,
+            "wages": self.wages,
+            "federal_tax_withheld": self.federal_tax_withheld,
+            "social_security_wages": self.social_security_wages,
+            "social_security_tax": self.social_security_tax,
+            "medicare_wages": self.medicare_wages,
+            "medicare_tax": self.medicare_tax,
+            "box_12": [{"code": c, "amount": a} for c, a in self.box_12],
+            "state": self.state,
+            "state_wages": self.state_wages,
+            "state_tax": self.state_tax,
+            "control_number": self.control_number,
+        }
+
+
+@dataclass
+class Form1099INT:
+    """IRS Form 1099-INT: Interest Income."""
+    payer_name: str = ""
+    payer_tin: str = ""
+    interest_income: int = 0  # Box 1
+    us_savings_bond_interest: int = 0  # Box 3
+    federal_tax_withheld: int = 0  # Box 4
+
+    def to_dict(self) -> dict:
+        return {
+            "payer_name": self.payer_name,
+            "payer_tin": self.payer_tin,
+            "interest_income": self.interest_income,
+            "us_savings_bond_interest": self.us_savings_bond_interest,
+            "federal_tax_withheld": self.federal_tax_withheld,
+        }
+
+
+@dataclass
+class Form1099DIV:
+    """IRS Form 1099-DIV: Dividends and Distributions."""
+    payer_name: str = ""
+    payer_tin: str = ""
+    ordinary_dividends: int = 0  # Box 1a
+    qualified_dividends: int = 0  # Box 1b
+    capital_gain_distributions: int = 0  # Box 2a
+    federal_tax_withheld: int = 0  # Box 4
+
+    def to_dict(self) -> dict:
+        return {
+            "payer_name": self.payer_name,
+            "payer_tin": self.payer_tin,
+            "ordinary_dividends": self.ordinary_dividends,
+            "qualified_dividends": self.qualified_dividends,
+            "capital_gain_distributions": self.capital_gain_distributions,
+            "federal_tax_withheld": self.federal_tax_withheld,
+        }
+
+
+@dataclass
+class Form1099R:
+    """IRS Form 1099-R: Distributions From Pensions, Annuities, etc."""
+    payer_name: str = ""
+    payer_tin: str = ""
+    gross_distribution: int = 0  # Box 1
+    taxable_amount: int = 0  # Box 2a
+    federal_tax_withheld: int = 0  # Box 4
+    distribution_code: str = ""  # Box 7: "7" normal, "1" early, "3" disability, "4" death
+
+    def to_dict(self) -> dict:
+        return {
+            "payer_name": self.payer_name,
+            "payer_tin": self.payer_tin,
+            "gross_distribution": self.gross_distribution,
+            "taxable_amount": self.taxable_amount,
+            "federal_tax_withheld": self.federal_tax_withheld,
+            "distribution_code": self.distribution_code,
+        }
+
+
+@dataclass
+class SSA1099:
+    """SSA-1099: Social Security Benefit Statement."""
+    total_benefits: int = 0  # Box 3
+    benefits_repaid: int = 0  # Box 4
+    net_benefits: int = 0  # Box 5
+
+    def to_dict(self) -> dict:
+        return {
+            "total_benefits": self.total_benefits,
+            "benefits_repaid": self.benefits_repaid,
+            "net_benefits": self.net_benefits,
+        }
+
+
+@dataclass
+class Form1099NEC:
+    """IRS Form 1099-NEC: Nonemployee Compensation."""
+    payer_name: str = ""
+    payer_tin: str = ""
+    nonemployee_compensation: int = 0  # Box 1
+    federal_tax_withheld: int = 0  # Box 4
+
+    def to_dict(self) -> dict:
+        return {
+            "payer_name": self.payer_name,
+            "payer_tin": self.payer_tin,
+            "nonemployee_compensation": self.nonemployee_compensation,
+            "federal_tax_withheld": self.federal_tax_withheld,
+        }
+
+
+@dataclass
 class Person:
     """
     Represents one individual in a household.
@@ -157,6 +298,14 @@ class Person:
     dividend_income: int = 0
     other_income: int = 0
     public_assistance_income: int = 0
+
+    # === Income Documents (populated by income.py — Sprint 9) ===
+    w2s: List[W2] = field(default_factory=list)
+    form_1099_ints: List[Form1099INT] = field(default_factory=list)
+    form_1099_divs: List[Form1099DIV] = field(default_factory=list)
+    form_1099_rs: List[Form1099R] = field(default_factory=list)
+    ssa_1099: Optional[SSA1099] = None
+    form_1099_necs: List[Form1099NEC] = field(default_factory=list)
 
     # === Expenses (populated by expenses.py — future) ===
     student_loan_interest: int = 0
@@ -228,6 +377,12 @@ class Person:
             "education": self.education,
             "occupation_code": self.occupation_code,
             "occupation_title": self.occupation_title,
+            "w2s": [w.to_dict() for w in self.w2s],
+            "form_1099_ints": [f.to_dict() for f in self.form_1099_ints],
+            "form_1099_divs": [f.to_dict() for f in self.form_1099_divs],
+            "form_1099_rs": [f.to_dict() for f in self.form_1099_rs],
+            "ssa_1099": self.ssa_1099.to_dict() if self.ssa_1099 else None,
+            "form_1099_necs": [f.to_dict() for f in self.form_1099_necs],
             "total_income": self.total_income(),
             "is_adult": self.is_adult(),
         }

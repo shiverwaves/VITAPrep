@@ -422,19 +422,279 @@ Tech: React, HTMX, or plain HTML + vanilla JS — decide when you get here.
 
 ---
 
-## Sprint 9: Expand to Part 2 — Income (Phase 2)
+## Sprint 9: Expand to Part 2 — Income
 
-### Step 9.1: `extraction/extract_part2.py`
-Port income/employment extraction functions from HouseholdRNG.
+**Goal**: Generate realistic employment/income data and render the source
+documents (W-2, 1099 family) that students use to verify income on the intake
+form.
 
-### Step 9.2: `generator/employment.py`
-Port employment/education/occupation logic from HouseholdRNG's adult_generator.
+Each income type maps to a specific IRS source form:
 
-### Step 9.3: `generator/income.py`
-Port from HouseholdRNG's income_generator.py mostly as-is.
+| Person Field | Source Form | Description |
+|---|---|---|
+| `wage_income` | **W-2** | Wages, salaries, tips from employers |
+| `interest_income` | **1099-INT** | Bank/savings interest |
+| `dividend_income` | **1099-DIV** | Stock/mutual fund dividends |
+| `retirement_income` | **1099-R** | Pensions, IRA distributions, annuities |
+| `social_security_income` | **SSA-1099** | Social Security benefits |
+| `self_employment_income` | **1099-NEC** | Freelance/gig/contract work |
+| `other_income` | **1099-G, 1099-MISC** | Unemployment, misc income |
 
-### Step 9.4: W-2 template + rendering
-### Step 9.5: Part 2 exercises (verify income on intake sheet)
+The sprint is divided into foundation work, per-form tasks, and integration.
+
+---
+
+### Foundation (must land before any form task)
+
+### Step 9.1: Model extensions — `generator/models.py`
+
+Extend Person and add new dataclasses for income documents:
+
+**Employer** dataclass:
+- employer_name, employer_ein, employer_address (Address)
+- Used by W-2 and 1099-NEC
+
+**W2** dataclass (one per job):
+- employer (Employer), employee (Person reference)
+- Box 1: wages, Box 2: federal_tax_withheld
+- Box 3: social_security_wages, Box 4: social_security_tax
+- Box 5: medicare_wages, Box 6: medicare_tax
+- Box 12a-d: coded items (retirement contributions, etc.)
+- Box 15-17: state/local tax info
+- control_number
+
+**Form1099INT** dataclass:
+- payer_name, payer_tin
+- Box 1: interest_income, Box 3: us_savings_bond_interest
+- Box 4: federal_tax_withheld
+
+**Form1099DIV** dataclass:
+- payer_name, payer_tin
+- Box 1a: ordinary_dividends, Box 1b: qualified_dividends
+- Box 2a: capital_gain_distributions
+- Box 4: federal_tax_withheld
+
+**Form1099R** dataclass:
+- payer_name, payer_tin
+- Box 1: gross_distribution, Box 2a: taxable_amount
+- Box 4: federal_tax_withheld, Box 7: distribution_code
+- Box 7 codes: "7" (normal), "1" (early), "3" (disability), "4" (death)
+
+**SSA1099** dataclass:
+- Box 3: total_benefits, Box 4: benefits_repaid
+- Box 5: net_benefits (the key training field)
+
+**Form1099NEC** dataclass:
+- payer_name, payer_tin
+- Box 1: nonemployee_compensation
+
+Extend **Person**:
+- `w2s: List[W2]` — one per employer (most people have 1-2)
+- `form_1099_ints: List[Form1099INT]`
+- `form_1099_divs: List[Form1099DIV]`
+- `form_1099_rs: List[Form1099R]`
+- `ssa_1099: Optional[SSA1099]`
+- `form_1099_necs: List[Form1099NEC]`
+- `employer_name, employer_ein` — primary employer (for intake form)
+
+### Step 9.2: `extraction/extract_part2.py`
+
+Extract employment and income distributions from PUMS data → SQLite.
+
+Distribution tables (from DATA_DICTIONARY.md):
+- `employment_by_age` — ESR by age bracket (employed/unemployed/NILF)
+- `education_by_age` — SCHL by age bracket
+- `disability_by_age` — DIS by age bracket
+- `social_security` — SSP+SSIP by age bracket
+- `retirement_income` — RETP by age bracket
+- `interest_and_dividend_income` — INTP by age bracket
+- `other_income_by_employment_status` — OIP by ESR
+- `public_assistance_income` — PAP by income bracket
+- `bls_occupation_wages` — BLS OEWS wage data by SOC code
+- `education_occupation_probabilities` — SCHL × OCCP cross-tab
+- `age_income_adjustments` — AGEP × WAGP adjustment factors
+- `occupation_self_employment_probability` — OCCP × COW rates
+
+Output: appended to `data/distributions_{state}_{year}.sqlite`
+
+CLI: `python -m extraction.extract_part2 --state HI --year 2022`
+
+Reference: `HouseholdRNG/scripts/extract_pums.py` + `extract_bls.py`
+
+### Step 9.3: `generator/employment.py`
+
+Assign employment attributes to each adult Person. Reads Part 2
+distribution tables and populates:
+- `employment_status` — sampled from employment_by_age
+- `education` — sampled from education_by_age
+- `occupation_code` + `occupation_title` — sampled from
+  education_occupation_probabilities, weighted by education level
+- `has_disability` — sampled from disability_by_age
+
+Port from `HouseholdRNG/generator/adult_generator.py`:
+- `_sample_employment_status(age)`
+- `_sample_education(age)`
+- `_sample_disability(age)`
+- `_sample_occupation(education, age)`
+
+### Step 9.4: `generator/income.py`
+
+Assign income amounts by type for each adult Person. Creates the income
+document objects (W2, 1099-INT, etc.) and attaches them.
+
+Core logic:
+- **Wages**: Look up occupation in bls_occupation_wages, apply
+  age_income_adjustments, add variance. Generate 1-2 W-2s per employed
+  person.
+- **Self-employment**: occupation_self_employment_probability determines
+  if any SE income. Generate 1099-NEC if so.
+- **Interest/dividends**: age-correlated probability and amount from
+  interest_and_dividend_income. Generate 1099-INT / 1099-DIV.
+- **Social Security**: age 62+ from social_security distributions.
+  Generate SSA-1099.
+- **Retirement**: age 55+ from retirement_income distributions.
+  Generate 1099-R.
+- **Withholding calculations**: federal tax withheld estimated from
+  income bracket + filing status. SS tax = 6.2% of wages (capped).
+  Medicare = 1.45% of wages.
+
+Also generates:
+- Employer name (Faker), EIN (random format XX-XXXXXXX), employer address
+- Payer names for 1099s (bank names, brokerage names via Faker)
+- Payer TINs
+
+---
+
+### Per-Form Tasks
+
+### Step 9.A: W-2 — Template + Renderer
+
+**Template**: `training/templates/w2.html`
+- Generic IRS-standard layout (not vendor-specific for now)
+- All boxes labeled by number (Box 1, Box 2, etc.)
+- Employer info section (name, EIN, address)
+- Employee info section (name, SSN, address)
+- Watermark: "SAMPLE — FOR TRAINING USE ONLY"
+- Future: W-2 vendor variants (ADP, Paychex, etc.) for layout training
+
+**Renderer**: Add to `training/document_renderer.py`
+- `render_w2_html(person: Person, w2_index: int = 0) -> str`
+- Handles multiple W-2s per person
+
+**Tests**: Render W-2 for person with wage income, verify HTML contains
+correct box values, employer name, SSN.
+
+### Step 9.B: 1099-INT + 1099-DIV — Templates + Renderers
+
+**Templates**:
+- `training/templates/1099_int.html` — interest income
+  - Payer name/TIN, recipient name/SSN
+  - Box 1 (interest income), Box 3 (US savings bonds), Box 4 (fed withheld)
+- `training/templates/1099_div.html` — dividend income
+  - Payer name/TIN, recipient name/SSN
+  - Box 1a (ordinary dividends), Box 1b (qualified), Box 2a (cap gains)
+
+These two forms share nearly identical structure — consider a shared
+base layout with form-specific box sections.
+
+**Renderer**: Add to `training/document_renderer.py`
+- `render_1099_int_html(person: Person, index: int = 0) -> str`
+- `render_1099_div_html(person: Person, index: int = 0) -> str`
+
+**Tests**: Render each form, verify box values match Person income fields.
+
+### Step 9.C: SSA-1099 + 1099-R — Templates + Renderers
+
+**Templates**:
+- `training/templates/ssa_1099.html` — Social Security benefits
+  - SSA as payer, beneficiary name/SSN
+  - Box 3 (total benefits), Box 4 (repaid), Box 5 (net benefits)
+  - Distinctive blue/government styling
+- `training/templates/1099_r.html` — retirement distributions
+  - Payer name/TIN, recipient name/SSN
+  - Box 1 (gross distribution), Box 2a (taxable amount)
+  - Box 7 (distribution code — important for tax treatment)
+
+**Renderer**: Add to `training/document_renderer.py`
+- `render_ssa_1099_html(person: Person) -> str`
+- `render_1099_r_html(person: Person, index: int = 0) -> str`
+
+**Tests**: Render each form, verify amounts and distribution codes.
+
+### Step 9.D: 1099-NEC — Template + Renderer
+
+**Template**: `training/templates/1099_nec.html`
+- Payer name/TIN (business that paid contractor)
+- Recipient name/SSN
+- Box 1: nonemployee compensation (the main field)
+- Simple form but different generation context (self-employment)
+
+**Renderer**: Add to `training/document_renderer.py`
+- `render_1099_nec_html(person: Person, index: int = 0) -> str`
+
+**Tests**: Render form, verify Box 1 matches self_employment_income.
+
+---
+
+### Integration
+
+### Step 9.E: Extend form fields + populator for Part 2
+
+**`training/form_fields.py`**: Add income field constants matching
+Form 13614-C Part II income questions:
+- `INCOME_WAGES` — wages, salaries, tips (from W-2s)
+- `INCOME_INTEREST` — interest income (from 1099-INT)
+- `INCOME_DIVIDENDS` — dividend income (from 1099-DIV)
+- `INCOME_SOCIAL_SECURITY` — SS benefits (from SSA-1099)
+- `INCOME_RETIREMENT` — pensions/annuities (from 1099-R)
+- `INCOME_SELF_EMPLOYMENT` — self-employment (from 1099-NEC)
+- Per-source yes/no checkboxes + amount fields
+
+**`training/form_populator.py`**: Extend `build_field_values()` to
+populate income fields from Person's income document objects.
+
+### Step 9.F: Extend intake form, grader, and error injector
+
+**Intake form**: Add Part II income section to `form_13614c_p1.html`
+(or create `form_13614c_p2.html`). Income questions with input fields.
+
+**Error injector**: New income error types:
+- W-2 wage amount doesn't match intake total
+- Wrong employer name on intake vs W-2
+- Missing 1099 income (student forgets a source)
+- SSN mismatch between W-2 and SSN card
+- Transposed digits on income amounts
+
+**Grader**: Extend `grade_intake()` and `grade_verification()` to
+cover income fields. Income amount matching with tolerance (allow
+rounding differences).
+
+### Step 9.G: API routes for income documents
+
+Add endpoints to `api/routes/scenarios.py`:
+- `GET /scenarios/{id}/documents/w2/{person_id}/{index}` — W-2 HTML
+- `GET /scenarios/{id}/documents/1099-int/{person_id}/{index}`
+- `GET /scenarios/{id}/documents/1099-div/{person_id}/{index}`
+- `GET /scenarios/{id}/documents/ssa-1099/{person_id}`
+- `GET /scenarios/{id}/documents/1099-r/{person_id}/{index}`
+- `GET /scenarios/{id}/documents/1099-nec/{person_id}/{index}`
+
+Update exercise page to list all available income documents.
+
+### Step 9.H: Tests
+
+Tests are written alongside each step above, but the final checkpoint
+is an end-to-end integration test:
+- Generate household with PII + employment + income
+- Render all applicable income documents
+- Verify income fields populated on intake form
+- Inject income errors, grade, verify feedback
+
+**Checkpoint**: Full Part 2 gameplay loop works — generate scenario with
+income → view W-2s and 1099s in browser → fill income section of intake
+form → grade → get feedback on income fields.
+
+---
 
 Each future VITA section follows this same pattern:
 extract → generate → render → exercise → grade.
