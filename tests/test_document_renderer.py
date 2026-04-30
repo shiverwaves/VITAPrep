@@ -9,13 +9,26 @@ from pathlib import Path
 
 import pytest
 
-from generator.models import Address, Household, Person, RelationshipType
+from generator.models import (
+    Address,
+    Employer,
+    Form1099DIV,
+    Form1099INT,
+    Form1099NEC,
+    Form1099R,
+    Household,
+    Person,
+    RelationshipType,
+    SSA1099,
+    W2,
+)
 
 # Import the module — renderer class and helpers
 from training.document_renderer import (
     DocumentRenderer,
     _estimate_issue_date,
     _format_date,
+    _format_dollars,
     _STATE_NAMES,
 )
 
@@ -362,3 +375,348 @@ class TestRendererHTMLMethods:
         html = renderer.render_photo_id_html(person)
         assert html is not None
         assert "EXPIRED" in html
+
+
+# =========================================================================
+# Dollar formatting
+# =========================================================================
+
+
+class TestFormatDollars:
+    def test_positive_amount(self) -> None:
+        assert _format_dollars(50000) == "$50,000.00"
+
+    def test_zero_returns_empty(self) -> None:
+        assert _format_dollars(0) == ""
+
+    def test_large_amount(self) -> None:
+        assert _format_dollars(160200) == "$160,200.00"
+
+    def test_small_amount(self) -> None:
+        assert _format_dollars(42) == "$42.00"
+
+
+# =========================================================================
+# Income document rendering — W-2
+# =========================================================================
+
+
+class TestW2Rendering:
+    @pytest.fixture
+    def sample_w2(self) -> W2:
+        return W2(
+            employer=Employer(
+                name="Acme Corp",
+                ein="12-3456789",
+                address=Address(
+                    street="100 Main St", city="Honolulu", state="HI", zip_code="96801"
+                ),
+            ),
+            wages=55000,
+            federal_tax_withheld=6200,
+            social_security_wages=55000,
+            social_security_tax=3410,
+            medicare_wages=55000,
+            medicare_tax=798,
+            state="HI",
+            state_wages=55000,
+            state_tax=2800,
+            control_number="W2-001",
+            box_12=[("D", 5000)],
+        )
+
+    def test_w2_contains_employer(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "Acme Corp" in html
+        assert "12-3456789" in html
+
+    def test_w2_contains_employee(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "John Robert Smith" in html
+        assert "900-12-3456" in html
+
+    def test_w2_contains_wages(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "$55,000.00" in html
+        assert "$6,200.00" in html
+
+    def test_w2_contains_fica(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "$3,410.00" in html
+        assert "$798.00" in html
+
+    def test_w2_contains_state(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "HI" in html
+        assert "$2,800.00" in html
+
+    def test_w2_has_watermark(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert 'class="watermark"' in html
+
+    def test_w2_contains_title(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "Form W-2" in html
+        assert "Wage and Tax Statement" in html
+
+    def test_w2_contains_box_12(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "D" in html
+        assert "$5,000.00" in html
+
+    def test_w2_employer_address(self, renderer, adult_with_dl, sample_w2) -> None:
+        html = renderer.render_w2_html(adult_with_dl, sample_w2)
+        assert "100 Main St" in html
+        assert "Honolulu" in html
+
+
+# =========================================================================
+# Income document rendering — 1099-INT
+# =========================================================================
+
+
+class TestForm1099INTRendering:
+    @pytest.fixture
+    def sample_1099_int(self) -> Form1099INT:
+        return Form1099INT(
+            payer_name="First Hawaiian Bank",
+            payer_tin="99-1234567",
+            interest_income=850,
+            us_savings_bond_interest=0,
+            federal_tax_withheld=0,
+        )
+
+    def test_contains_payer(self, renderer, adult_with_dl, sample_1099_int) -> None:
+        html = renderer.render_1099_int_html(adult_with_dl, sample_1099_int)
+        assert "First Hawaiian Bank" in html
+        assert "99-1234567" in html
+
+    def test_contains_recipient(self, renderer, adult_with_dl, sample_1099_int) -> None:
+        html = renderer.render_1099_int_html(adult_with_dl, sample_1099_int)
+        assert "John Robert Smith" in html
+        assert "900-12-3456" in html
+
+    def test_contains_interest(self, renderer, adult_with_dl, sample_1099_int) -> None:
+        html = renderer.render_1099_int_html(adult_with_dl, sample_1099_int)
+        assert "$850.00" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1099_int) -> None:
+        html = renderer.render_1099_int_html(adult_with_dl, sample_1099_int)
+        assert 'class="watermark"' in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1099_int) -> None:
+        html = renderer.render_1099_int_html(adult_with_dl, sample_1099_int)
+        assert "1099-INT" in html
+        assert "Interest Income" in html
+
+
+# =========================================================================
+# Income document rendering — 1099-DIV
+# =========================================================================
+
+
+class TestForm1099DIVRendering:
+    @pytest.fixture
+    def sample_1099_div(self) -> Form1099DIV:
+        return Form1099DIV(
+            payer_name="Vanguard Funds",
+            payer_tin="23-7654321",
+            ordinary_dividends=1200,
+            qualified_dividends=900,
+            capital_gain_distributions=300,
+            federal_tax_withheld=0,
+        )
+
+    def test_contains_payer(self, renderer, adult_with_dl, sample_1099_div) -> None:
+        html = renderer.render_1099_div_html(adult_with_dl, sample_1099_div)
+        assert "Vanguard Funds" in html
+        assert "23-7654321" in html
+
+    def test_contains_dividends(self, renderer, adult_with_dl, sample_1099_div) -> None:
+        html = renderer.render_1099_div_html(adult_with_dl, sample_1099_div)
+        assert "$1,200.00" in html
+        assert "$900.00" in html
+        assert "$300.00" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1099_div) -> None:
+        html = renderer.render_1099_div_html(adult_with_dl, sample_1099_div)
+        assert "1099-DIV" in html
+        assert "Dividends" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1099_div) -> None:
+        html = renderer.render_1099_div_html(adult_with_dl, sample_1099_div)
+        assert 'class="watermark"' in html
+
+
+# =========================================================================
+# Income document rendering — 1099-R
+# =========================================================================
+
+
+class TestForm1099RRendering:
+    @pytest.fixture
+    def sample_1099_r(self) -> Form1099R:
+        return Form1099R(
+            payer_name="Hawaii State Pension Fund",
+            payer_tin="99-8765432",
+            gross_distribution=18000,
+            taxable_amount=18000,
+            federal_tax_withheld=2700,
+            distribution_code="7",
+        )
+
+    def test_contains_payer(self, renderer, adult_with_dl, sample_1099_r) -> None:
+        html = renderer.render_1099_r_html(adult_with_dl, sample_1099_r)
+        assert "Hawaii State Pension Fund" in html
+        assert "99-8765432" in html
+
+    def test_contains_distribution(self, renderer, adult_with_dl, sample_1099_r) -> None:
+        html = renderer.render_1099_r_html(adult_with_dl, sample_1099_r)
+        assert "$18,000.00" in html
+        assert "$2,700.00" in html
+
+    def test_contains_code(self, renderer, adult_with_dl, sample_1099_r) -> None:
+        html = renderer.render_1099_r_html(adult_with_dl, sample_1099_r)
+        assert ">7<" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1099_r) -> None:
+        html = renderer.render_1099_r_html(adult_with_dl, sample_1099_r)
+        assert "1099-R" in html
+        assert "Pensions" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1099_r) -> None:
+        html = renderer.render_1099_r_html(adult_with_dl, sample_1099_r)
+        assert 'class="watermark"' in html
+
+
+# =========================================================================
+# Income document rendering — SSA-1099
+# =========================================================================
+
+
+class TestSSA1099Rendering:
+    @pytest.fixture
+    def sample_ssa_1099(self) -> SSA1099:
+        return SSA1099(
+            total_benefits=16800,
+            benefits_repaid=0,
+            net_benefits=16800,
+        )
+
+    def test_contains_recipient(self, renderer, adult_with_dl, sample_ssa_1099) -> None:
+        html = renderer.render_ssa_1099_html(adult_with_dl, sample_ssa_1099)
+        assert "John Robert Smith" in html
+        assert "900-12-3456" in html
+
+    def test_contains_benefits(self, renderer, adult_with_dl, sample_ssa_1099) -> None:
+        html = renderer.render_ssa_1099_html(adult_with_dl, sample_ssa_1099)
+        assert "$16,800.00" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_ssa_1099) -> None:
+        html = renderer.render_ssa_1099_html(adult_with_dl, sample_ssa_1099)
+        assert "SSA-1099" in html
+        assert "Social Security" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_ssa_1099) -> None:
+        html = renderer.render_ssa_1099_html(adult_with_dl, sample_ssa_1099)
+        assert 'class="watermark"' in html
+
+    def test_ssa_subtitle(self, renderer, adult_with_dl, sample_ssa_1099) -> None:
+        html = renderer.render_ssa_1099_html(adult_with_dl, sample_ssa_1099)
+        assert "Social Security Administration" in html
+
+
+# =========================================================================
+# Income document rendering — 1099-NEC
+# =========================================================================
+
+
+class TestForm1099NECRendering:
+    @pytest.fixture
+    def sample_1099_nec(self) -> Form1099NEC:
+        return Form1099NEC(
+            payer_name="Island Consulting LLC",
+            payer_tin="99-1112222",
+            nonemployee_compensation=32000,
+            federal_tax_withheld=0,
+        )
+
+    def test_contains_payer(self, renderer, adult_with_dl, sample_1099_nec) -> None:
+        html = renderer.render_1099_nec_html(adult_with_dl, sample_1099_nec)
+        assert "Island Consulting LLC" in html
+        assert "99-1112222" in html
+
+    def test_contains_compensation(self, renderer, adult_with_dl, sample_1099_nec) -> None:
+        html = renderer.render_1099_nec_html(adult_with_dl, sample_1099_nec)
+        assert "$32,000.00" in html
+
+    def test_contains_title(self, renderer, adult_with_dl, sample_1099_nec) -> None:
+        html = renderer.render_1099_nec_html(adult_with_dl, sample_1099_nec)
+        assert "1099-NEC" in html
+        assert "Nonemployee Compensation" in html
+
+    def test_has_watermark(self, renderer, adult_with_dl, sample_1099_nec) -> None:
+        html = renderer.render_1099_nec_html(adult_with_dl, sample_1099_nec)
+        assert 'class="watermark"' in html
+
+
+# =========================================================================
+# Intake form Part II rendering
+# =========================================================================
+
+
+class TestIntakeP2Rendering:
+    @pytest.fixture
+    def sample_household(self) -> Household:
+        return Household(
+            household_id="hh-intake",
+            state="HI",
+            year=2022,
+            pattern="single_adult",
+            members=[
+                Person(
+                    person_id="p-intake",
+                    relationship=RelationshipType.HOUSEHOLDER,
+                    age=35,
+                    legal_first_name="Test",
+                    legal_last_name="User",
+                ),
+            ],
+        )
+
+    def test_renders_with_income(self, renderer, sample_household) -> None:
+        field_values = {
+            "income.wages": "Yes",
+            "income.wages.amount": "55000",
+            "income.interest": "Yes",
+            "income.interest.amount": "800",
+            "income.total": "55800",
+        }
+        html = renderer.render_intake_p2_html(sample_household, field_values)
+        assert "Part II" in html
+        assert "55000" in html
+        assert "800" in html
+        assert "55800" in html
+
+    def test_renders_empty_when_no_income(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {})
+        assert "Part II" in html
+        assert "Wages" in html or "wages" in html
+
+    def test_has_watermark(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {})
+        assert 'class="watermark"' in html
+
+    def test_contains_all_income_types(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {})
+        assert "W-2" in html
+        assert "1099-INT" in html
+        assert "1099-DIV" in html
+        assert "SSA-1099" in html
+        assert "1099-R" in html
+        assert "1099-NEC" in html
+
+    def test_contains_form_name(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {}, tax_year=2022)
+        assert "13614-C" in html
+        assert "2022" in html

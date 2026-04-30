@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.w2-form {
+    position: relative;
+    width: 720px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    color: #1a1a1a;
+    border: 2px solid #333;
+    background: #fff;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.w2-title-bar {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.w2-title-bar .form-id {
+    font-size: 10px;
+    font-weight: normal;
+}
+
+.w2-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid #999;
+}
+
+.w2-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid #999;
+}
+
+.w2-cell {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 36px;
+}
+
+.w2-cell .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.w2-cell .box-num {
+    font-size: 8px;
+    color: #666;
+    font-weight: bold;
+}
+
+.w2-cell .value {
+    font-size: 12px;
+    font-weight: bold;
+    font-family: "Courier New", Courier, monospace;
+}
+
+.w2-employer-block {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 60px;
+}
+
+.w2-employer-block .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.w2-employer-block .value {
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.w2-employee-block {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 48px;
+}
+
+.w2-employee-block .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.w2-employee-block .value {
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.w2-state-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 1fr 1fr;
+    border-top: 1px solid #999;
+}
+
+.w2-footer {
+    font-size: 8px;
+    color: #666;
+    text-align: center;
+    padding: 4px;
+    border-top: 1px solid #999;
+}
+</style>
+</head>
+<body>
+<div class="w2-form">
+    <div class="watermark"></div>
+
+    <div class="w2-title-bar">
+        <span>Form W-2 Wage and Tax Statement</span>
+        <span class="form-id">{{ tax_year }}</span>
+    </div>
+
+    <!-- Row 1: Control number + Employer info -->
+    <div class="w2-grid">
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">d</span> Control number</div>
+            <div class="value">{{ control_number }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">1</span> Wages, tips, other compensation</div>
+            <div class="value">{{ wages }}</div>
+        </div>
+    </div>
+
+    <div class="w2-grid">
+        <div class="w2-employer-block">
+            <div class="label"><span class="box-num">b</span> Employer's identification number (EIN)</div>
+            <div class="value">{{ employer_ein }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">2</span> Federal income tax withheld</div>
+            <div class="value">{{ federal_tax_withheld }}</div>
+        </div>
+    </div>
+
+    <div class="w2-grid">
+        <div class="w2-employer-block">
+            <div class="label"><span class="box-num">c</span> Employer's name, address, and ZIP code</div>
+            <div class="value">{{ employer_name }}</div>
+            {% if employer_address %}
+            <div class="value">{{ employer_address }}</div>
+            {% endif %}
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">3</span> Social security wages</div>
+            <div class="value">{{ social_security_wages }}</div>
+        </div>
+    </div>
+
+    <div class="w2-grid">
+        <div class="w2-cell">
+            <div class="label">&nbsp;</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">4</span> Social security tax withheld</div>
+            <div class="value">{{ social_security_tax }}</div>
+        </div>
+    </div>
+
+    <div class="w2-grid">
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">e</span> Employee's first name and initial &nbsp; Last name</div>
+            <div class="value">{{ employee_name }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">5</span> Medicare wages and tips</div>
+            <div class="value">{{ medicare_wages }}</div>
+        </div>
+    </div>
+
+    <div class="w2-grid">
+        <div class="w2-employee-block">
+            <div class="label"><span class="box-num">f</span> Employee's address and ZIP code</div>
+            <div class="value">{{ employee_address }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">6</span> Medicare tax withheld</div>
+            <div class="value">{{ medicare_tax }}</div>
+        </div>
+    </div>
+
+    <!-- State section -->
+    <div class="w2-state-row">
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">15</span> State</div>
+            <div class="value">{{ state }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">16</span> State wages, tips, etc.</div>
+            <div class="value">{{ state_wages }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">17</span> State income tax</div>
+            <div class="value">{{ state_tax }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label">&nbsp;</div>
+        </div>
+    </div>
+
+    <!-- Employee SSN -->
+    <div class="w2-grid">
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">a</span> Employee's social security number</div>
+            <div class="value">{{ employee_ssn }}</div>
+        </div>
+        <div class="w2-cell">
+            <div class="label"><span class="box-num">12a</span> See instructions for box 12</div>
+            <div class="value">
+                {% for entry in box_12 %}{{ entry.code }} &mdash; {{ entry.amount }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="w2-footer">
+        Department of the Treasury — Internal Revenue Service
+    </div>
+</div>
+</body>
+</html>

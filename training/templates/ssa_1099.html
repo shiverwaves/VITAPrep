@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.ssa-1099 {
+    position: relative;
+    width: 600px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    color: #1a1a1a;
+    border: 2px solid #333;
+    background: #fff;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.ssa-title-bar {
+    background: #003366;
+    color: #fff;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ssa-title-bar .tax-year {
+    font-size: 10px;
+    font-weight: normal;
+}
+
+.ssa-subtitle {
+    background: #e8f0f8;
+    padding: 4px 12px;
+    font-size: 10px;
+    color: #003366;
+    font-weight: bold;
+    border-bottom: 1px solid #999;
+}
+
+.ssa-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+.ssa-cell {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 36px;
+}
+
+.ssa-cell .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.ssa-cell .box-num {
+    font-size: 8px;
+    color: #666;
+    font-weight: bold;
+}
+
+.ssa-cell .value {
+    font-size: 12px;
+    font-weight: bold;
+    font-family: "Courier New", Courier, monospace;
+}
+
+.ssa-recipient-block {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 48px;
+    grid-column: 1 / -1;
+}
+
+.ssa-recipient-block .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.ssa-recipient-block .value {
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.ssa-full-row {
+    border: 1px solid #999;
+    padding: 4px 8px;
+    min-height: 36px;
+}
+
+.ssa-full-row .label {
+    font-size: 8px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.ssa-full-row .box-num {
+    font-size: 8px;
+    color: #666;
+    font-weight: bold;
+}
+
+.ssa-full-row .value {
+    font-size: 14px;
+    font-weight: bold;
+    font-family: "Courier New", Courier, monospace;
+}
+
+.ssa-footer {
+    font-size: 8px;
+    color: #666;
+    text-align: center;
+    padding: 4px;
+    border-top: 1px solid #999;
+}
+</style>
+</head>
+<body>
+<div class="ssa-1099">
+    <div class="watermark"></div>
+
+    <div class="ssa-title-bar">
+        <span>SSA-1099 &mdash; Social Security Benefit Statement</span>
+        <span class="tax-year">{{ tax_year }}</span>
+    </div>
+
+    <div class="ssa-subtitle">
+        Social Security Administration
+    </div>
+
+    <!-- Recipient info -->
+    <div class="ssa-recipient-block">
+        <div class="label">Name</div>
+        <div class="value">{{ recipient_name }}</div>
+    </div>
+
+    <div class="ssa-grid">
+        <div class="ssa-cell">
+            <div class="label">Beneficiary's SSN</div>
+            <div class="value">{{ recipient_tin }}</div>
+        </div>
+        <div class="ssa-cell">
+            <div class="label">&nbsp;</div>
+        </div>
+    </div>
+
+    <!-- Benefit boxes -->
+    <div class="ssa-grid">
+        <div class="ssa-cell">
+            <div class="label"><span class="box-num">3</span> Benefits paid</div>
+            <div class="value">{{ total_benefits }}</div>
+        </div>
+        <div class="ssa-cell">
+            <div class="label"><span class="box-num">4</span> Benefits repaid</div>
+            <div class="value">{{ benefits_repaid }}</div>
+        </div>
+    </div>
+
+    <div class="ssa-full-row">
+        <div class="label"><span class="box-num">5</span> Net benefits (Box 3 minus Box 4)</div>
+        <div class="value">{{ net_benefits }}</div>
+    </div>
+
+    <div class="ssa-footer">
+        Social Security Administration &mdash; Form SSA-1099
+    </div>
+</div>
+</body>
+</html>

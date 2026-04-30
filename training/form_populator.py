@@ -41,6 +41,19 @@ from training.form_fields import (
     FS_MFS,
     FS_QSS,
     FS_SINGLE,
+    INCOME_DIVIDENDS,
+    INCOME_DIVIDENDS_AMOUNT,
+    INCOME_INTEREST,
+    INCOME_INTEREST_AMOUNT,
+    INCOME_RETIREMENT,
+    INCOME_RETIREMENT_AMOUNT,
+    INCOME_SELF_EMPLOYMENT,
+    INCOME_SELF_EMPLOYMENT_AMOUNT,
+    INCOME_SOCIAL_SECURITY,
+    INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_TOTAL,
+    INCOME_WAGES,
+    INCOME_WAGES_AMOUNT,
     MAX_DEPENDENTS,
     NOT_CLAIMED_AS_DEPENDENT,
     NOT_PRIOR_YEAR_DEPENDENT,
@@ -215,4 +228,74 @@ def build_field_values(household: Household) -> Dict[str, str]:
     # Prior year dependent — default No (simplest case)
     values[NOT_PRIOR_YEAR_DEPENDENT] = "Yes"
 
+    # =================================================================
+    # Part II: Income
+    # =================================================================
+    _populate_income_fields(values, household)
+
     return values
+
+
+def _populate_income_fields(
+    values: Dict[str, str], household: Household
+) -> None:
+    """Populate Part II income fields from all household members' documents.
+
+    Sums income across the primary filer and spouse (the two people
+    whose income appears on the joint return). Dependents' income is
+    not included on the 13614-C Part II.
+
+    Args:
+        values: Field dict to populate (mutated in place).
+        household: Household with income documents populated.
+    """
+    filers = []
+    householder = household.get_householder()
+    spouse = household.get_spouse()
+    if householder:
+        filers.append(householder)
+    if spouse:
+        filers.append(spouse)
+
+    total_wages = 0
+    total_interest = 0
+    total_dividends = 0
+    total_ss = 0
+    total_retirement = 0
+    total_se = 0
+
+    for person in filers:
+        total_wages += person.wage_income
+        total_interest += person.interest_income
+        total_dividends += person.dividend_income
+        total_ss += person.social_security_income
+        total_retirement += person.retirement_income
+        total_se += person.self_employment_income
+
+    if total_wages > 0:
+        values[INCOME_WAGES] = "Yes"
+        values[INCOME_WAGES_AMOUNT] = str(total_wages)
+
+    if total_interest > 0:
+        values[INCOME_INTEREST] = "Yes"
+        values[INCOME_INTEREST_AMOUNT] = str(total_interest)
+
+    if total_dividends > 0:
+        values[INCOME_DIVIDENDS] = "Yes"
+        values[INCOME_DIVIDENDS_AMOUNT] = str(total_dividends)
+
+    if total_ss > 0:
+        values[INCOME_SOCIAL_SECURITY] = "Yes"
+        values[INCOME_SOCIAL_SECURITY_AMOUNT] = str(total_ss)
+
+    if total_retirement > 0:
+        values[INCOME_RETIREMENT] = "Yes"
+        values[INCOME_RETIREMENT_AMOUNT] = str(total_retirement)
+
+    if total_se > 0:
+        values[INCOME_SELF_EMPLOYMENT] = "Yes"
+        values[INCOME_SELF_EMPLOYMENT_AMOUNT] = str(total_se)
+
+    total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
+    if total > 0:
+        values[INCOME_TOTAL] = str(total)

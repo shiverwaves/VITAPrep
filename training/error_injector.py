@@ -5,7 +5,7 @@ Takes a Household with PII and introduces errors between documents and/or
 the intake form. Returns the modified data plus a manifest of injected errors
 (used as the answer key).
 
-Error categories: name, ssn, address, dob, filing_status, dependent, expiration
+Error categories: name, ssn, address, dob, filing_status, dependent, expiration, income
 ~15% of scenarios should be error-free to test student confidence.
 
 See docs/VITA_FORM_FIELDS.md for field-level error examples.
@@ -376,6 +376,156 @@ def _expiration_error(person: Person, difficulty: str) -> Optional[InjectedError
     )
 
 
+def _wage_amount_mismatch(
+    person: Person, difficulty: str,
+) -> Optional[InjectedError]:
+    """Make the intake form's wage total not match the W-2(s)."""
+    if person.wage_income <= 0:
+        return None
+
+    original = str(person.wage_income)
+
+    if difficulty == "easy":
+        mutated = str(person.wage_income + random.choice([1000, 2000, 5000]))
+    elif difficulty == "medium":
+        digits = list(original)
+        if len(digits) >= 4:
+            i = random.randint(1, len(digits) - 2)
+            digits[i], digits[i + 1] = digits[i + 1], digits[i]
+            mutated = "".join(digits)
+        else:
+            mutated = str(person.wage_income + 500)
+    else:
+        mutated = str(person.wage_income + random.choice([-100, 100]))
+
+    if mutated == original:
+        mutated = str(person.wage_income + 1)
+
+    return InjectedError(
+        error_id=_gen_id(),
+        category="income",
+        field="income.wages.amount",
+        person_id=person.person_id,
+        document="intake_form",
+        correct_value=original,
+        erroneous_value=mutated,
+        explanation=f"Wage amount on intake doesn't match W-2: ${original} → ${mutated}",
+        difficulty=difficulty,
+    )
+
+
+def _missing_income_source(
+    person: Person, difficulty: str,
+) -> Optional[InjectedError]:
+    """Omit an income source from the intake form (student forgets a 1099)."""
+    sources = []
+    if person.interest_income > 0:
+        sources.append(("income.interest", "1099-INT", str(person.interest_income)))
+    if person.dividend_income > 0:
+        sources.append(("income.dividends", "1099-DIV", str(person.dividend_income)))
+    if person.retirement_income > 0:
+        sources.append(("income.retirement", "1099-R", str(person.retirement_income)))
+    if person.self_employment_income > 0:
+        sources.append(("income.self_employment", "1099-NEC", str(person.self_employment_income)))
+
+    if not sources:
+        return None
+
+    field, doc, amount = random.choice(sources)
+
+    return InjectedError(
+        error_id=_gen_id(),
+        category="income",
+        field=field,
+        person_id=person.person_id,
+        document="intake_form",
+        correct_value=f"Yes (${amount})",
+        erroneous_value="(omitted)",
+        explanation=f"Income from {doc} not reported on intake form",
+        difficulty=difficulty,
+    )
+
+
+def _income_amount_transposition(
+    person: Person, difficulty: str,
+) -> Optional[InjectedError]:
+    """Transpose digits in an income amount on the intake form."""
+    candidates = []
+    if person.social_security_income > 0:
+        candidates.append(("income.social_security.amount", person.social_security_income))
+    if person.retirement_income > 0:
+        candidates.append(("income.retirement.amount", person.retirement_income))
+    if person.interest_income > 0:
+        candidates.append(("income.interest.amount", person.interest_income))
+
+    if not candidates:
+        return None
+
+    field, amount = random.choice(candidates)
+    original = str(amount)
+    digits = list(original)
+
+    if len(digits) >= 2:
+        i = random.randint(0, len(digits) - 2)
+        digits[i], digits[i + 1] = digits[i + 1], digits[i]
+        mutated = "".join(digits)
+    else:
+        mutated = str(amount + 1)
+
+    if mutated == original:
+        mutated = str(amount + 1)
+
+    return InjectedError(
+        error_id=_gen_id(),
+        category="income",
+        field=field,
+        person_id=person.person_id,
+        document="intake_form",
+        correct_value=original,
+        erroneous_value=mutated,
+        explanation=f"Income amount digits transposed: ${original} → ${mutated}",
+        difficulty=difficulty,
+    )
+
+
+def _w2_ssn_mismatch(
+    person: Person, difficulty: str,
+) -> Optional[InjectedError]:
+    """SSN on W-2 doesn't match the SSN card."""
+    if not person.ssn or not person.w2s:
+        return None
+
+    original = person.ssn
+    digits = list(original.replace("-", ""))
+
+    if difficulty == "easy":
+        i = random.randint(3, 7)
+        digits[i], digits[i + 1] = digits[i + 1], digits[i]
+    elif difficulty == "medium":
+        i = random.randint(3, 8)
+        digits[i] = str((int(digits[i]) + random.randint(1, 9)) % 10)
+    else:
+        i, j = 4, 7
+        digits[i], digits[j] = digits[j], digits[i]
+
+    mutated = f"{digits[0]}{digits[1]}{digits[2]}-{digits[3]}{digits[4]}-{digits[5]}{digits[6]}{digits[7]}{digits[8]}"
+    if mutated == original:
+        digits[-1] = str((int(digits[-1]) + 1) % 10)
+        mutated = f"{digits[0]}{digits[1]}{digits[2]}-{digits[3]}{digits[4]}-{digits[5]}{digits[6]}{digits[7]}{digits[8]}"
+
+    return InjectedError(
+        error_id=_gen_id(),
+        category="income",
+        field="w2_ssn",
+        person_id=person.person_id,
+        document="w2",
+        correct_value=original,
+        erroneous_value=mutated,
+        explanation=f"SSN on W-2 doesn't match SSN card: '{original}' → '{mutated}'",
+        difficulty=difficulty,
+    )
+
+
 # =========================================================================
 # Error target collection
 # =========================================================================
@@ -440,6 +590,38 @@ def _collect_targets(
             targets.append(
                 (f"{dpid}:dependent_name",
                  lambda hh, d, p=dep: _dependent_error(p, d)),
+            )
+
+    # Income errors (filers only)
+    for person in adults:
+        pid = person.person_id
+        if person.wage_income > 0:
+            targets.append(
+                (f"{pid}:wage_amount",
+                 lambda hh, d, p=person: _wage_amount_mismatch(p, d)),
+            )
+        if person.w2s and person.ssn:
+            targets.append(
+                (f"{pid}:w2_ssn",
+                 lambda hh, d, p=person: _w2_ssn_mismatch(p, d)),
+            )
+        non_wage_income = (
+            person.interest_income + person.dividend_income
+            + person.retirement_income + person.self_employment_income
+        )
+        if non_wage_income > 0:
+            targets.append(
+                (f"{pid}:missing_income",
+                 lambda hh, d, p=person: _missing_income_source(p, d)),
+            )
+        benefit_income = (
+            person.social_security_income + person.retirement_income
+            + person.interest_income
+        )
+        if benefit_income > 0:
+            targets.append(
+                (f"{pid}:income_transposition",
+                 lambda hh, d, p=person: _income_amount_transposition(p, d)),
             )
 
     return targets

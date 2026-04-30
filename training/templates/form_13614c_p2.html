@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.intake-p2 {
+    position: relative;
+    width: 720px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #1a1a1a;
+    border: 2px solid #333;
+    background: #fff;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.intake-p2-header {
+    background: #1a3a5c;
+    color: #fff;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.intake-p2-header .form-name {
+    font-size: 10px;
+    font-weight: normal;
+    display: block;
+    margin-top: 2px;
+}
+
+.intake-p2-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid #ccc;
+}
+
+.intake-p2-section .section-title {
+    font-size: 11px;
+    font-weight: bold;
+    color: #1a3a5c;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.income-row {
+    display: grid;
+    grid-template-columns: 280px 60px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.income-row:last-child {
+    border-bottom: none;
+}
+
+.income-row .question {
+    font-size: 11px;
+}
+
+.income-row .checkbox-group {
+    display: flex;
+    gap: 4px;
+    font-size: 10px;
+    align-items: center;
+}
+
+.income-row .checkbox-group input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+}
+
+.income-row .amount-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.income-row .amount-field label {
+    font-size: 10px;
+    color: #666;
+}
+
+.income-row .amount-field input {
+    width: 120px;
+    padding: 3px 6px;
+    border: 1px solid #999;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 11px;
+    text-align: right;
+}
+
+.income-total-row {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-top: 2px solid #333;
+    margin-top: 4px;
+    font-weight: bold;
+}
+
+.income-total-row input {
+    width: 120px;
+    padding: 3px 6px;
+    border: 1px solid #999;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: right;
+}
+
+.intake-p2-footer {
+    font-size: 8px;
+    color: #666;
+    text-align: center;
+    padding: 6px;
+    border-top: 1px solid #999;
+}
+</style>
+</head>
+<body>
+<div class="intake-p2">
+    <div class="watermark"></div>
+
+    <div class="intake-p2-header">
+        Part II — Income
+        <span class="form-name">Form 13614-C ({{ tax_year }})</span>
+    </div>
+
+    <div class="intake-p2-section">
+        <div class="section-title">Did you (or your spouse) receive income from any of these sources?</div>
+
+        <div class="income-row">
+            <div class="question">1. Wages, salaries, or tips? (W-2)</div>
+            <div class="checkbox-group">
+                <input type="checkbox" name="income.wages" id="income_wages"
+                    {% if income_wages %}checked{% endif %}>
+                <label for="income_wages">Yes</label>
+            </div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.wages.amount" id="income_wages_amount"
+                    value="{{ income_wages_amount }}">
+            </div>
+        </div>
+
+        <div class="income-row">
+            <div class="question">2. Interest income? (1099-INT)</div>
+            <div class="checkbox-group">
+                <input type="checkbox" name="income.interest" id="income_interest"
+                    {% if income_interest %}checked{% endif %}>
+                <label for="income_interest">Yes</label>
+            </div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.interest.amount" id="income_interest_amount"
+                    value="{{ income_interest_amount }}">
+            </div>
+        </div>
+
+        <div class="income-row">
+            <div class="question">3. Dividend income? (1099-DIV)</div>
+            <div class="checkbox-group">
+                <input type="checkbox" name="income.dividends" id="income_dividends"
+                    {% if income_dividends %}checked{% endif %}>
+                <label for="income_dividends">Yes</label>
+            </div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.dividends.amount" id="income_dividends_amount"
+                    value="{{ income_dividends_amount }}">
+            </div>
+        </div>
+
+        <div class="income-row">
+            <div class="question">4. Social Security benefits? (SSA-1099)</div>
+            <div class="checkbox-group">
+                <input type="checkbox" name="income.social_security" id="income_ss"
+                    {% if income_social_security %}checked{% endif %}>
+                <label for="income_ss">Yes</label>
+            </div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.social_security.amount" id="income_ss_amount"
+                    value="{{ income_social_security_amount }}">
+            </div>
+        </div>
+
+        <div class="income-row">
+            <div class="question">5. Pension or annuity income? (1099-R)</div>
+            <div class="checkbox-group">
+                <input type="checkbox" name="income.retirement" id="income_retirement"
+                    {% if income_retirement %}checked{% endif %}>
+                <label for="income_retirement">Yes</label>
+            </div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.retirement.amount" id="income_retirement_amount"
+                    value="{{ income_retirement_amount }}">
+            </div>
+        </div>
+
+        <div class="income-row">
+            <div class="question">6. Self-employment income? (1099-NEC)</div>
+            <div class="checkbox-group">
+                <input type="checkbox" name="income.self_employment" id="income_se"
+                    {% if income_self_employment %}checked{% endif %}>
+                <label for="income_se">Yes</label>
+            </div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.self_employment.amount" id="income_se_amount"
+                    value="{{ income_self_employment_amount }}">
+            </div>
+        </div>
+
+        <div class="income-total-row">
+            <div>Total Income</div>
+            <div class="amount-field">
+                <label>$</label>
+                <input type="text" name="income.total" id="income_total"
+                    value="{{ income_total }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="intake-p2-footer">
+        Form 13614-C Part II — Catalog Number 52121E — Department of the Treasury — Internal Revenue Service
+    </div>
+</div>
+</body>
+</html>

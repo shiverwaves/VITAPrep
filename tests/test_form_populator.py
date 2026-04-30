@@ -13,10 +13,17 @@ import pytest
 
 from generator.models import (
     Address,
+    Employer,
     FilingStatus,
+    Form1099DIV,
+    Form1099INT,
+    Form1099NEC,
+    Form1099R,
     Household,
     Person,
     RelationshipType,
+    SSA1099,
+    W2,
 )
 from training.form_fields import (
     ADDR_CITY,
@@ -28,6 +35,19 @@ from training.form_fields import (
     FS_HOH,
     FS_MFJ,
     FS_SINGLE,
+    INCOME_DIVIDENDS,
+    INCOME_DIVIDENDS_AMOUNT,
+    INCOME_INTEREST,
+    INCOME_INTEREST_AMOUNT,
+    INCOME_RETIREMENT,
+    INCOME_RETIREMENT_AMOUNT,
+    INCOME_SELF_EMPLOYMENT,
+    INCOME_SELF_EMPLOYMENT_AMOUNT,
+    INCOME_SOCIAL_SECURITY,
+    INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_TOTAL,
+    INCOME_WAGES,
+    INCOME_WAGES_AMOUNT,
     NOT_CLAIMED_AS_DEPENDENT,
     NOT_PRIOR_YEAR_DEPENDENT,
     PRIOR_YEAR_DEPENDENT,
@@ -57,6 +77,7 @@ from training.form_populator import (
     build_field_values,
     _format_date,
     _middle_initial,
+    _populate_income_fields,
     _relationship_label,
     _get_dependents,
 )
@@ -455,3 +476,211 @@ class TestBuildFieldValues:
     def test_apt_empty_when_none(self, married_household: Household) -> None:
         vals = build_field_values(married_household)
         assert vals.get("addr.apt") == ""
+
+
+# =========================================================================
+# Part II: Income field tests
+# =========================================================================
+
+
+class TestIncomeFields:
+    """Test income field population from Person income attributes."""
+
+    @pytest.fixture
+    def wage_earner_household(self) -> Household:
+        """Single filer with W-2 wage income."""
+        p = Person(
+            person_id="p-w2",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=35,
+            legal_first_name="Alice",
+            legal_last_name="Worker",
+            ssn="900-11-0001",
+            wage_income=55000,
+            w2s=[W2(
+                employer=Employer(name="Acme Corp", ein="12-3456789"),
+                wages=55000,
+                federal_tax_withheld=6200,
+            )],
+        )
+        return Household(
+            household_id="hh-w2",
+            state="HI",
+            year=2022,
+            pattern="single_adult",
+            members=[p],
+        )
+
+    @pytest.fixture
+    def retiree_household(self) -> Household:
+        """Retiree with SS, retirement, and interest income."""
+        p = Person(
+            person_id="p-ret",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=70,
+            legal_first_name="Bob",
+            legal_last_name="Retiree",
+            ssn="900-22-0002",
+            social_security_income=18000,
+            retirement_income=12000,
+            interest_income=500,
+            ssa_1099=SSA1099(total_benefits=18000, net_benefits=18000),
+            form_1099_rs=[Form1099R(
+                payer_name="State Pension", gross_distribution=12000,
+                taxable_amount=12000, distribution_code="7",
+            )],
+            form_1099_ints=[Form1099INT(
+                payer_name="Bank", interest_income=500,
+            )],
+        )
+        return Household(
+            household_id="hh-ret",
+            state="HI",
+            year=2022,
+            pattern="single_adult",
+            members=[p],
+        )
+
+    @pytest.fixture
+    def dual_income_household(self) -> Household:
+        """Married couple, both with wage income."""
+        h = Person(
+            person_id="p-h",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=40,
+            legal_first_name="Carl",
+            legal_last_name="Dual",
+            ssn="900-33-0003",
+            wage_income=60000,
+        )
+        s = Person(
+            person_id="p-s",
+            relationship=RelationshipType.SPOUSE,
+            age=38,
+            legal_first_name="Dana",
+            legal_last_name="Dual",
+            ssn="900-44-0004",
+            wage_income=45000,
+            interest_income=200,
+        )
+        return Household(
+            household_id="hh-dual",
+            state="HI",
+            year=2022,
+            pattern="married_couple",
+            members=[h, s],
+        )
+
+    def test_wage_income_populated(self, wage_earner_household: Household) -> None:
+        vals = build_field_values(wage_earner_household)
+        assert vals[INCOME_WAGES] == "Yes"
+        assert vals[INCOME_WAGES_AMOUNT] == "55000"
+
+    def test_no_income_fields_omitted(self, wage_earner_household: Household) -> None:
+        vals = build_field_values(wage_earner_household)
+        assert INCOME_INTEREST not in vals
+        assert INCOME_INTEREST_AMOUNT not in vals
+        assert INCOME_SOCIAL_SECURITY not in vals
+        assert INCOME_RETIREMENT not in vals
+
+    def test_retiree_all_sources(self, retiree_household: Household) -> None:
+        vals = build_field_values(retiree_household)
+        assert vals[INCOME_SOCIAL_SECURITY] == "Yes"
+        assert vals[INCOME_SOCIAL_SECURITY_AMOUNT] == "18000"
+        assert vals[INCOME_RETIREMENT] == "Yes"
+        assert vals[INCOME_RETIREMENT_AMOUNT] == "12000"
+        assert vals[INCOME_INTEREST] == "Yes"
+        assert vals[INCOME_INTEREST_AMOUNT] == "500"
+        assert INCOME_WAGES not in vals
+
+    def test_retiree_total(self, retiree_household: Household) -> None:
+        vals = build_field_values(retiree_household)
+        assert vals[INCOME_TOTAL] == "30500"
+
+    def test_dual_income_sums_filers(self, dual_income_household: Household) -> None:
+        vals = build_field_values(dual_income_household)
+        assert vals[INCOME_WAGES] == "Yes"
+        assert vals[INCOME_WAGES_AMOUNT] == "105000"
+        assert vals[INCOME_INTEREST] == "Yes"
+        assert vals[INCOME_INTEREST_AMOUNT] == "200"
+
+    def test_dual_income_total(self, dual_income_household: Household) -> None:
+        vals = build_field_values(dual_income_household)
+        assert vals[INCOME_TOTAL] == "105200"
+
+    def test_self_employment_income(self) -> None:
+        p = Person(
+            person_id="p-se",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=35,
+            legal_first_name="Eve",
+            legal_last_name="Freelance",
+            ssn="900-55-0005",
+            self_employment_income=40000,
+            form_1099_necs=[Form1099NEC(
+                payer_name="Client Inc", nonemployee_compensation=40000,
+            )],
+        )
+        hh = Household(
+            household_id="hh-se", state="HI", year=2022,
+            pattern="single_adult", members=[p],
+        )
+        vals = build_field_values(hh)
+        assert vals[INCOME_SELF_EMPLOYMENT] == "Yes"
+        assert vals[INCOME_SELF_EMPLOYMENT_AMOUNT] == "40000"
+        assert vals[INCOME_TOTAL] == "40000"
+
+    def test_dividend_income(self) -> None:
+        p = Person(
+            person_id="p-div",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=50,
+            legal_first_name="Frank",
+            legal_last_name="Investor",
+            ssn="900-66-0006",
+            dividend_income=3000,
+            form_1099_divs=[Form1099DIV(
+                payer_name="Vanguard", ordinary_dividends=3000,
+            )],
+        )
+        hh = Household(
+            household_id="hh-div", state="HI", year=2022,
+            pattern="single_adult", members=[p],
+        )
+        vals = build_field_values(hh)
+        assert vals[INCOME_DIVIDENDS] == "Yes"
+        assert vals[INCOME_DIVIDENDS_AMOUNT] == "3000"
+
+    def test_no_income_no_fields(self, single_adult_household: Household) -> None:
+        vals = build_field_values(single_adult_household)
+        assert INCOME_WAGES not in vals
+        assert INCOME_TOTAL not in vals
+
+    def test_dependent_income_excluded(self) -> None:
+        parent = Person(
+            person_id="p-par",
+            relationship=RelationshipType.HOUSEHOLDER,
+            age=40,
+            legal_first_name="Grace",
+            legal_last_name="Parent",
+            ssn="900-77-0007",
+            wage_income=50000,
+        )
+        child = Person(
+            person_id="p-kid",
+            relationship=RelationshipType.BIOLOGICAL_CHILD,
+            age=16,
+            legal_first_name="Henry",
+            legal_last_name="Parent",
+            ssn="900-88-0008",
+            wage_income=3000,
+            is_dependent=True,
+            can_be_claimed=True,
+        )
+        hh = Household(
+            household_id="hh-dep-inc", state="HI", year=2022,
+            pattern="single_parent", members=[parent, child],
+        )
+        vals = build_field_values(hh)
+        assert vals[INCOME_WAGES_AMOUNT] == "50000"
+        assert vals[INCOME_TOTAL] == "50000"

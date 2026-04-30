@@ -1,5 +1,5 @@
 """
-Form field name constants for the 13614-C Part I.
+Form field name constants for the 13614-C.
 
 These constants define the contract between:
 - form_populator.py (builds field values for the answer key)
@@ -8,6 +8,9 @@ These constants define the contract between:
 
 Field names use dot-separated namespaces matching form sections:
     section.subsection.field_name
+
+Part I: Sections A–F (personal information)
+Part II: Income (wages, interest, dividends, SS, retirement, SE)
 """
 
 from typing import Dict, List
@@ -105,6 +108,63 @@ PRIOR_YEAR_DEPENDENT = "additional.prior_year_dep"  # checkbox: yes
 NOT_PRIOR_YEAR_DEPENDENT = "additional.not_prior_year_dep"  # checkbox: no
 
 # =========================================================================
+# Part II — Income
+# =========================================================================
+# Form 13614-C Part II asks yes/no for each income source, then the
+# taxpayer lists amounts from their documents (W-2, 1099, SSA-1099).
+# For each source we define:
+#   - A checkbox field (did you receive this type?)
+#   - An amount field (total from all documents of that type)
+
+# Wages, salaries, tips (from W-2s)
+INCOME_WAGES = "income.wages"
+INCOME_WAGES_AMOUNT = "income.wages.amount"
+
+# Interest income (from 1099-INT)
+INCOME_INTEREST = "income.interest"
+INCOME_INTEREST_AMOUNT = "income.interest.amount"
+
+# Dividend income (from 1099-DIV)
+INCOME_DIVIDENDS = "income.dividends"
+INCOME_DIVIDENDS_AMOUNT = "income.dividends.amount"
+
+# Social Security benefits (from SSA-1099)
+INCOME_SOCIAL_SECURITY = "income.social_security"
+INCOME_SOCIAL_SECURITY_AMOUNT = "income.social_security.amount"
+
+# Pensions and annuities (from 1099-R)
+INCOME_RETIREMENT = "income.retirement"
+INCOME_RETIREMENT_AMOUNT = "income.retirement.amount"
+
+# Self-employment income (from 1099-NEC)
+INCOME_SELF_EMPLOYMENT = "income.self_employment"
+INCOME_SELF_EMPLOYMENT_AMOUNT = "income.self_employment.amount"
+
+# Aggregate total (all sources)
+INCOME_TOTAL = "income.total"
+
+# All income checkbox fields
+INCOME_CHECKBOX_FIELDS: List[str] = [
+    INCOME_WAGES,
+    INCOME_INTEREST,
+    INCOME_DIVIDENDS,
+    INCOME_SOCIAL_SECURITY,
+    INCOME_RETIREMENT,
+    INCOME_SELF_EMPLOYMENT,
+]
+
+# All income amount fields
+INCOME_AMOUNT_FIELDS: List[str] = [
+    INCOME_WAGES_AMOUNT,
+    INCOME_INTEREST_AMOUNT,
+    INCOME_DIVIDENDS_AMOUNT,
+    INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_RETIREMENT_AMOUNT,
+    INCOME_SELF_EMPLOYMENT_AMOUNT,
+    INCOME_TOTAL,
+]
+
+# =========================================================================
 # Helpers — enumerate all fields
 # =========================================================================
 
@@ -137,4 +197,7 @@ for _i in range(MAX_DEPENDENTS):
     CHECKBOX_FIELDS.append(dep_field(_i, DEP_SINGLE_OR_MARRIED))
 
 # All field names combined
-ALL_FIELDS: List[str] = TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
+ALL_FIELDS: List[str] = (
+    TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
+    + INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
+)

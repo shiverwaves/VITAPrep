@@ -62,24 +62,51 @@
 | Dependent relationship | Person.relationship | Household pattern |
 | Months lived in home | 12 (default) or calculated for newborns | DOB cross-check |
 
-## Part 2: Income (Future — Sprint 9+)
+## Part 2: Income
 
 ### Distribution Tables
 
-| Table Name | PUMS Fields | Purpose |
-|------------|------------|---------|
-| `employment_by_age` | AGEP, ESR, PWGTP | Employment rate by age bracket |
-| `education_by_age` | AGEP, SCHL, PWGTP | Education level by age |
-| `disability_by_age` | AGEP, DIS, PWGTP | Disability rate by age |
-| `social_security` | AGEP, SSP, SSIP, PWGTP | SS income by age bracket |
-| `retirement_income` | AGEP, RETP, PWGTP | Retirement income distribution |
-| `interest_and_dividend_income` | AGEP, INTP, PWGTP | Investment income |
-| `other_income_by_employment_status` | ESR, OIP, PWGTP | Other income sources |
-| `public_assistance_income` | HINCP, PAP, PWGTP | Means-tested assistance |
-| `bls_occupation_wages` | (BLS OEWS data) | Occupation-specific wage ranges |
-| `education_occupation_probabilities` | SCHL, OCCP | Education → occupation mapping |
-| `age_income_adjustments` | AGEP, WAGP | Age-based wage adjustment factors |
-| `occupation_self_employment_probability` | OCCP, COW | Self-employment rates by occupation |
+| Table Name | Source | PUMS Fields Used | Purpose |
+|------------|--------|-----------------|---------|
+| `employment_by_age` | Person | AGEP, ESR, PWGTP | Employment rate by age bracket |
+| `education_by_age` | Person | AGEP, SCHL, PWGTP | Education level by age |
+| `disability_by_age` | Person | AGEP, DIS, PWGTP | Disability rate by age |
+| `social_security` | Person | AGEP, SSP, SSIP, PWGTP | SS income by age bracket |
+| `retirement_income` | Person | AGEP, RETP, PWGTP | Retirement income distribution |
+| `interest_and_dividend_income` | Person | AGEP, INTP, PWGTP | Investment income |
+| `other_income_by_employment_status` | Person | ESR, OIP, PWGTP | Other income sources |
+| `public_assistance_income` | Person | HINCP, PAP, PWGTP | Means-tested assistance |
+| `occupation_wages` | Person | OCCP, WAGP, PWGTP | Occupation-specific wage ranges (PUMS-derived) |
+| `education_occupation_probabilities` | Person | SCHL, OCCP, PWGTP | Education → occupation mapping |
+| `age_income_adjustments` | Person | AGEP, WAGP, PWGTP | Age-based wage adjustment factors |
+| `occupation_self_employment_rates` | Person | OCCP, COW, PWGTP | Self-employment rates by occupation |
+
+### Key PUMS Variables for Part 2
+
+| PUMS Variable | Description | Values | Maps To |
+|--------------|-------------|--------|---------|
+| `ESR` | Employment status recode | 1=Employed (civilian), 2=Employed (armed forces), 3=Unemployed, 6=Not in labor force | Person.employment_status |
+| `SCHL` | Educational attainment | 16=High school, 20=Associate's, 21=Bachelor's, 22=Master's, 23=Professional, 24=Doctorate | Person.education |
+| `DIS` | Disability recode | 1=With disability, 2=Without | Person.has_disability |
+| `OCCP` | Occupation code (SOC-based) | 4-digit codes grouped into 23 major groups | Person.occupation_code |
+| `COW` | Class of worker | 1-2=Private, 3-5=Government, 6-7=Self-employed, 8=Unpaid family | Self-employment determination |
+| `WAGP` | Wages/salary income | 0-999999 | Person.wage_income → W2.wages |
+| `SSP` | Social Security income | 0-99999 | Person.social_security_income → SSA1099.net_benefits |
+| `RETP` | Retirement income | 0-999999 | Person.retirement_income → Form1099R.gross_distribution |
+| `INTP` | Interest, dividends, net rental income | -99999 to 999999 | Person.interest_income → Form1099INT/Form1099DIV |
+| `OIP` | Other income | -99999 to 999999 | Person.other_income |
+| `PAP` | Public assistance income | 0-99999 | Person.other_income |
+
+### Income Document Templates
+
+| Document | Template File | Model Class | Key Fields |
+|----------|--------------|-------------|------------|
+| W-2 | `w2.html` | `W2` | wages (Box 1), federal_tax_withheld (Box 2), SS wages/tax (3-4), Medicare (5-6), state (15-17) |
+| 1099-INT | `1099_int.html` | `Form1099INT` | interest_income (Box 1), savings bond interest (Box 3), federal withheld (Box 4) |
+| 1099-DIV | `1099_div.html` | `Form1099DIV` | ordinary_dividends (1a), qualified (1b), capital gains (2a), federal withheld (4) |
+| 1099-R | `1099_r.html` | `Form1099R` | gross_distribution (Box 1), taxable_amount (2a), federal withheld (4), distribution_code (7) |
+| SSA-1099 | `ssa_1099.html` | `SSA1099` | total_benefits (Box 3), benefits_repaid (4), net_benefits (5) |
+| 1099-NEC | `1099_nec.html` | `Form1099NEC` | nonemployee_compensation (Box 1), federal withheld (4) |
 
 ## Part 3/4: Deductions and Credits (Future)
 
@@ -88,6 +115,9 @@
 | `homeownership_rates` | TEN, AGEP, HINCP | Owner vs renter by demographics |
 | `property_taxes` | TAXAMT, TEN | Property tax distribution |
 | `mortgage_interest` | (derived) | Mortgage costs by income bracket |
+
+> **Note**: These housing-related tables were originally planned as Part 2 but have
+> been deferred to Part 3 extraction since they relate to deductions, not income.
 
 ## State-Specific ID Number Formats
 

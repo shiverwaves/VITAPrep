@@ -28,6 +28,19 @@ from training.form_fields import (
     DEP_MONTHS,
     DEP_RELATIONSHIP,
     FILING_STATUS,
+    INCOME_DIVIDENDS,
+    INCOME_DIVIDENDS_AMOUNT,
+    INCOME_INTEREST,
+    INCOME_INTEREST_AMOUNT,
+    INCOME_RETIREMENT,
+    INCOME_RETIREMENT_AMOUNT,
+    INCOME_SELF_EMPLOYMENT,
+    INCOME_SELF_EMPLOYMENT_AMOUNT,
+    INCOME_SOCIAL_SECURITY,
+    INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_TOTAL,
+    INCOME_WAGES,
+    INCOME_WAGES_AMOUNT,
     MAX_DEPENDENTS,
     NOT_CLAIMED_AS_DEPENDENT,
     SPOUSE_DOB,
@@ -46,6 +59,16 @@ from training.form_fields import (
 )
 
 logger = logging.getLogger(__name__)
+
+_DEPENDENT_RELATIONSHIPS: Dict[str, str] = {
+    "biological_child": "Son/Daughter",
+    "adopted_child": "Son/Daughter",
+    "stepchild": "Stepchild",
+    "grandchild": "Grandchild",
+    "sibling": "Sibling",
+    "parent": "Parent",
+    "other_relative": "Other",
+}
 
 
 # =========================================================================
@@ -118,12 +141,57 @@ def _build_answer_key(household: Household) -> Dict[str, str]:
         key[dep_field(i, DEP_LAST_NAME)] = dep.legal_last_name
         key[dep_field(i, DEP_DOB)] = _format_dob(dep)
         rel = dep.relationship
-        key[dep_field(i, DEP_RELATIONSHIP)] = (
-            rel.value if isinstance(rel, RelationshipType) else str(rel)
+        rel_val = rel.value if isinstance(rel, RelationshipType) else str(rel)
+        key[dep_field(i, DEP_RELATIONSHIP)] = _DEPENDENT_RELATIONSHIPS.get(
+            rel_val, "Other"
         )
         key[dep_field(i, DEP_MONTHS)] = str(dep.months_in_home)
 
+    # Part II: Income
+    _build_income_key(key, household)
+
     return key
+
+
+def _build_income_key(key: Dict[str, str], household: Household) -> None:
+    """Add income fields to the answer key from filers' income data."""
+    filers = []
+    householder = household.get_householder()
+    spouse = household.get_spouse()
+    if householder:
+        filers.append(householder)
+    if spouse:
+        filers.append(spouse)
+
+    total_wages = sum(p.wage_income for p in filers)
+    total_interest = sum(p.interest_income for p in filers)
+    total_dividends = sum(p.dividend_income for p in filers)
+    total_ss = sum(p.social_security_income for p in filers)
+    total_retirement = sum(p.retirement_income for p in filers)
+    total_se = sum(p.self_employment_income for p in filers)
+
+    if total_wages > 0:
+        key[INCOME_WAGES] = "Yes"
+        key[INCOME_WAGES_AMOUNT] = str(total_wages)
+    if total_interest > 0:
+        key[INCOME_INTEREST] = "Yes"
+        key[INCOME_INTEREST_AMOUNT] = str(total_interest)
+    if total_dividends > 0:
+        key[INCOME_DIVIDENDS] = "Yes"
+        key[INCOME_DIVIDENDS_AMOUNT] = str(total_dividends)
+    if total_ss > 0:
+        key[INCOME_SOCIAL_SECURITY] = "Yes"
+        key[INCOME_SOCIAL_SECURITY_AMOUNT] = str(total_ss)
+    if total_retirement > 0:
+        key[INCOME_RETIREMENT] = "Yes"
+        key[INCOME_RETIREMENT_AMOUNT] = str(total_retirement)
+    if total_se > 0:
+        key[INCOME_SELF_EMPLOYMENT] = "Yes"
+        key[INCOME_SELF_EMPLOYMENT_AMOUNT] = str(total_se)
+
+    total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
+    if total > 0:
+        key[INCOME_TOTAL] = str(total)
 
 
 # =========================================================================
@@ -339,5 +407,16 @@ def _values_match(submitted: str, expected: str) -> bool:
     e_digits = e.replace("-", "").replace(" ", "")
     if len(s_digits) == 9 and s_digits.isdigit() and s_digits == e_digits:
         return True
+
+    # Numeric: allow small rounding differences for income amounts
+    s_clean = s.replace(",", "").replace("$", "").strip()
+    e_clean = e.replace(",", "").replace("$", "").strip()
+    try:
+        s_num = float(s_clean)
+        e_num = float(e_clean)
+        if abs(s_num - e_num) <= 1.0:
+            return True
+    except ValueError:
+        pass
 
     return False
