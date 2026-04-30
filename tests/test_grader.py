@@ -47,6 +47,13 @@ from generator.models import (
     RelationshipType,
 )
 from training.form_fields import (
+    INCOME_DIVIDENDS,
+    INCOME_DIVIDENDS_AMOUNT,
+    INCOME_INTEREST,
+    INCOME_INTEREST_AMOUNT,
+    INCOME_TOTAL,
+    INCOME_WAGES,
+    INCOME_WAGES_AMOUNT,
     YOU_FIRST_NAME,
     YOU_LAST_NAME,
     YOU_MIDDLE_INITIAL,
@@ -561,3 +568,130 @@ class TestGradeVerificationFeedback:
         result = grader.grade_verification([], actual)
         # Should have some feedback about the missed error
         assert len(result.feedback) > 0
+
+
+# =========================================================================
+# Mode 1: grade_intake — income fields
+# =========================================================================
+
+
+class TestGradeIntakeIncome:
+
+    @pytest.fixture
+    def income_household(self) -> Household:
+        return Household(
+            household_id="hh-g-inc",
+            state="HI",
+            year=2022,
+            pattern="single_adult",
+            address=Address(
+                street="100 Main St", city="Honolulu",
+                state="HI", zip_code="96816",
+            ),
+            members=[
+                Person(
+                    person_id="p-inc",
+                    relationship=RelationshipType.HOUSEHOLDER,
+                    age=35,
+                    sex="M",
+                    legal_first_name="Tom",
+                    legal_middle_name="A",
+                    legal_last_name="Worker",
+                    ssn="900-77-8888",
+                    dob=date(1987, 6, 1),
+                    wage_income=55000,
+                    interest_income=800,
+                ),
+            ],
+        )
+
+    def test_income_fields_in_answer_key(
+        self, grader: Grader, income_household: Household,
+    ) -> None:
+        sub = {
+            YOU_FIRST_NAME: "Tom",
+            YOU_MIDDLE_INITIAL: "A",
+            YOU_LAST_NAME: "Worker",
+            YOU_DOB: "06/01/1987",
+            YOU_SSN: "900-77-8888",
+            ADDR_STREET: "100 Main St",
+            ADDR_CITY: "Honolulu",
+            ADDR_STATE: "HI",
+            ADDR_ZIP: "96816",
+            FILING_STATUS: "single",
+            INCOME_WAGES: "Yes",
+            INCOME_WAGES_AMOUNT: "55000",
+            INCOME_INTEREST: "Yes",
+            INCOME_INTEREST_AMOUNT: "800",
+            INCOME_TOTAL: "55800",
+        }
+        result = grader.grade_intake(sub, income_household)
+        assert result.accuracy == 1.0
+
+    def test_wrong_wage_amount_reduces_score(
+        self, grader: Grader, income_household: Household,
+    ) -> None:
+        sub = {
+            YOU_FIRST_NAME: "Tom",
+            YOU_MIDDLE_INITIAL: "A",
+            YOU_LAST_NAME: "Worker",
+            YOU_DOB: "06/01/1987",
+            YOU_SSN: "900-77-8888",
+            ADDR_STREET: "100 Main St",
+            ADDR_CITY: "Honolulu",
+            ADDR_STATE: "HI",
+            ADDR_ZIP: "96816",
+            FILING_STATUS: "single",
+            INCOME_WAGES: "Yes",
+            INCOME_WAGES_AMOUNT: "56000",
+            INCOME_INTEREST: "Yes",
+            INCOME_INTEREST_AMOUNT: "800",
+            INCOME_TOTAL: "56800",
+        }
+        result = grader.grade_intake(sub, income_household)
+        assert result.score < result.max_score
+
+    def test_missing_income_source_reduces_score(
+        self, grader: Grader, income_household: Household,
+    ) -> None:
+        sub = {
+            YOU_FIRST_NAME: "Tom",
+            YOU_MIDDLE_INITIAL: "A",
+            YOU_LAST_NAME: "Worker",
+            YOU_DOB: "06/01/1987",
+            YOU_SSN: "900-77-8888",
+            ADDR_STREET: "100 Main St",
+            ADDR_CITY: "Honolulu",
+            ADDR_STATE: "HI",
+            ADDR_ZIP: "96816",
+            FILING_STATUS: "single",
+            INCOME_WAGES: "Yes",
+            INCOME_WAGES_AMOUNT: "55000",
+            # Missing interest entirely
+            INCOME_TOTAL: "55000",
+        }
+        result = grader.grade_intake(sub, income_household)
+        assert result.score < result.max_score
+
+    def test_numeric_tolerance(
+        self, grader: Grader, income_household: Household,
+    ) -> None:
+        sub = {
+            YOU_FIRST_NAME: "Tom",
+            YOU_MIDDLE_INITIAL: "A",
+            YOU_LAST_NAME: "Worker",
+            YOU_DOB: "06/01/1987",
+            YOU_SSN: "900-77-8888",
+            ADDR_STREET: "100 Main St",
+            ADDR_CITY: "Honolulu",
+            ADDR_STATE: "HI",
+            ADDR_ZIP: "96816",
+            FILING_STATUS: "single",
+            INCOME_WAGES: "Yes",
+            INCOME_WAGES_AMOUNT: "$55,000",
+            INCOME_INTEREST: "Yes",
+            INCOME_INTEREST_AMOUNT: "800",
+            INCOME_TOTAL: "55800",
+        }
+        result = grader.grade_intake(sub, income_household)
+        assert result.accuracy == 1.0

@@ -28,6 +28,7 @@ from generator.models import (
     Form1099INT,
     Form1099NEC,
     Form1099R,
+    Household,
     Person,
     SSA1099,
     W2,
@@ -331,6 +332,44 @@ class DocumentRenderer:
             recipient_tin=person.ssn,
             nonemployee_compensation=_format_dollars(form.nonemployee_compensation),
             federal_tax_withheld=_format_dollars(form.federal_tax_withheld),
+        )
+
+    # =================================================================
+    # Form 13614-C Part II — Income Intake
+    # =================================================================
+
+    def render_intake_p2_html(
+        self, household: Household, field_values: Dict[str, str],
+        tax_year: int = 2022,
+    ) -> str:
+        """Render Form 13614-C Part II (Income) as an HTML string.
+
+        Args:
+            household: Household (used for context; fields come from
+                field_values).
+            field_values: Dict from build_field_values() — income fields
+                are used to pre-fill the form in verify mode.
+            tax_year: Tax year to display.
+
+        Returns:
+            Rendered HTML string.
+        """
+        template = self._env.get_template("form_13614c_p2.html")
+        return template.render(
+            tax_year=tax_year,
+            income_wages=field_values.get("income.wages", ""),
+            income_wages_amount=field_values.get("income.wages.amount", ""),
+            income_interest=field_values.get("income.interest", ""),
+            income_interest_amount=field_values.get("income.interest.amount", ""),
+            income_dividends=field_values.get("income.dividends", ""),
+            income_dividends_amount=field_values.get("income.dividends.amount", ""),
+            income_social_security=field_values.get("income.social_security", ""),
+            income_social_security_amount=field_values.get("income.social_security.amount", ""),
+            income_retirement=field_values.get("income.retirement", ""),
+            income_retirement_amount=field_values.get("income.retirement.amount", ""),
+            income_self_employment=field_values.get("income.self_employment", ""),
+            income_self_employment_amount=field_values.get("income.self_employment.amount", ""),
+            income_total=field_values.get("income.total", ""),
         )
 
     # =================================================================

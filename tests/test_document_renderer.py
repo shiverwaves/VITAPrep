@@ -658,3 +658,65 @@ class TestForm1099NECRendering:
     def test_has_watermark(self, renderer, adult_with_dl, sample_1099_nec) -> None:
         html = renderer.render_1099_nec_html(adult_with_dl, sample_1099_nec)
         assert 'class="watermark"' in html
+
+
+# =========================================================================
+# Intake form Part II rendering
+# =========================================================================
+
+
+class TestIntakeP2Rendering:
+    @pytest.fixture
+    def sample_household(self) -> Household:
+        return Household(
+            household_id="hh-intake",
+            state="HI",
+            year=2022,
+            pattern="single_adult",
+            members=[
+                Person(
+                    person_id="p-intake",
+                    relationship=RelationshipType.HOUSEHOLDER,
+                    age=35,
+                    legal_first_name="Test",
+                    legal_last_name="User",
+                ),
+            ],
+        )
+
+    def test_renders_with_income(self, renderer, sample_household) -> None:
+        field_values = {
+            "income.wages": "Yes",
+            "income.wages.amount": "55000",
+            "income.interest": "Yes",
+            "income.interest.amount": "800",
+            "income.total": "55800",
+        }
+        html = renderer.render_intake_p2_html(sample_household, field_values)
+        assert "Part II" in html
+        assert "55000" in html
+        assert "800" in html
+        assert "55800" in html
+
+    def test_renders_empty_when_no_income(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {})
+        assert "Part II" in html
+        assert "Wages" in html or "wages" in html
+
+    def test_has_watermark(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {})
+        assert 'class="watermark"' in html
+
+    def test_contains_all_income_types(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {})
+        assert "W-2" in html
+        assert "1099-INT" in html
+        assert "1099-DIV" in html
+        assert "SSA-1099" in html
+        assert "1099-R" in html
+        assert "1099-NEC" in html
+
+    def test_contains_form_name(self, renderer, sample_household) -> None:
+        html = renderer.render_intake_p2_html(sample_household, {}, tax_year=2022)
+        assert "13614-C" in html
+        assert "2022" in html

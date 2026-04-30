@@ -37,10 +37,13 @@ import pytest
 
 from generator.models import (
     Address,
+    Employer,
+    Form1099INT,
     Household,
     InjectedError,
     Person,
     RelationshipType,
+    W2,
 )
 from training.error_injector import ErrorInjector
 
@@ -527,3 +530,115 @@ class TestAddressErrors:
                 )
                 return
         pytest.skip("No address errors generated in 30 attempts")
+
+
+# =========================================================================
+# Income errors
+# =========================================================================
+
+
+class TestIncomeErrors:
+
+    @pytest.fixture
+    def wage_earner(self) -> Household:
+        """Single adult with W-2 wage income and interest."""
+        return Household(
+            household_id="hh-inc",
+            state="HI",
+            year=2022,
+            pattern="single_adult",
+            address=Address(
+                street="500 King St", city="Honolulu",
+                state="HI", zip_code="96813",
+            ),
+            members=[
+                Person(
+                    person_id="p-inc-01",
+                    relationship=RelationshipType.HOUSEHOLDER,
+                    age=35,
+                    sex="M",
+                    legal_first_name="Tom",
+                    legal_last_name="Worker",
+                    ssn="900-55-6666",
+                    dob=date(1987, 3, 20),
+                    wage_income=55000,
+                    interest_income=800,
+                    w2s=[W2(
+                        employer=Employer(name="Acme Corp", ein="12-3456789"),
+                        wages=55000,
+                    )],
+                    form_1099_ints=[Form1099INT(
+                        payer_name="Bank of HI", interest_income=800,
+                    )],
+                    id_type="drivers_license",
+                    id_state="HI",
+                    id_number="H7777777",
+                    id_expiry=date(2028, 1, 1),
+                    id_address=Address(
+                        street="500 King St", city="Honolulu",
+                        state="HI", zip_code="96813",
+                    ),
+                ),
+            ],
+        )
+
+    def test_income_errors_generated(
+        self, injector: ErrorInjector, wage_earner: Household,
+    ) -> None:
+        found_income = False
+        for _ in range(50):
+            _, errors = injector.inject(
+                wage_earner, difficulty="medium", error_count=2,
+            )
+            if any(e.category == "income" for e in errors):
+                found_income = True
+                break
+        assert found_income, "No income errors generated in 50 attempts"
+
+    def test_wage_mismatch_error_fields(
+        self, injector: ErrorInjector, wage_earner: Household,
+    ) -> None:
+        for _ in range(50):
+            _, errors = injector.inject(
+                wage_earner, difficulty="easy", error_count=2,
+            )
+            wage_errors = [e for e in errors if e.field == "income.wages.amount"]
+            if wage_errors:
+                err = wage_errors[0]
+                assert err.category == "income"
+                assert err.correct_value == "55000"
+                assert err.erroneous_value != "55000"
+                assert err.person_id == "p-inc-01"
+                return
+        pytest.skip("No wage mismatch errors generated in 50 attempts")
+
+    def test_missing_income_error_fields(
+        self, injector: ErrorInjector, wage_earner: Household,
+    ) -> None:
+        for _ in range(50):
+            _, errors = injector.inject(
+                wage_earner, difficulty="medium", error_count=2,
+            )
+            missing = [e for e in errors if e.field == "income.interest"]
+            if missing:
+                err = missing[0]
+                assert err.category == "income"
+                assert "(omitted)" in err.erroneous_value
+                return
+        pytest.skip("No missing income errors generated in 50 attempts")
+
+    def test_w2_ssn_mismatch(
+        self, injector: ErrorInjector, wage_earner: Household,
+    ) -> None:
+        for _ in range(50):
+            _, errors = injector.inject(
+                wage_earner, difficulty="hard", error_count=3,
+            )
+            ssn_errors = [e for e in errors if e.field == "w2_ssn"]
+            if ssn_errors:
+                err = ssn_errors[0]
+                assert err.category == "income"
+                assert err.document == "w2"
+                assert err.erroneous_value != err.correct_value
+                return
+        pytest.skip("No W-2 SSN errors generated in 50 attempts")
