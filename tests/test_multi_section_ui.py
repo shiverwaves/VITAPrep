@@ -284,10 +284,10 @@ class TestLandingPageGrades:
             # Part I should show a score, Part II still pending
             assert "Not yet submitted" in html
 
-    def test_both_graded_no_pending(self):
+    def test_all_graded_no_pending(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
-            # Submit both sections
+            # Submit all three sections
             client.post(
                 f"/scenarios/{sid}/submit",
                 data={"you.first_name": "Test"},
@@ -296,9 +296,13 @@ class TestLandingPageGrades:
                 f"/scenarios/{sid}/submit/income",
                 data={INCOME_WAGES: "Yes"},
             )
+            client.post(
+                f"/scenarios/{sid}/submit/expenses",
+                data={EXPENSE_DEDUCTION_TYPE: "standard"},
+            )
             resp = client.get(f"/scenarios/{sid}")
             html = resp.text
-            # Both sections graded, no pending labels
+            # All sections graded, no pending labels
             assert "Not yet submitted" not in html
 
 
@@ -387,20 +391,23 @@ class TestSectionGradeStorage:
     def test_section_grades_separate(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
-            # Grade Part I
+            # Grade all three sections
             client.post(
                 f"/scenarios/{sid}/submit",
                 data={"you.first_name": "Test"},
             )
-            # Grade Part II
             client.post(
                 f"/scenarios/{sid}/submit/income",
                 data={INCOME_WAGES: "Yes"},
             )
+            client.post(
+                f"/scenarios/{sid}/submit/expenses",
+                data={EXPENSE_DEDUCTION_TYPE: "standard"},
+            )
             # Check section grades via landing page
             resp = client.get(f"/scenarios/{sid}")
             html = resp.text
-            # Both sections should show scores
+            # All sections should show scores
             assert "Not yet submitted" not in html
 
     def test_results_page_section_param(self):
@@ -419,6 +426,156 @@ class TestSectionGradeStorage:
             sid = _create_scenario(client)
             resp = client.get(f"/scenarios/{sid}/results?section=income")
             assert resp.status_code == 404
+
+
+# =========================================================================
+# Part III form rendering
+# =========================================================================
+
+class TestExpenseFormRender:
+    """Test that the Part III expense form renders correctly."""
+
+    def test_expense_form_renders(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            assert resp.status_code == 200
+
+    def test_expense_form_has_field_names(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            html = resp.text
+            assert f'name="{EXPENSE_MORTGAGE_INTEREST}"' in html
+            assert f'name="{EXPENSE_CHARITABLE}"' in html
+            assert f'name="{EXPENSE_DEDUCTION_TYPE}"' in html
+
+    def test_expense_form_has_submit_action(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            assert "/submit/expenses" in resp.text
+
+    def test_expense_form_has_section_nav(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            html = resp.text
+            assert "section-nav" in html
+            assert "Part I" in html
+            assert "Part II" in html
+            assert "Part III" in html
+
+    def test_expense_form_part3_active(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            html = resp.text
+            assert '/form/expenses" class="active"' in html
+
+    def test_expense_form_has_deduction_radios(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            html = resp.text
+            assert 'value="standard"' in html
+            assert 'value="itemized"' in html
+
+
+# =========================================================================
+# Part III submission and grading
+# =========================================================================
+
+class TestExpenseSubmission:
+    """Test Part III submission grades only expense fields."""
+
+    def test_submit_expenses_returns_results(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.post(
+                f"/scenarios/{sid}/submit/expenses",
+                data={EXPENSE_DEDUCTION_TYPE: "standard"},
+            )
+            assert resp.status_code == 200
+            assert "Grading Results" in resp.text
+            assert "Part III" in resp.text
+
+    def test_submit_expenses_grades_only_expense_fields(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.post(
+                f"/scenarios/{sid}/submit/expenses",
+                data={EXPENSE_DEDUCTION_TYPE: "standard"},
+            )
+            html = resp.text
+            assert "you.first_name" not in html
+            assert "income.wages" not in html
+
+    def test_expense_grade_stored_as_section(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            client.post(
+                f"/scenarios/{sid}/submit/expenses",
+                data={EXPENSE_DEDUCTION_TYPE: "standard"},
+            )
+            resp = client.get(f"/scenarios/{sid}/results?section=expenses")
+            assert resp.status_code == 200
+            assert "Part III" in resp.text
+
+
+# =========================================================================
+# Landing page with all three sections
+# =========================================================================
+
+class TestLandingPageAllSections:
+    """Test landing page shows all three section cards."""
+
+    def test_landing_shows_part3_card(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}")
+            html = resp.text
+            assert "Part III" in html
+
+    def test_all_three_graded_no_pending(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            client.post(
+                f"/scenarios/{sid}/submit",
+                data={"you.first_name": "Test"},
+            )
+            client.post(
+                f"/scenarios/{sid}/submit/income",
+                data={INCOME_WAGES: "Yes"},
+            )
+            client.post(
+                f"/scenarios/{sid}/submit/expenses",
+                data={EXPENSE_DEDUCTION_TYPE: "standard"},
+            )
+            resp = client.get(f"/scenarios/{sid}")
+            assert "Not yet submitted" not in resp.text
+
+    def test_section_nav_has_part3(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client)
+            resp = client.get(f"/scenarios/{sid}/form")
+            html = resp.text
+            assert "Part III" in html
+
+
+# =========================================================================
+# Verify mode Part III
+# =========================================================================
+
+class TestVerifyModeExpenses:
+    """Test verify mode pre-fills expense fields."""
+
+    def test_verify_prefills_expense_form(self):
+        with TestClient(app) as client:
+            sid = _create_scenario(client, mode="verify")
+            resp = client.get(f"/scenarios/{sid}/form/expenses")
+            html = resp.text
+            assert "checked" in html or 'value="' in html
 
 
 # =========================================================================
