@@ -16,6 +16,24 @@ GET  /scenarios/{scenario_id}/documents/ssn-card/{person_id}
 GET  /scenarios/{scenario_id}/documents/photo-id/{person_id}
     Render a DL or state ID as HTML.
 
+GET  /scenarios/{scenario_id}/documents/w2/{person_id}/{index}
+    Render a W-2 as HTML.
+
+GET  /scenarios/{scenario_id}/documents/1099-int/{person_id}/{index}
+    Render a 1099-INT as HTML.
+
+GET  /scenarios/{scenario_id}/documents/1099-div/{person_id}/{index}
+    Render a 1099-DIV as HTML.
+
+GET  /scenarios/{scenario_id}/documents/1099-r/{person_id}/{index}
+    Render a 1099-R as HTML.
+
+GET  /scenarios/{scenario_id}/documents/ssa-1099/{person_id}
+    Render an SSA-1099 as HTML.
+
+GET  /scenarios/{scenario_id}/documents/1099-nec/{person_id}/{index}
+    Render a 1099-NEC as HTML.
+
 GET  /scenarios/{scenario_id}/form
     Interactive 13614-C Part I form with <input> fields.
 
@@ -160,6 +178,12 @@ async def api_get_scenario(
                 "has_ssn": bool(p.ssn),
                 "has_photo_id": bool(p.id_type),
                 "id_type": p.id_type,
+                "w2_count": len(p.w2s),
+                "form_1099_int_count": len(p.form_1099_ints),
+                "form_1099_div_count": len(p.form_1099_divs),
+                "form_1099_r_count": len(p.form_1099_rs),
+                "has_ssa_1099": p.ssa_1099 is not None,
+                "form_1099_nec_count": len(p.form_1099_necs),
             })
 
     # Build document URLs
@@ -171,6 +195,18 @@ async def api_get_scenario(
                 doc_urls[f"ssn_{pid}"] = f"/scenarios/{scenario_id}/documents/ssn-card/{pid}"
             if p.id_type:
                 doc_urls[f"id_{pid}"] = f"/scenarios/{scenario_id}/documents/photo-id/{pid}"
+            for i in range(len(p.w2s)):
+                doc_urls[f"w2_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/w2/{pid}/{i}"
+            for i in range(len(p.form_1099_ints)):
+                doc_urls[f"1099int_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-int/{pid}/{i}"
+            for i in range(len(p.form_1099_divs)):
+                doc_urls[f"1099div_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-div/{pid}/{i}"
+            for i in range(len(p.form_1099_rs)):
+                doc_urls[f"1099r_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-r/{pid}/{i}"
+            if p.ssa_1099 is not None:
+                doc_urls[f"ssa1099_{pid}"] = f"/scenarios/{scenario_id}/documents/ssa-1099/{pid}"
+            for i in range(len(p.form_1099_necs)):
+                doc_urls[f"1099nec_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-nec/{pid}/{i}"
 
     return JSONResponse(content={
         "scenario_id": scenario.scenario_id,
@@ -303,20 +339,53 @@ async def page_exercise(
 
     # Build document links
     doc_links: List[str] = []
+    income_doc_links: List[str] = []
     if hh:
         for p in hh.members:
             name = p.full_legal_name() or f"Person {p.person_id}"
             rel = p.relationship.value if hasattr(p.relationship, "value") else str(p.relationship)
+            pid = p.person_id
             if p.ssn:
                 doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/ssn-card/{p.person_id}" '
+                    f'<li><a href="/scenarios/{scenario_id}/documents/ssn-card/{pid}" '
                     f'target="_blank">SSN Card — {name} ({rel})</a></li>'
                 )
             if p.id_type:
                 id_label = "Driver License" if p.id_type == "drivers_license" else "State ID"
                 doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/photo-id/{p.person_id}" '
+                    f'<li><a href="/scenarios/{scenario_id}/documents/photo-id/{pid}" '
                     f'target="_blank">{id_label} — {name} ({rel})</a></li>'
+                )
+            for i, w2 in enumerate(p.w2s):
+                emp = w2.employer.name if w2.employer else "Employer"
+                income_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/w2/{pid}/{i}" '
+                    f'target="_blank">W-2 — {name} ({emp})</a></li>'
+                )
+            for i, _ in enumerate(p.form_1099_ints):
+                income_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-int/{pid}/{i}" '
+                    f'target="_blank">1099-INT — {name}</a></li>'
+                )
+            for i, _ in enumerate(p.form_1099_divs):
+                income_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-div/{pid}/{i}" '
+                    f'target="_blank">1099-DIV — {name}</a></li>'
+                )
+            for i, _ in enumerate(p.form_1099_rs):
+                income_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-r/{pid}/{i}" '
+                    f'target="_blank">1099-R — {name}</a></li>'
+                )
+            if p.ssa_1099 is not None:
+                income_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/ssa-1099/{pid}" '
+                    f'target="_blank">SSA-1099 — {name}</a></li>'
+                )
+            for i, _ in enumerate(p.form_1099_necs):
+                income_doc_links.append(
+                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-nec/{pid}/{i}" '
+                    f'target="_blank">1099-NEC — {name}</a></li>'
                 )
 
     # Client facts
@@ -380,11 +449,12 @@ th {{ background: #f0f4f8; }}
     <span><strong>Members:</strong> {len(hh.members) if hh else 0}</span>
 </div>
 {grades_html}
-<h2>Supporting Documents</h2>
+<h2>Identity Documents</h2>
 <p>Open each document in a new tab to review:</p>
 <ul>
 {"".join(doc_links)}
 </ul>
+{"<h2>Income Documents</h2><ul>" + "".join(income_doc_links) + "</ul>" if income_doc_links else ""}
 {facts_html}
 <a class="form-link" href="/scenarios/{scenario_id}/form">
     Open Intake Form (13614-C Part I)
@@ -453,6 +523,190 @@ async def page_photo_id(
     if html is None:
         raise HTTPException(status_code=404, detail="Could not render photo ID")
 
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+# =========================================================================
+# HTML: income document renders
+# =========================================================================
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/w2/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_w2(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a person's W-2 as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.w2s):
+        raise HTTPException(status_code=404, detail="W-2 index out of range")
+
+    html = renderer.render_w2_html(person, person.w2s[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1099-int/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1099_int(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a person's 1099-INT as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1099_ints):
+        raise HTTPException(status_code=404, detail="1099-INT index out of range")
+
+    html = renderer.render_1099_int_html(person, person.form_1099_ints[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1099-div/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1099_div(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a person's 1099-DIV as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1099_divs):
+        raise HTTPException(status_code=404, detail="1099-DIV index out of range")
+
+    html = renderer.render_1099_div_html(person, person.form_1099_divs[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1099-r/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1099_r(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a person's 1099-R as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1099_rs):
+        raise HTTPException(status_code=404, detail="1099-R index out of range")
+
+    html = renderer.render_1099_r_html(person, person.form_1099_rs[index])
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/ssa-1099/{person_id}",
+    response_class=HTMLResponse,
+)
+async def page_ssa_1099(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+) -> HTMLResponse:
+    """Render a person's SSA-1099 as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if person.ssa_1099 is None:
+        raise HTTPException(status_code=404, detail="Person has no SSA-1099")
+
+    html = renderer.render_ssa_1099_html(person, person.ssa_1099)
+    html = html.replace('href="base.css"', 'href="/static/base.css"')
+    return HTMLResponse(content=html)
+
+
+@router.get(
+    "/scenarios/{scenario_id}/documents/1099-nec/{person_id}/{index}",
+    response_class=HTMLResponse,
+)
+async def page_1099_nec(
+    request: Request,
+    scenario_id: str,
+    person_id: str,
+    index: int,
+) -> HTMLResponse:
+    """Render a person's 1099-NEC as HTML."""
+    store = request.app.state.store
+    renderer = request.app.state.renderer
+
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    person = _find_person(scenario, person_id)
+    if person is None:
+        raise HTTPException(status_code=404, detail="Person not found in scenario")
+
+    if index < 0 or index >= len(person.form_1099_necs):
+        raise HTTPException(status_code=404, detail="1099-NEC index out of range")
+
+    html = renderer.render_1099_nec_html(person, person.form_1099_necs[index])
     html = html.replace('href="base.css"', 'href="/static/base.css"')
     return HTMLResponse(content=html)
 
