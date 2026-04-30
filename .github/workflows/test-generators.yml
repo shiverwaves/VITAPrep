@@ -174,6 +174,69 @@ jobs:
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
+          # Employment & income table
+          echo "#### Employment & Income" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          python -c "
+          import json
+          d = json.load(open('/tmp/household.json'))
+          print('| # | Name | Employment | Occupation | Wage | Interest | Dividends | SS | Retirement | Self-Emp | Total |')
+          print('|---|------|-----------|-----------|------|----------|-----------|----|-----------|---------| ------|')
+          for i, m in enumerate(d['members'], 1):
+              name = f\"{m['legal_first_name']} {m['legal_last_name']}\"
+              emp = m.get('employment_status', '—') or '—'
+              occ = m.get('occupation_title', '—') or '—'
+              if len(occ) > 25:
+                  occ = occ[:22] + '...'
+              total = m.get('total_income', 0)
+              w2_total = sum(w.get('wages', 0) for w in m.get('w2s', []))
+              interest = sum(f.get('interest_income', 0) for f in m.get('form_1099_ints', []))
+              dividends = sum(f.get('ordinary_dividends', 0) for f in m.get('form_1099_divs', []))
+              ss = m.get('ssa_1099', {})
+              ss_amt = ss.get('net_benefits', 0) if ss else 0
+              retirement = sum(f.get('gross_distribution', 0) for f in m.get('form_1099_rs', []))
+              se = sum(f.get('nonemployee_compensation', 0) for f in m.get('form_1099_necs', []))
+              fmt = lambda v: f'\${v:,}' if v else '—'
+              print(f'| {i} | {name} | {emp} | {occ} | {fmt(w2_total)} | {fmt(interest)} | {fmt(dividends)} | {fmt(ss_amt)} | {fmt(retirement)} | {fmt(se)} | {fmt(total)} |')
+          " >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Tax documents inventory
+          echo "#### Tax Documents" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          python -c "
+          import json
+          d = json.load(open('/tmp/household.json'))
+          docs = []
+          for m in d['members']:
+              name = f\"{m['legal_first_name']} {m['legal_last_name']}\"
+              for w in m.get('w2s', []):
+                  emp = w.get('employer', {})
+                  emp_name = emp.get('name', '?') if emp else '?'
+                  docs.append(f'| W-2 | {name} | {emp_name} | \${w[\"wages\"]:,} |')
+              for f in m.get('form_1099_ints', []):
+                  docs.append(f'| 1099-INT | {name} | {f[\"payer_name\"]} | \${f[\"interest_income\"]:,} |')
+              for f in m.get('form_1099_divs', []):
+                  docs.append(f'| 1099-DIV | {name} | {f[\"payer_name\"]} | \${f[\"ordinary_dividends\"]:,} |')
+              for f in m.get('form_1099_rs', []):
+                  docs.append(f'| 1099-R | {name} | {f[\"payer_name\"]} | \${f[\"gross_distribution\"]:,} |')
+              if m.get('ssa_1099'):
+                  s = m['ssa_1099']
+                  docs.append(f'| SSA-1099 | {name} | SSA | \${s[\"net_benefits\"]:,} |')
+              for f in m.get('form_1099_necs', []):
+                  docs.append(f'| 1099-NEC | {name} | {f[\"payer_name\"]} | \${f[\"nonemployee_compensation\"]:,} |')
+          if docs:
+              print('| Form | Recipient | Payer | Amount |')
+              print('|------|-----------|-------|--------|')
+              for row in docs:
+                  print(row)
+          else:
+              print('*No tax documents generated for this household.*')
+          " >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
           # Full JSON collapsible
           echo "<details><summary>Full household JSON</summary>" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -183,9 +246,11 @@ jobs:
           echo "</details>" >> "$GITHUB_STEP_SUMMARY"
 
       # ── Optional tests ───────────────────────────────────────────
-      - name: Run generator tests
+      - name: Run Part 1 generator tests
         if: inputs.run-tests
         run: |
+          echo "### Part 1: Demographics & PII" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
           python -m pytest tests/test_models.py \
                            tests/test_sampler.py \
                            tests/test_demographics.py \
@@ -193,20 +258,53 @@ jobs:
                            tests/test_pipeline.py \
                            tests/test_pii.py \
                            tests/test_db.py \
-                           -v --tb=short
+                           -v --tb=short 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Part 2 generator tests
+        if: inputs.run-tests
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Part 2: Employment & Income" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/test_employment.py \
+                           tests/test_income.py \
+                           tests/test_extract_part2.py \
+                           -v --tb=short 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run training module tests
+        if: inputs.run-tests
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Training: Documents, Forms, Errors & Grading" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/test_document_renderer.py \
+                           tests/test_form_populator.py \
+                           tests/test_error_injector.py \
+                           tests/test_grader.py \
+                           -v --tb=short 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run integration tests
+        if: inputs.run-tests
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Integration: End-to-End Pipeline" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/test_exercise_engine.py \
+                           tests/test_scenario_store.py \
+                           tests/test_income_integration.py \
+                           -v --tb=short 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test summary
         if: inputs.run-tests && always()
         run: |
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Generator Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Full Test Suite Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest tests/test_models.py \
-                           tests/test_sampler.py \
-                           tests/test_demographics.py \
-                           tests/test_children.py \
-                           tests/test_pipeline.py \
-                           tests/test_pii.py \
-                           tests/test_db.py \
-                           --tb=no -q 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python -m pytest tests/ --tb=no -q 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

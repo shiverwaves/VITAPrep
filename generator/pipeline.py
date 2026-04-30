@@ -4,8 +4,8 @@ Household generation pipeline — orchestrates generation by VITA section.
 Usage:
     generator = HouseholdGenerator("HI", 2022)
     household = generator.generate_part1()              # Demographics only
-    household = generator.generate_part2(household)     # + Employment + Income (future)
-    household = generator.generate_full(household)      # Everything (future)
+    household = generator.generate_part2(household)     # + Employment + Income
+    household = generator.generate_with_pii()           # Full pipeline (Part 1 + PII + Part 2)
 """
 
 import logging
@@ -18,6 +18,8 @@ from .models import Household, PATTERN_METADATA
 from .db import DistributionLoader
 from .demographics import DemographicsGenerator
 from .children import ChildGenerator
+from .employment import EmploymentGenerator
+from .income import IncomeGenerator
 from .pii import PIIGenerator
 from .sampler import weighted_sample, set_random_seed
 
@@ -51,12 +53,16 @@ class HouseholdGenerator:
 
         # Load distribution tables
         self.db = DistributionLoader(connection_string)
-        self.distributions = self.db.load_part1_tables(self.state, self.year)
+        self.distributions = self.db.load_all_tables(self.state, self.year)
 
         # Initialize Part 1 generators
         self.demographics = DemographicsGenerator(self.distributions)
         self.children = ChildGenerator(self.distributions)
         self.pii = PIIGenerator(tax_year=self.year)
+
+        # Initialize Part 2 generators
+        self.employment = EmploymentGenerator(self.distributions)
+        self.income = IncomeGenerator(self.distributions, tax_year=self.year)
 
         logger.info("Initialized generator for %s (%d)", self.state, self.year)
 
@@ -146,15 +152,37 @@ class HouseholdGenerator:
         )
         return household
 
+    def generate_part2(self, household: Household) -> Household:
+        """Add Part 2 data to a household: employment and income.
+
+        Assigns employment status, education, occupation, then income
+        amounts and tax documents (W-2s, 1099s, SSA-1099) to each
+        adult member.
+
+        Args:
+            household: Household with Part 1 demographics populated.
+
+        Returns:
+            The same Household with employment and income fields set.
+        """
+        self.employment.overlay(household)
+        self.income.overlay(household)
+
+        logger.info(
+            "Generated Part 2 for household: members=%d",
+            len(household.members),
+        )
+        return household
+
     def generate_with_pii(
         self,
         pattern: Optional[str] = None,
         seed: Optional[int] = None,
     ) -> Household:
-        """Generate a household with demographics AND PII overlay.
+        """Generate a household with demographics, PII, employment, and income.
 
-        Runs :meth:`generate_part1` then applies the PII generator to
-        populate names, SSNs, DOBs, addresses, and ID details.
+        Runs the full pipeline: Part 1 (demographics) → PII overlay →
+        Part 2 (employment + income).
 
         Args:
             pattern: Specific household pattern (e.g.,
@@ -163,13 +191,14 @@ class HouseholdGenerator:
             seed: Random seed for reproducibility.
 
         Returns:
-            Household with members fully populated (demographics + PII).
+            Household with all fields populated.
         """
         household = self.generate_part1(pattern=pattern, seed=seed)
         self.pii.overlay(household)
+        self.generate_part2(household)
 
         logger.info(
-            "Generated household with PII: pattern=%s, members=%d",
+            "Generated full household: pattern=%s, members=%d",
             household.pattern,
             len(household.members),
         )
