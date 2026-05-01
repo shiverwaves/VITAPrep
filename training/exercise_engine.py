@@ -24,7 +24,11 @@ from typing import Optional
 from generator.models import Scenario
 from generator.pipeline import HouseholdGenerator
 from intake.analyzer.analyzer import MAX_REROLL_ATTEMPTS, ScenarioAnalyzer
+from intake.analyzer.slots.address_mismatch import AddressMismatchSlot
+from intake.analyzer.slots.dependent_residency import DependentResidencySlot
+from intake.analyzer.slots.zero_income_reason import ZeroIncomeReasonSlot
 from intake.analyzer.types import Unrescuable
+from intake.obfuscator import obfuscate
 from tax_core.ground_truth import compute_ground_truth
 from .client_profile import filter_by_difficulty, generate_client_profile
 from .error_injector import ErrorInjector
@@ -40,6 +44,9 @@ class ExerciseEngine:
         self.generator = HouseholdGenerator(state, year)
         self.error_injector = ErrorInjector()
         self.analyzer = ScenarioAnalyzer()
+        self.analyzer.register(AddressMismatchSlot())
+        self.analyzer.register(ZeroIncomeReasonSlot())
+        self.analyzer.register(DependentResidencySlot())
 
     def generate_scenario(
         self,
@@ -128,7 +135,10 @@ class ExerciseEngine:
         gt.form_answers = build_form_answers(household)
         gt_dict = gt.to_dict()
 
-        # Stage 5: Inject errors (verify mode only)
+        # Stage 5: Obfuscate — render fired templates into interview notes
+        interview_notes = obfuscate(narrative_slots, scenario, difficulty)
+
+        # Stage 6: Inject errors (verify mode only)
         injected_errors = []
         if mode == "verify":
             household, injected_errors = self.error_injector.inject(
@@ -137,7 +147,7 @@ class ExerciseEngine:
                 error_count=error_count,
             )
 
-        # Stage 6: Generate client profile (verbal facts)
+        # Stage 7: Generate client profile (verbal facts — old path)
         all_facts = generate_client_profile(household)
         client_facts = filter_by_difficulty(all_facts, difficulty)
 
@@ -153,15 +163,25 @@ class ExerciseEngine:
             ]
             for name, fired_list in narrative_slots.items()
         } if narrative_slots else None
+        scenario.interview_notes = [
+            {
+                "category": n.category,
+                "question": n.question,
+                "answer": n.answer,
+                "source_slot": n.source_slot,
+            }
+            for n in interview_notes
+        ] if interview_notes else None
 
         logger.info(
             "Generated scenario %s (attempt %d): mode=%s, difficulty=%s, "
-            "members=%d, errors=%d, facts=%d, slots_fired=%d",
+            "members=%d, errors=%d, facts=%d, slots_fired=%d, notes=%d",
             scenario_id, attempt + 1, mode, difficulty,
             len(household.members),
             len(injected_errors),
             len(client_facts),
             len(narrative_slots),
+            len(interview_notes),
         )
         return scenario
 
