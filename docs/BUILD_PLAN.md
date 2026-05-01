@@ -346,30 +346,50 @@ Wire ground truth into the live pipeline and migrate the grader. This is the hig
 
 **Prerequisites:** Restructure B complete. Read the Type Definitions, Worked Example, and Stage 3/Stage 6 sections of `SCENARIO_LIFECYCLE.md` before starting — the base classes, data models, and constraint rules are specified there.
 
-**Operation:**
+#### Phase 1: Scaffolding (types + pipeline stub)
 
-0. **Insert analyzer call site into the pipeline orchestrator.** The pipeline currently runs: generate → ground truth → serve. After this step: generate → **analyze** → ground truth → serve. This is a wiring change only — the analyzer is a no-op stub that returns an empty `narrative_slots` dict until step 3 populates it. The ordering matters: ground truth runs *after* analysis so that scenarios destined for reroll (unrescuable) never pay the cost of ground-truth computation.
-1. **Create `intake/analyzer/`** with `types.py`, `analyzer.py` (orchestrator), and `slots/` (one module per slot family).
-2. **Define the type system in `intake/analyzer/types.py`.** Four types, specified in `SCENARIO_LIFECYCLE.md` § Type Definitions:
-   - `Slot` (ABC) — `name`, `fires_for(scenario)`, `templates()`. The docstring enforces the **slot evaluation constraint**: slots access `scenario.household` and `scenario.documents` only. Other lifecycle fields (`ground_truth`, `concept_tags`, `interview_notes`) are `None` at Stage 3 and must not be read. This is enforced by ordering, documented in the base class, and verified by test (see checkpoint).
+Set up the directory structure, type system, and pipeline call site. Nothing fires yet — the analyzer is a no-op.
+
+1. **Insert analyzer call site into the pipeline orchestrator.** The pipeline currently runs: generate → ground truth → serve. After this step: generate → **analyze** → ground truth → serve. This is a wiring change only — the analyzer is a no-op stub that returns an empty `narrative_slots` dict until Phase 2 populates it. The ordering matters: ground truth runs *after* analysis so that scenarios destined for reroll (unrescuable) never pay the cost of ground-truth computation.
+2. **Create `intake/analyzer/`** with `types.py`, `analyzer.py` (orchestrator), and `slots/` (one module per slot family).
+3. **Define the type system in `intake/analyzer/types.py`.** Four types, specified in `SCENARIO_LIFECYCLE.md` § Type Definitions:
+   - `Slot` (ABC) — `name`, `fires_for(scenario)`, `templates()`. The docstring enforces the **slot evaluation constraint**: slots access `scenario.household` and `scenario.documents` only. Other lifecycle fields (`ground_truth`, `concept_tags`, `interview_notes`) are `None` at Stage 3 and must not be read. This is enforced by ordering, documented in the base class, and verified by test (see Phase 2 checkpoint).
    - `NarrativeTemplate` (ABC) — `requirements(scenario, instance)`, `render(scenario, instance, subtlety)`.
    - `InterviewNote` (dataclass) — `category: str`, `question: str`, `answer: str`, `source_slot: str | None`. `source_slot` is a debug field (hidden from the player) that traces each note back to the slot that produced it. `None` for boilerplate notes not produced by a slot.
    - `FiredTemplate` (dataclass) — `slot_name: str`, `instance: Any`, `template: NarrativeTemplate`. `scenario.narrative_slots` is `dict[slot_name, list[FiredTemplate]]`.
-3. **Implement three starter slots** covering the highest-frequency cases. Follow the `dependent_residency` worked example in `SCENARIO_LIFECYCLE.md`:
-   - `zero_income_reason` — fires when a person has zero total income.
-   - `dependent_residency` — fires when a child's `months_in_home < 12`.
-   - `address_mismatch` — fires when an ID address differs from the household address.
-4. For each slot, implement at least three narrative templates with distinct `requirements()` predicates. Each template produces `InterviewNote` objects at three subtlety levels (`obvious`, `moderate`, `subtle`).
-5. Wire the analyzer into the pipeline at the call site from step 0. Populate `scenario.narrative_slots` on every scenario. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
-6. Build the obfuscator (`intake/obfuscator.py`) that calls each fired template's `render()` method at the scenario-level subtlety (derived from `request.difficulty`: easy → obvious, medium → moderate, hard → subtle) and assembles `scenario.interview_notes`. Store the result on the scenario but **do not yet wire it to the UI**.
 
-**Output:**
+**Phase 1 checkpoint:** Types are importable. The pipeline calls the no-op analyzer stub and still produces valid scenarios. All existing tests pass. The import graph is clean: `intake/analyzer/types.py` imports from `intake/generator/` models only (no `tax_core`, no `learn`).
+
+#### Phase 2: Slots and templates (content)
+
+Write the slot and template content. This is where the creative work lives — each template must be narratively plausible at all three subtlety levels without contradicting ground truth. All testable in isolation without touching the live pipeline.
+
+4. **Implement three starter slots** covering the highest-frequency cases. Follow the `dependent_residency` worked example in `SCENARIO_LIFECYCLE.md`:
+   - `dependent_residency` — fires when a child's `months_in_home < 12`. This slot has a full worked example in the lifecycle doc; implement it first as a reference.
+   - `zero_income_reason` — fires when a person has zero total income.
+   - `address_mismatch` — fires when an ID address differs from the household address.
+5. For each slot, implement at least three narrative templates with distinct `requirements()` predicates. Each template produces `InterviewNote` objects at three subtlety levels (`obvious`, `moderate`, `subtle`).
+
+**Phase 2 checkpoint:** Each slot fires correctly against hand-built scenario fixtures (unit tests). Template `requirements()` predicates are selective — not every template fires for every instance. The **slot evaluation constraint test** passes: run all slots against a scenario with `ground_truth=None`, `concept_tags=None`, `interview_notes=None` and confirm none attempt to read those fields. Review each template's `render()` output at all three subtlety levels: `obvious` states the fact directly, `moderate` requires inference, `subtle` requires significant inference — and none contradict ground truth.
+
+**Failure mode to watch for:** Templates that are too generic. If `requirements()` returns `True` for every instance, the template isn't adding narrative value — it's a fallback. At least two of the three templates per slot should have meaningfully different predicates.
+
+#### Phase 3: Integration (wire analyzer + obfuscator)
+
+Connect Phase 2's content to the pipeline and add the obfuscation layer. After this phase, every scenario carries analyzer output — but the player UI still reads the old path.
+
+6. **Wire the analyzer into the pipeline** at the call site from Phase 1. Register the three starter slots. Populate `scenario.narrative_slots` on every scenario. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
+7. **Build the obfuscator** (`intake/obfuscator.py`) that calls each fired template's `render()` method at the scenario-level subtlety (derived from `request.difficulty`: easy → obvious, medium → moderate, hard → subtle) and assembles `scenario.interview_notes`. Store the result on the scenario but **do not yet wire it to the UI**.
+
+**Phase 3 checkpoint:** Generate ten scenarios. Confirm `narrative_slots` and new-path `interview_notes` are populated, vary across scenarios, make narrative sense, and never contradict the generated facts. At least one scenario should trigger a reroll due to slot failure (induce this with a constrained generation if needed). All existing tests still pass — the old UI path is untouched.
+
+#### Output
 
 - Every scenario carries `narrative_slots` and new-path `interview_notes`.
 - The player UI still reads the old hardcoded interview structure (unchanged).
 - Unrescuable scenarios trigger reroll instead of being served.
 
-**Checkpoint:** Generate ten scenarios. Confirm `narrative_slots` and new-path `interview_notes` are populated, vary across scenarios, make narrative sense, and never contradict the generated facts. At least one should trigger a reroll due to slot failure (induce this with a constrained generation if needed). All existing tests still pass — the old UI path is untouched. **Additionally:** run a constraint test that executes all slots against a scenario with `ground_truth=None`, `concept_tags=None`, `interview_notes=None` to confirm no slot or template attempts to read those fields.
+**Final checkpoint:** All Phase 1–3 checkpoints pass. The new pipeline is running end-to-end, producing analyzer-driven interview notes on every scenario, and is independently testable via the API or CLI. The player sees no change.
 
 **Failure mode to watch for:** Templates that lie about ground truth. The obfuscation layer must preserve truth — it can introduce ambiguity, not contradictions.
 
