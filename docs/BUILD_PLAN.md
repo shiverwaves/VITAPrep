@@ -452,30 +452,83 @@ Connect Phase 2's content to the pipeline and add the obfuscation layer. After t
 
 ### Restructure D: Concept catalog (generate-then-tag)
 
-**Goal:** Every scenario carries metadata identifying which tax-law features it exercises.
+**Goal:** Every scenario carries metadata identifying which tax-law features it exercises. All six MVP concepts ship in this sprint — a half-populated catalog where some concepts fire and others silently don't is worse than no tagging at all.
 
-**Prerequisites:** Restructure C complete.
+**Prerequisites:** Restructure C complete. All 18 MVP predicates from Restructure A are in `tax_core` and passing tests.
 
-**Operation:**
+**Reference:** [`CONCEPT_CATALOG.md`](./CONCEPT_CATALOG.md) — the six MVP concept entries define the `matches()` logic, predicate dependencies, and test-case guidance for each concept.
 
-1. Create `learn/concepts/` with one module per concept family (`dependency.py`, `filing_status.py`, `income.py`, `deductions.py`).
-2. Define the `Concept` base class with `matches(scenario) -> bool` and `generation_hints() -> GenerationHints` methods.
-3. Implement a starter set of three concepts for initial validation:
-   - `qualifying_child_residency`
-   - `hoh_qualifying_person`
-   - `refundable_credit_only_filer`
-4. Add `learn/concept_catalog.py` with an explicit registry (no autodiscovery) and a `run_all(scenario) -> set[str]` method.
-5. Wire concept labeling into the pipeline at Stage 5 (after ground truth, before obfuscation rendering). Every scenario gets `concept_tags` populated.
-6. Surface concept tags in the post-game screen (or wherever grading results are shown). The player sees what they were tested on after submission.
+#### Phase 1: Infrastructure (base class + registry)
 
-**Output:**
+1. **Create `learn/concepts/`** with one module per concept family (`dependency.py`, `filing_status.py`, `income.py`, `deductions.py`).
+2. **Define the `Concept` base class** in `learn/concepts/base.py`:
+   - `name: str` — the concept's tag (snake_case, matches the catalog entry name).
+   - `matches(scenario) -> bool` — evaluates whether this concept is exercised by the scenario.
+   - `generation_hints() -> GenerationHints` — returns empty `GenerationHints()` by default. **Override in Restructure E, not D.** Concept implementations in D do not populate hints.
 
-- Every scenario has `concept_tags` populated.
-- Post-game UI shows which concepts were exercised.
+   **Concept evaluation constraint.** Concepts evaluate at Stage 5 (after ground truth). They can read `scenario.ground_truth`, `scenario.household`, and `scenario.documents`. They MUST NOT read `scenario.interview_notes` (not yet populated) or `scenario.concept_tags` (that's what they're producing). Same enforcement pattern as slots: docstring + pipeline ordering + constraint test.
 
-**Checkpoint:** Generate twenty scenarios and inspect their concept tags. Confirm the tags actually correspond to features present in the scenario. A scenario with a borderline-residency child should fire `qualifying_child_residency`; a scenario without one should not.
+3. **Add `learn/concept_catalog.py`** with an explicit registry (no autodiscovery) and a `run_all(scenario) -> set[str]` method.
 
-**Failure mode to watch for:** Concepts that fire too eagerly (false positives) or too rarely (false negatives). Predicates need to be exact; "almost" doesn't count.
+   **Exception-handling contract.** A buggy concept must not blow up the entire labeling pass. `run_all` wraps each `matches()` call in a try/except, logs the failure with the concept name and exception, treats it as "did not match," and continues. This is specified here rather than discovered at runtime — concept predicates call into `tax_core` and can hit unexpected data shapes.
+
+**Phase 1 checkpoint:** `Concept` base class and `ConceptCatalog` are importable. `run_all` with an empty registry returns an empty set. `run_all` with a deliberately-crashing concept logs the error and returns results from the non-crashing concepts. Import graph is clean: `learn/` imports from `tax_core/` and `intake/` models; nothing imports from `learn/`.
+
+#### Phase 2: Implement concepts (content)
+
+Implement all six MVP concepts. Start with one to validate the pattern, then add the remaining five.
+
+**Phase 2a — first concept (pattern validation):**
+
+4. **Implement `qualifying_child_residency`** in `learn/concepts/dependency.py`. This is the simplest MVP concept — one predicate call (`qualifying_child_residency_test`), clear pass/fail boundary (6 months exactly fails, 7 passes). Unit tests:
+   - Positive: scenario with a child at 7 months in home → matches.
+   - Negative (boundary): child at exactly 12 months → does not match (no partial-year residency issue to drill).
+   - Negative (absent): scenario with no children → does not match.
+   - Docstring on each fixture explains what it demonstrates.
+
+**Phase 2a checkpoint:** One concept matches correctly against hand-built fixtures. The registry holds one concept. `run_all` returns `{"qualifying_child_residency"}` for the positive fixture and `set()` for the negatives.
+
+**Phase 2b — remaining five concepts:**
+
+5. **Implement the remaining five MVP concepts**, one per entry in the catalog:
+   - `hoh_qualifying_person` — `learn/concepts/filing_status.py`
+   - `refundable_credit_only_filer` — `learn/concepts/filing_status.py`
+   - `self_employment_threshold` — `learn/concepts/income.py`
+   - `social_security_taxability` — `learn/concepts/income.py`
+   - `standard_vs_itemized` — `learn/concepts/deductions.py`
+
+6. **Unit tests for each concept.** Same pattern as Phase 2a: at least one positive fixture, at least two negative fixtures (close-but-not-quite), docstrings explaining each. Examples from the catalog:
+   - `self_employment_threshold`: positive at $500 1099-NEC, negative at $399, negative with zero SE income.
+   - `social_security_taxability`: positive with SS + other income above lower threshold, negative with SS-only below threshold.
+   - `standard_vs_itemized`: positive when itemized total exceeds standard deduction, negative when it doesn't.
+
+**Phase 2b checkpoint:** All six concepts pass their unit tests. The registry holds six concepts. `run_all` produces correct tags for a hand-built scenario that exercises multiple concepts simultaneously (e.g., a single parent with a borderline-residency child, 1099-NEC income, and a mortgage — should fire `qualifying_child_residency`, `hoh_qualifying_person`, `self_employment_threshold`, and `standard_vs_itemized`). The **concept evaluation constraint test** passes: run all concepts against a scenario with `interview_notes=None`, `concept_tags=None` and confirm none attempt to read those fields.
+
+#### Phase 3: Pipeline integration + post-game UI
+
+Wire concept labeling into the live pipeline and make tags minimally visible to the player.
+
+7. **Wire concept labeling into the pipeline** at Stage 5 (after ground truth, before obfuscation rendering). Every scenario gets `concept_tags` populated via `run_all`.
+8. **Surface concept tags on the grading results page.** Scope this tightly: a small section on the existing page that says "This scenario tested: qualifying child residency, head of household." Plain text list, no styling beyond what the page already uses. No weakness map, no recommendations, no progression tracking — those are a future curriculum-loop sprint, not D.
+
+**Phase 3 checkpoint:** Generate twenty scenarios and inspect their concept tags. Confirm the tags correspond to features actually present in the scenario. A scenario with a borderline-residency child should fire `qualifying_child_residency`; a scenario with $5k of 1099-NEC should fire `self_employment_threshold`; a scenario with neither should fire neither. The post-game UI shows the tags after submission.
+
+#### Output
+
+- Every scenario has `concept_tags` populated with all applicable MVP concepts.
+- The grading results page shows which concepts were exercised.
+- `run_all` is resilient to individual concept failures (logs and continues).
+- No concept reads `interview_notes` or `concept_tags` — enforced by test.
+
+**Final checkpoint:** All Phase 1–3 checkpoints pass. Six concepts are registered, tested, and producing correct tags on live scenarios. The post-game display is working. The `generation_hints()` method exists on the base class but returns empty hints — E will populate them.
+
+**Failure mode to watch for:** Concepts that fire too eagerly (false positives) or too rarely (false negatives). Predicates must be exact — "almost" doesn't count. If a concept relies on a stub-tier predicate from A whose simplification changes the match boundary, document the coupling and revisit when the predicate is refined.
+
+**What D deliberately defers:**
+- Generation hints (Restructure E).
+- Weakness map and concept-driven recommendations (future curriculum-loop sprint).
+- P2 concepts (implement after MVP is stable, using the same pattern D establishes).
+- Post-game explanation of *why* a concept fired (requires exposing predicate detail snapshots from `ground_truth` — a UI decision for later).
 
 ---
 
@@ -485,22 +538,61 @@ Connect Phase 2's content to the pipeline and add the obfuscation layer. After t
 
 **Prerequisites:** Restructure D complete. This is the most fragile sprint and should not be attempted until A–D are stable in production.
 
-**Operation:**
+#### Design decisions
 
-1. Add a `concepts` parameter to the `ScenarioRequest` model.
-2. In the orchestrator, when concepts are requested, query their `generation_hints()` and merge into the generator's hint object.
-3. After generation, verify all requested concepts actually fired (in Stage 5). If not, reroll with a new seed up to `MAX_GEN_ATTEMPTS`.
-4. Surface the concept selector in the scenario-generation UI — replace the old "Difficulty: easy/medium/hard" dropdown with a concept picker plus a subtlety slider.
-5. Document the failure path: if `MAX_GEN_ATTEMPTS` is exhausted, surface a clear error to the player ("This concept combination is too rare or contradictory; try fewer concepts").
+**GenerationHints: flat and extensible (Option A).** Keep `GenerationHints` as a flat dataclass and extend it field-by-field as each concept's hints are implemented. Coordination between fields (e.g., `force_hsa = True` implies HDHP-compatible insurance and no Medicare) is the generator's concern, not the hint structure's. This works as long as the generator's existing pipelines can handle the implication chains.
+
+The alternative — named trait bundles like `force_scenario_traits: list[str]` (Option B) — is cleaner conceptually but introduces a layer before you know the right primitives. Implement A, watch for field count to balloon or coordination to get tangled, refactor to B if it does. The decision is reversible.
+
+Practical impact: don't lock the `GenerationHints` shape. The first concept's hints (`qualifying_child_residency` — needs `dependent_months_in_home_range: tuple[int, int]` or similar) set the pattern. Subsequent concepts add fields as needed. By the time all six are done, you'll know whether A is holding up.
+
+**Multi-field constraints.** Some concepts require coordinated hints across multiple fields. Example: `social_security_taxability` needs a person with SS income *plus* enough other income to cross the provisional income threshold. That's two fields (`force_ss_recipient`, `min_other_income_floor`), but the floor only makes sense relative to filing status, which the generator determines downstream. The hint either forces filing status too (constraining further) or accepts the floor as a soft target the generator approximates. Work this out per concept during implementation.
+
+**Reroll rate targets.** The reroll rate is the quality signal for hint effectiveness. Too few rerolls means hints are over-constraining (variety suffers). Too many means hints are too weak (generation is grinding). Both are fixable but the failure modes differ, which is why both bounds matter.
+
+Per-concept thresholds, not global:
+
+| Concept | Expected rarity | Avg attempts target | Max attempts |
+|---|---|---|---|
+| `qualifying_child_residency` | common | ≤ 2 | 5 |
+| `hoh_qualifying_person` | common | ≤ 2 | 5 |
+| `refundable_credit_only_filer` | moderate | ≤ 3 | 5 |
+| `self_employment_threshold` | common | ≤ 2 | 5 |
+| `social_security_taxability` | moderate | ≤ 3 | 5 |
+| `standard_vs_itemized` | common | ≤ 2 | 5 |
+
+These are starting values. Adjust per concept if implementation reveals the natural rarity is different than expected. P2 concepts like `qualifying_surviving_spouse` (genuinely rare trigger condition) may warrant higher thresholds (max 10).
+
+**Failure UX.** When `MAX_GEN_ATTEMPTS` is exhausted, fail with a clear message: "Couldn't generate a scenario matching all selected concepts. Try fewer concepts or different combinations." Do not silently fall back to random generation — silent fallback teaches the player that their selection didn't matter. A richer dialog (offering to drop one concept) is a nice-to-have for after MVP.
+
+#### Operation
+
+No phase structure — E's steps can't ship independently (hints without wiring are dead code, wiring without hints does nothing, UI without either is decorative). Numbered steps with clear checkpoints are sufficient.
+
+1. **Implement `generation_hints()` for `qualifying_child_residency`.** This is the simplest concept — needs a child with `months_in_home` in a specific range. Extend `GenerationHints` with the field(s) required. Confirm the generator respects the hint and produces a matching scenario. This sets the pattern for subsequent concepts.
+2. **Implement `generation_hints()` for the remaining five MVP concepts.** Each may extend `GenerationHints` with new fields. For each, confirm the generator can satisfy the hint. Note where coordination is needed (e.g., `social_security_taxability` — SS income plus sufficient other income) and how the generator handles it.
+3. **Add `concepts` parameter to `ScenarioRequest`.** Accept an optional set of concept names. Validate against the registered catalog.
+4. **Wire hint merging into the orchestrator.** When concepts are requested, query each concept's `generation_hints()`, merge into a single `GenerationHints` object (last-write-wins for conflicting fields), and pass to the generator. Log the merged hints for diagnostics.
+5. **Add the reroll-on-concept-missed path.** After generation, run Stage 5 concept labeling. If any requested concept is not in `concept_tags`, reroll with a new seed up to `MAX_GEN_ATTEMPTS`. Log each reroll with the missing concepts.
+6. **Surface the concept selector in the UI.** Replace or augment the scenario-generation controls with a concept picker (checkboxes or multi-select for the six MVP concepts) plus the existing subtlety/difficulty control. The failure message from the design decisions section is surfaced here when `MAX_GEN_ATTEMPTS` is exhausted.
+7. **Add the reroll-rate integration test.** For each of the six MVP concepts: generate 50 scenarios targeting only that concept, count rerolls, assert average attempts ≤ threshold and no single run exceeds max attempts. Run as a slow test (tagged, not in the default suite) that gates merge. Concepts that fail the threshold have buggy hints, not "good enough" hints.
 
 **Output:**
 
 - Concept-driven generation works end to end.
-- The UI exposes it cleanly.
+- The UI exposes concept selection cleanly.
+- Reroll rates are measured and enforced per concept.
+- `GenerationHints` is extended with fields for all six MVP concepts.
 
-**Checkpoint:** For each starter concept, request a scenario targeting only that concept and verify the resulting scenario fires it. Then request two concepts simultaneously and verify both fire. Then request a deliberately incompatible pair and confirm graceful failure.
+**Checkpoint:** For each of the six MVP concepts, request a scenario targeting only that concept and verify the resulting scenario fires it. Then request two concepts simultaneously and verify both fire. Then request a deliberately incompatible pair and confirm graceful failure with the specified error message. The reroll-rate integration test passes for all six concepts.
 
-**Failure mode to watch for:** Generation hints from different concepts conflicting silently. Add hint-conflict detection (or document that last-write-wins is the policy) before this sprint ships.
+**Failure mode to watch for:** Generation hints from different concepts conflicting silently. Last-write-wins is the merge policy for MVP; if conflicts prove common (identifiable from reroll logs), revisit with explicit conflict detection or soft-preference merging.
+
+**What E deliberately defers:**
+- Option B trait bundles (refactor to B if flat hints become unwieldy).
+- Per-concept subtlety overrides (concepts could specify a preferred subtlety that trumps the global setting — deferred until there's a reason).
+- Multi-concept difficulty scaling (requesting 3 concepts simultaneously could auto-increase subtlety — a curriculum concern, not a generation concern).
+- Rich failure dialog (offering to drop a concept) — MVP uses a static error message.
 
 ---
 
