@@ -370,26 +370,34 @@ class TestStudentStatus:
             if c.age < 18:
                 assert c.is_full_time_student is False
 
-    def test_force_full_time_student_hint(self) -> None:
-        """force_full_time_student hint guarantees at least one student."""
+    def test_force_full_time_student_promotes_child(self) -> None:
+        """force_full_time_student ages up oldest child to 19-21."""
         from generator.children import ChildGenerator
-        import pandas as pd
-        enrollment_df = pd.DataFrame([
-            {"age_bracket": "18-19", "enrolled_proportion": 0.0, "weight": 100},
-            {"age_bracket": "20-21", "enrolled_proportion": 0.0, "weight": 100},
-            {"age_bracket": "22-24", "enrolled_proportion": 0.0, "weight": 100},
-        ])
-        cg = ChildGenerator({"student_enrollment": enrollment_df})
-        parent = _person(age=50)
-        child = _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
-                        age=20, is_dependent=True)
-        hh = _household([parent, child], pattern="single_parent")
+        cg = ChildGenerator({})
+        hh = _household(
+            [_person(age=45)],
+            pattern="single_parent",
+        )
         hh.expected_children_range = (1, 3)
         hints = GenerationHints(force_full_time_student=True)
         children = cg.generate_children(hh, hints=hints)
-        eligible = [c for c in children if 18 <= c.age <= 23]
-        if eligible:
-            assert any(c.is_full_time_student for c in eligible)
+        assert any(c.is_full_time_student for c in children)
+        students = [c for c in children if c.is_full_time_student]
+        for s in students:
+            assert 19 <= s.age <= 21
+
+    def test_force_full_time_student_respects_age_gap(self) -> None:
+        """Won't promote if parent is too young for a 19+ child."""
+        from generator.children import ChildGenerator
+        cg = ChildGenerator({})
+        hh = _household(
+            [_person(age=30)],
+            pattern="single_parent",
+        )
+        hh.expected_children_range = (1, 3)
+        hints = GenerationHints(force_full_time_student=True)
+        children = cg.generate_children(hh, hints=hints)
+        assert not any(c.is_full_time_student for c in children)
 
     def test_national_fallback_used(self) -> None:
         """When no distribution table, national rates are used (no crash)."""
