@@ -980,6 +980,12 @@ async def page_submit(
     if scenario is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
+    if scenario.mode != "verify" and scenario.ground_truth is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Scenario has no ground truth. Regenerate the scenario.",
+        )
+
     # Parse form data — Part I fields only
     form_data = await request.form()
     submission: Dict[str, str] = {}
@@ -1001,7 +1007,7 @@ async def page_submit(
         result = grader.grade_verification(flagged, scenario.injected_errors)
     else:
         result = grader.grade_intake(
-            submission, scenario.household, fields=PART1_FIELDS,
+            submission, scenario.ground_truth, fields=PART1_FIELDS,
         )
 
     # Save grade with section tag
@@ -1032,6 +1038,12 @@ async def page_submit_income(
     if scenario is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
+    if scenario.ground_truth is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Scenario has no ground truth. Regenerate the scenario.",
+        )
+
     form_data = await request.form()
     submission: Dict[str, str] = {}
 
@@ -1041,7 +1053,7 @@ async def page_submit_income(
             submission[field_name] = val.strip()
 
     result = grader.grade_intake(
-        submission, scenario.household, fields=PART2_FIELDS,
+        submission, scenario.ground_truth, fields=PART2_FIELDS,
     )
 
     store.save_grade(scenario_id, result, section="income")
@@ -1102,6 +1114,12 @@ async def page_submit_expenses(
     if scenario is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
+    if scenario.ground_truth is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Scenario has no ground truth. Regenerate the scenario.",
+        )
+
     form_data = await request.form()
     submission: Dict[str, str] = {}
 
@@ -1111,7 +1129,7 @@ async def page_submit_expenses(
             submission[field_name] = val.strip()
 
     result = grader.grade_intake(
-        submission, scenario.household, fields=PART3_FIELDS,
+        submission, scenario.ground_truth, fields=PART3_FIELDS,
     )
 
     store.save_grade(scenario_id, result, section="expenses")

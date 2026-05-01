@@ -31,7 +31,12 @@ from generator.models import (
 from training.document_renderer import DocumentRenderer
 from training.error_injector import ErrorInjector
 from training.form_populator import build_field_values
-from training.grader import Grader
+from training.grader import Grader, build_form_answers
+
+
+def _gt_dict(hh: Household) -> dict:
+    """Build a minimal ground_truth dict from a Household for testing."""
+    return {"form_answers": build_form_answers(hh), "schema_version": 1}
 
 
 # =========================================================================
@@ -437,7 +442,7 @@ class TestIntakeGrading:
         hh = _make_married_diverse_income()
         values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy == 1.0
         assert result.score == result.max_score
         assert "Perfect" in result.feedback
@@ -448,7 +453,7 @@ class TestIntakeGrading:
         values = build_field_values(hh)
         values["income.wages.amount"] = "99999"
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong = [f for f in result.field_feedback if f["status"] == "incorrect"]
         wrong_fields = {f["field"] for f in wrong}
@@ -461,7 +466,7 @@ class TestIntakeGrading:
         del values["income.interest"]
         del values["income.interest.amount"]
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong_fields = {
             f["field"] for f in result.field_feedback
@@ -476,13 +481,13 @@ class TestIntakeGrading:
         values = build_field_values(hh)
         values["income.wages.amount"] = "$55,000"
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy == 1.0
 
     def test_empty_submission_scores_zero(self) -> None:
         hh = _make_single_worker()
         grader = Grader()
-        result = grader.grade_intake({}, hh)
+        result = grader.grade_intake({}, _gt_dict(hh))
         assert result.score == 0
         assert result.accuracy == 0.0
 
@@ -573,7 +578,7 @@ class TestFullPipeline:
         assert "income.total" in answer
 
         grader = Grader()
-        result = grader.grade_intake(answer, hh)
+        result = grader.grade_intake(answer, _gt_dict(hh))
         assert result.accuracy == 1.0
 
     def test_end_to_end_verify(self) -> None:
@@ -614,7 +619,7 @@ class TestFullPipeline:
 
         correct_values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(correct_values, hh)
+        result = grader.grade_intake(correct_values, _gt_dict(hh))
         assert result.accuracy == 1.0
 
 
@@ -736,7 +741,7 @@ class TestExpensePipeline:
         hh = self._make_expense_household()
         values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy == 1.0
         assert "Perfect" in result.feedback
 
@@ -746,7 +751,7 @@ class TestExpensePipeline:
         values = build_field_values(hh)
         values["expense.deduction_type"] = "itemized"
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong_fields = {f["field"] for f in result.field_feedback if f["status"] == "incorrect"}
         assert "expense.deduction_type" in wrong_fields
@@ -757,7 +762,7 @@ class TestExpensePipeline:
         values = build_field_values(hh)
         values["expense.mortgage_interest.amount"] = "99999"
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong_fields = {f["field"] for f in result.field_feedback if f["status"] == "incorrect"}
         assert "expense.mortgage_interest.amount" in wrong_fields
@@ -784,5 +789,5 @@ class TestExpensePipeline:
         # Populate and grade
         values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(values, hh)
+        result = grader.grade_intake(values, _gt_dict(hh))
         assert result.accuracy == 1.0

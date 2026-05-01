@@ -5,11 +5,11 @@ Written before the implementation (red phase).
 
 Contract summary
 ----------------
-Grader.grade_intake(submission: Dict, ground_truth: Household)
+Grader.grade_intake(submission: Dict, ground_truth: dict)
   → GradingResult
 
   - submission is a dict of {field_name: student_value} matching form_fields.py
-  - Ground truth is the original Household (before error injection).
+  - ground_truth is the GroundTruth dict (must contain 'form_answers' key).
   - Compares field-by-field. Correct iff student value matches ground truth.
   - GradingResult.score = number of correct fields
   - GradingResult.max_score = total graded fields
@@ -97,7 +97,12 @@ from training.form_fields import (
     DEDUCTION_TYPE_ITEMIZED,
     PART3_FIELDS,
 )
-from training.grader import Grader
+from training.grader import Grader, build_form_answers
+
+
+def _gt_dict(household: Household) -> dict:
+    """Build a minimal ground_truth dict from a Household for testing."""
+    return {"form_answers": build_form_answers(household), "schema_version": 1}
 
 
 # =========================================================================
@@ -241,7 +246,7 @@ class TestGradeIntakeReturnType:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert isinstance(result, GradingResult)
 
@@ -249,7 +254,7 @@ class TestGradeIntakeReturnType:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert isinstance(result.score, int)
         assert isinstance(result.max_score, int)
@@ -258,7 +263,7 @@ class TestGradeIntakeReturnType:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert isinstance(result.accuracy, float)
 
@@ -273,7 +278,7 @@ class TestGradeIntakePerfect:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert result.score == result.max_score
         assert result.score > 0
@@ -282,7 +287,7 @@ class TestGradeIntakePerfect:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert result.accuracy == 1.0
 
@@ -290,7 +295,7 @@ class TestGradeIntakePerfect:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert result.missed_flags == []
         assert result.false_flags == []
@@ -299,7 +304,7 @@ class TestGradeIntakePerfect:
         self, grader: Grader, married_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_married_submission(), married_household,
+            _perfect_married_submission(), _gt_dict(married_household),
         )
         assert result.score == result.max_score
         assert result.accuracy == 1.0
@@ -316,7 +321,7 @@ class TestGradeIntakeErrors:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_FIRST_NAME] = "Janet"  # Wrong
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         assert result.score < result.max_score
 
     def test_wrong_ssn_reduces_score(
@@ -324,7 +329,7 @@ class TestGradeIntakeErrors:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_SSN] = "900-12-3465"  # Transposed
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         assert result.score < result.max_score
 
     def test_missing_field_reduces_score(
@@ -332,14 +337,14 @@ class TestGradeIntakeErrors:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_MIDDLE_INITIAL] = ""  # Omitted
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         assert result.score < result.max_score
 
     def test_all_wrong_gives_zero(
         self, grader: Grader, single_household: Household,
     ) -> None:
         sub = {k: "WRONG" for k in _perfect_single_submission()}
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         assert result.score == 0
         assert result.accuracy == 0.0
 
@@ -348,7 +353,7 @@ class TestGradeIntakeErrors:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_FIRST_NAME] = "WRONG"
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         assert 0.0 < result.accuracy < 1.0
 
 
@@ -362,7 +367,7 @@ class TestGradeIntakeFieldFeedback:
         self, grader: Grader, single_household: Household,
     ) -> None:
         result = grader.grade_intake(
-            _perfect_single_submission(), single_household,
+            _perfect_single_submission(), _gt_dict(single_household),
         )
         assert len(result.field_feedback) > 0
 
@@ -371,7 +376,7 @@ class TestGradeIntakeFieldFeedback:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_FIRST_NAME] = "WRONG"
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         for fb in result.field_feedback:
             assert "field" in fb
             assert "status" in fb
@@ -382,7 +387,7 @@ class TestGradeIntakeFieldFeedback:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_FIRST_NAME] = "WRONG"
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         name_fb = [fb for fb in result.field_feedback if fb["field"] == YOU_FIRST_NAME]
         assert len(name_fb) == 1
         assert name_fb[0]["status"] == "incorrect"
@@ -392,7 +397,7 @@ class TestGradeIntakeFieldFeedback:
     ) -> None:
         sub = _perfect_single_submission()
         sub[YOU_FIRST_NAME] = "WRONG"
-        result = grader.grade_intake(sub, single_household)
+        result = grader.grade_intake(sub, _gt_dict(single_household))
         last_fb = [fb for fb in result.field_feedback if fb["field"] == YOU_LAST_NAME]
         assert len(last_fb) == 1
         assert last_fb[0]["status"] == "correct"
@@ -407,7 +412,7 @@ class TestGradeIntakeEmpty:
     def test_empty_submission(
         self, grader: Grader, single_household: Household,
     ) -> None:
-        result = grader.grade_intake({}, single_household)
+        result = grader.grade_intake({}, _gt_dict(single_household))
         assert result.score == 0
         assert result.max_score > 0
         assert result.accuracy == 0.0
@@ -649,7 +654,7 @@ class TestGradeIntakeIncome:
             INCOME_TOTAL: "55800",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
-        result = grader.grade_intake(sub, income_household)
+        result = grader.grade_intake(sub, _gt_dict(income_household))
         assert result.accuracy == 1.0
 
     def test_wrong_wage_amount_reduces_score(
@@ -672,7 +677,7 @@ class TestGradeIntakeIncome:
             INCOME_INTEREST_AMOUNT: "800",
             INCOME_TOTAL: "56800",
         }
-        result = grader.grade_intake(sub, income_household)
+        result = grader.grade_intake(sub, _gt_dict(income_household))
         assert result.score < result.max_score
 
     def test_missing_income_source_reduces_score(
@@ -694,7 +699,7 @@ class TestGradeIntakeIncome:
             # Missing interest entirely
             INCOME_TOTAL: "55000",
         }
-        result = grader.grade_intake(sub, income_household)
+        result = grader.grade_intake(sub, _gt_dict(income_household))
         assert result.score < result.max_score
 
     def test_numeric_tolerance(
@@ -718,7 +723,7 @@ class TestGradeIntakeIncome:
             INCOME_TOTAL: "55800",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
-        result = grader.grade_intake(sub, income_household)
+        result = grader.grade_intake(sub, _gt_dict(income_household))
         assert result.accuracy == 1.0
 
 
@@ -774,7 +779,7 @@ class TestGradeExpenses:
             EXPENSE_STUDENT_LOAN_AMOUNT: "1200",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
         }
-        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
     def test_wrong_deduction_type(
@@ -791,7 +796,7 @@ class TestGradeExpenses:
             EXPENSE_STUDENT_LOAN_AMOUNT: "1200",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
-        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.accuracy < 1.0
         wrong = {fb["field"] for fb in result.field_feedback if fb["status"] == "incorrect"}
         assert EXPENSE_DEDUCTION_TYPE in wrong
@@ -817,7 +822,7 @@ class TestGradeExpenses:
             uses_standard_deduction=True,
         )
         sub = {EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD}
-        result = grader.grade_intake(sub, hh, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(hh), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
     def test_missing_expense_reduces_score(
@@ -826,7 +831,7 @@ class TestGradeExpenses:
         sub = {
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
         }
-        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.score < result.max_score
         wrong_fields = {fb["field"] for fb in result.field_feedback if fb["status"] == "incorrect"}
         assert EXPENSE_MORTGAGE_INTEREST in wrong_fields
@@ -845,7 +850,7 @@ class TestGradeExpenses:
             EXPENSE_STUDENT_LOAN_AMOUNT: "$1,200",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
         }
-        result = grader.grade_intake(sub, expense_household, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
     def test_above_line_deductions_graded(self, grader: Grader) -> None:
@@ -878,7 +883,7 @@ class TestGradeExpenses:
             EXPENSE_IRA_AMOUNT: "3000",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
-        result = grader.grade_intake(sub, hh, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(hh), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
     def test_credit_expenses_graded(self, grader: Grader) -> None:
@@ -910,12 +915,28 @@ class TestGradeExpenses:
             EXPENSE_EDUCATION_AMOUNT: "8000",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
-        result = grader.grade_intake(sub, hh, fields=PART3_FIELDS)
+        result = grader.grade_intake(sub, _gt_dict(hh), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
     def test_empty_expense_submission_scores_zero(
         self, grader: Grader, expense_household: Household,
     ) -> None:
-        result = grader.grade_intake({}, expense_household, fields=PART3_FIELDS)
+        result = grader.grade_intake({}, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.score == 0
         assert result.accuracy == 0.0
+
+
+# =========================================================================
+# Mode 1: grade_intake — ground_truth validation
+# =========================================================================
+
+class TestGradeIntakeGroundTruthValidation:
+
+    def test_none_ground_truth_raises(self, grader: Grader) -> None:
+        with pytest.raises(ValueError, match="no ground_truth"):
+            grader.grade_intake({"you.first_name": "Jane"}, None)
+
+    def test_missing_form_answers_grades_zero(self, grader: Grader) -> None:
+        gt = {"schema_version": 1}
+        result = grader.grade_intake({"you.first_name": "Jane"}, gt)
+        assert result.max_score == 0

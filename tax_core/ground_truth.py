@@ -88,6 +88,10 @@ class GroundTruth:
     # the structured result dicts from rich-result predicates.
     predicate_results: Dict[str, Any] = field(default_factory=dict)
 
+    # Form-level answer key — maps form field names to expected string
+    # values. Built once at generation time so the grader never recomputes.
+    form_answers: Dict[str, str] = field(default_factory=dict)
+
     def to_dict(self) -> dict:
         return {
             "schema_version": self.schema_version,
@@ -106,6 +110,7 @@ class GroundTruth:
                 for pid, pc in self.person_classifications.items()
             },
             "predicate_results": self.predicate_results,
+            "form_answers": dict(self.form_answers),
         }
 
     @classmethod
@@ -134,6 +139,7 @@ class GroundTruth:
             credits_claimed=dict(data.get("credits_claimed", {})),
             person_classifications=classifications,
             predicate_results=data.get("predicate_results", {}),
+            form_answers=dict(data.get("form_answers", {})),
         )
 
 

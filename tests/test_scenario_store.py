@@ -712,3 +712,27 @@ class TestGroundTruthStore:
         assert sc.narrative_slots is None
         assert sc.concept_tags is None
         assert sc.interview_notes is None
+
+    def test_ground_truth_survives_grading_roundtrip(
+        self, store: ScenarioStore, sample_household: Household,
+    ) -> None:
+        """Generate GT → store → reload → grade → same result."""
+        from training.grader import Grader, build_form_answers
+        gt_dict = self._make_ground_truth()
+        gt_dict["form_answers"] = build_form_answers(sample_household)
+
+        sc = Scenario(
+            scenario_id="sc-gt-grade",
+            mode="intake",
+            difficulty="easy",
+            household=sample_household,
+            ground_truth=gt_dict,
+        )
+        store.save_scenario(sc)
+        loaded = store.get_scenario("sc-gt-grade")
+
+        grader = Grader()
+        fa = loaded.ground_truth["form_answers"]
+        result = grader.grade_intake(fa, loaded.ground_truth)
+        assert result.accuracy == 1.0
+        assert result.score == result.max_score
