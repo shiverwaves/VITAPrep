@@ -1,7 +1,11 @@
 """
 Exercise engine — orchestrates full scenario creation.
 
-Pipeline: generate household → compute ground truth → inject errors → package
+Pipeline: generate → analyze → compute ground truth → inject errors → package
+
+The analyzer runs before ground truth so that unrescuable scenarios
+(no matching narrative templates) are caught before paying the cost of
+ground-truth computation.
 
 Documents are rendered on-demand by the API layer (HTML served directly
 to the browser), not pre-generated at scenario creation time.
@@ -19,6 +23,8 @@ from typing import Optional
 
 from generator.models import Scenario
 from generator.pipeline import HouseholdGenerator
+from intake.analyzer.analyzer import MAX_REROLL_ATTEMPTS, ScenarioAnalyzer
+from intake.analyzer.types import Unrescuable
 from tax_core.ground_truth import compute_ground_truth
 from .client_profile import filter_by_difficulty, generate_client_profile
 from .error_injector import ErrorInjector
@@ -33,6 +39,7 @@ class ExerciseEngine:
     def __init__(self, state: str = "HI", year: int = 2022) -> None:
         self.generator = HouseholdGenerator(state, year)
         self.error_injector = ErrorInjector()
+        self.analyzer = ScenarioAnalyzer()
 
     def generate_scenario(
         self,
@@ -43,6 +50,9 @@ class ExerciseEngine:
         seed: Optional[int] = None,
     ) -> Scenario:
         """Generate a complete training scenario.
+
+        Retries with a new seed if the analyzer deems the scenario
+        unrescuable (no matching narrative templates for a fired slot).
 
         Args:
             mode: "intake" (fill blank form), "verify" (find errors),
@@ -55,7 +65,42 @@ class ExerciseEngine:
 
         Returns:
             Scenario with household, ground truth, errors, and client facts.
+
+        Raises:
+            Unrescuable: If all retry attempts produce unrescuable scenarios.
         """
+        for attempt in range(MAX_REROLL_ATTEMPTS):
+            try:
+                return self._build_scenario(
+                    mode=mode,
+                    difficulty=difficulty,
+                    error_count=error_count,
+                    pattern=pattern,
+                    seed=seed,
+                    attempt=attempt,
+                )
+            except Unrescuable:
+                logger.warning(
+                    "Attempt %d unrescuable, retrying with new seed",
+                    attempt + 1,
+                )
+                seed = None
+
+        raise Unrescuable(
+            f"Failed to generate rescuable scenario after "
+            f"{MAX_REROLL_ATTEMPTS} attempts"
+        )
+
+    def _build_scenario(
+        self,
+        mode: str,
+        difficulty: str,
+        error_count: int,
+        pattern: Optional[str],
+        seed: Optional[int],
+        attempt: int,
+    ) -> Scenario:
+        """Single attempt at building a scenario. May raise Unrescuable."""
         scenario_id = f"sc-{uuid.uuid4().hex[:12]}"
 
         # Stage 1: Generate household with demographics + PII
@@ -63,13 +108,27 @@ class ExerciseEngine:
             pattern=pattern, seed=seed,
         )
 
-        # Stage 2: Compute ground truth from the clean household
+        # Stage 2: Build provisional scenario for analysis
+        scenario = Scenario(
+            scenario_id=scenario_id,
+            mode=mode,
+            difficulty=difficulty,
+            household=household,
+            document_paths={},
+            created_at=datetime.utcnow().isoformat(),
+        )
+
+        # Stage 3: Analyze — evaluate slots, pick templates.
+        # Raises Unrescuable if a fired slot has no matching template.
+        narrative_slots = self.analyzer.analyze(scenario)
+
+        # Stage 4: Compute ground truth from the clean household
         # (before error injection so it reflects correct answers)
         gt = compute_ground_truth(household, year=self.generator.year)
         gt.form_answers = build_form_answers(household)
         gt_dict = gt.to_dict()
 
-        # Stage 3: Inject errors (verify mode only)
+        # Stage 5: Inject errors (verify mode only)
         injected_errors = []
         if mode == "verify":
             household, injected_errors = self.error_injector.inject(
@@ -78,29 +137,37 @@ class ExerciseEngine:
                 error_count=error_count,
             )
 
-        # Stage 4: Generate client profile (verbal facts)
+        # Stage 6: Generate client profile (verbal facts)
         all_facts = generate_client_profile(household)
         client_facts = filter_by_difficulty(all_facts, difficulty)
 
         # Package
-        scenario = Scenario(
-            scenario_id=scenario_id,
-            mode=mode,
-            difficulty=difficulty,
-            household=household,
-            injected_errors=injected_errors,
-            client_facts=client_facts,
-            document_paths={},
-            created_at=datetime.utcnow().isoformat(),
-            ground_truth=gt_dict,
-        )
+        scenario.household = household
+        scenario.injected_errors = injected_errors
+        scenario.client_facts = client_facts
+        scenario.ground_truth = gt_dict
+        scenario.narrative_slots = {
+            name: [
+                {"slot_name": ft.slot_name, "instance_id": _instance_id(ft.instance)}
+                for ft in fired_list
+            ]
+            for name, fired_list in narrative_slots.items()
+        } if narrative_slots else None
 
         logger.info(
-            "Generated scenario %s: mode=%s, difficulty=%s, "
-            "members=%d, errors=%d, facts=%d",
-            scenario_id, mode, difficulty,
+            "Generated scenario %s (attempt %d): mode=%s, difficulty=%s, "
+            "members=%d, errors=%d, facts=%d, slots_fired=%d",
+            scenario_id, attempt + 1, mode, difficulty,
             len(household.members),
             len(injected_errors),
             len(client_facts),
+            len(narrative_slots),
         )
         return scenario
+
+
+def _instance_id(instance: object) -> str:
+    """Extract a serializable identifier from a triggering instance."""
+    if hasattr(instance, "person_id"):
+        return instance.person_id
+    return str(instance)
