@@ -88,7 +88,7 @@ Restructure A is both a **move** (extracting existing tax logic) and a **build**
 
 1. Create `tax_core/` at the repo root with `__init__.py`, `thresholds.py`, `predicates/`, and `state_tax/`.
 2. **`tax_core/thresholds.py`** — Move all year-indexed constants from `generator/expenses.py`: `STANDARD_DEDUCTION`, `SALT_CAP`, `IRA_CONTRIBUTION_LIMIT`, `IRA_CONTRIBUTION_LIMIT_50_PLUS`, `STUDENT_LOAN_INTEREST_LIMIT`, `EDUCATOR_EXPENSE_LIMIT`. Structure as year-keyed lookups, not bare constants.
-3. **`tax_core/state_tax/hawaii.py`** — Move `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and the progressive tax calculation from `ExpenseGenerator._assign_state_income_tax()`. Add a dispatch function (`compute_state_income_tax(income, filing_status, state, year)`) so other state modules can be added later.
+3. **`tax_core/state_tax/hawaii.py`** — Move `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and the progressive tax calculation from `ExpenseGenerator._assign_state_income_tax()`. Add a dispatch function (`compute_state_income_tax(income, filing_status, state, year)`) so other state modules can be added later. **Multi-state support is deferred** — Hawaii moves as-is. See "Future: State Tax Generalization" for the expansion plan.
 4. **`tax_core/predicates/filing_status.py`** — Move `Household.derive_filing_status()` logic. The `Household` method becomes a thin wrapper that delegates to `tax_core`.
 5. **`tax_core/predicates/deductions.py`** — Move the SALT cap application, medical 7.5% AGI floor, itemized total aggregation, and standard-vs-itemized comparison from `ExpenseGenerator._calculate_totals()`. The expense generator calls these functions instead of doing the math inline.
 6. Replace all original call sites with imports from `tax_core`. Behavior must not change.
@@ -100,24 +100,61 @@ Restructure A is both a **move** (extracting existing tax logic) and a **build**
 
 Implement the 18 MVP predicates listed in [`CONCEPT_CATALOG.md` § "MVP predicates"](./CONCEPT_CATALOG.md#mvp-predicates-restructure-a-first-pass). These are net-new `tax_core` functions that don't exist in the codebase today.
 
-8. **`tax_core/predicates/filing_status.py`** — Add `is_unmarried(filer, year)`, `paid_more_than_half_household_costs(filer, household)`, `has_qualifying_person_for_hoh(filer)`. These encode HoH eligibility logic per IRC §2(b).
-9. **`tax_core/predicates/dependency.py`** — Add `qualifying_child_residency_test(child, year)`, `qualifying_relative_test(person, household)`. Return structured results (pass/fail + detail) so grader and slots can inspect *why*.
-10. **`tax_core/predicates/income.py`** — Add `total_income(person)`, `total_self_employment_income(person)`, `requires_schedule_se(person)`, `compute_provisional_income(filer)`, `ss_taxability_thresholds(filing_status, year)`, `compute_taxable_ss(filer, year)`, `filing_threshold_for(status, year)`.
-11. **`tax_core/predicates/deductions.py`** — Add `standard_deduction_for(status, year)`, `compute_salt(state_tax, property_tax, year)`, `compute_medical_deduction(medical_expenses, agi)`, `compute_itemized_total(household, year)`, `should_itemize(household, year)`.
-12. **Refundable credit stubs** — Add `qualifies_for_eitc(filer, year)` and `qualifies_for_actc(filer, year)` as stubs (qualifying child + earned income > 0). Full implementation in P2.
-13. Add unit tests in `tests/tax_core/` for every predicate, using hand-built `Household` fixtures. Test boundary cases explicitly (6 months exactly fails residency, $399 SE income below threshold, provisional income at each SS tier). These tests are the regression suite for every future change.
+**Accuracy tiers.** Not all 18 predicates require the same level of tax-law scrutiny. The table below classifies each by how much work is needed now vs what can be deferred.
 
-**Phase 2 checkpoint:** All 18 predicates pass their unit tests. Import graph constraint still holds.
+| Tier | Description | Count | Approach |
+|---|---|---|---|
+| **Exact** | Arithmetic or table lookups. Hard to get wrong. | 8 | Implement fully, cite source in docstring. |
+| **Stub** | Simplified version works for scenarios we generate today. Full rule requires data or edge cases we don't yet produce. | 7 | Implement simplified logic. Docstring notes what's simplified and cites the IRC section for the full rule. Refine incrementally as generation capabilities expand. |
+| **Careful** | Requires faithful encoding of an IRS worksheet or multi-step rule. Getting it wrong produces wrong grading. | 3 | Implement against the IRS publication worksheet. Test with worked examples from the publication. |
+
+**Exact (8) — implement fully:**
+- `standard_deduction_for(status, year)` — lookup table, 2022 values already in `expenses.py`
+- `compute_salt(state_tax, property_tax, year)` — `min(total, 10000)`
+- `compute_medical_deduction(medical_expenses, agi)` — `max(0, expenses - agi * 0.075)`
+- `compute_itemized_total(household, year)` — aggregation of Schedule A categories
+- `should_itemize(household, year)` — comparison of itemized total vs standard deduction
+- `total_income(person)` — sum of income fields, already exists as `Person.total_income()`
+- `total_self_employment_income(person)` — sum of 1099-NEC amounts
+- `requires_schedule_se(person)` — `se_income >= 400`
+
+**Stub (7) — simplified now, refine later:**
+- `derive_filing_status(household)` — current logic (married → MFJ, has kids → HoH, else single) is wrong for edge cases (HoH requires more than just having children) but correct for the household patterns we generate today. Refine when `hoh_qualifying_person` concept is drilled.
+- `is_unmarried(filer, year)` — stub as "no spouse in household." Full rule includes "considered unmarried" status (lived apart last 6 months with dependent child), which requires data we don't generate yet.
+- `paid_more_than_half_household_costs(filer, household)` — stub as `True` for single-adult households. We don't generate cost-of-household data. Document as a known gap.
+- `has_qualifying_person_for_hoh(filer)` — depends on residency and relationship tests. Can compose from simplified versions of those tests.
+- `qualifying_child_residency_test(child, year)` — core "more than half the year" test is straightforward using `months_in_home`. Temporary absence exceptions (school, illness, military, kidnapping) deferred — we don't generate those scenarios yet.
+- `qualifying_relative_test(person, household)` — four-part test (relationship, gross income under threshold, support, not a QC of another). Implement the parts we have data for (relationship, gross income); stub the support test as `True` for now.
+- `qualifies_for_eitc(filer, year)` / `qualifies_for_actc(filer, year)` — explicitly stubs (qualifying child + earned income > 0). Full EITC rules are a P2 concept (`eitc_qualifying_child_rules`).
+
+**Careful (3) — requires IRS worksheet fidelity:**
+- `filing_threshold_for(status, year)` — straightforward lookup but the values must be exact for each year and filing status. Source: IRS Publication 501, Table 1.
+- `compute_provisional_income(filer)` — AGI + tax-exempt interest + ½ SS benefits. We don't generate tax-exempt interest, so for current scenarios it simplifies to `income + ss/2`. Document that tax-exempt interest is a known gap.
+- `ss_taxability_thresholds(filing_status, year)` / `compute_taxable_ss(filer, year)` — must faithfully encode the two-tier IRS Publication 915 worksheet (~10 steps). Test against worked examples from the publication. The MFS-living-with-spouse edge case (zero threshold, 85% taxable) must be handled correctly.
+
+**Steps:**
+
+8. **`tax_core/predicates/filing_status.py`** — Add `is_unmarried` (stub), `paid_more_than_half_household_costs` (stub), `has_qualifying_person_for_hoh` (stub). Each docstring cites IRC §2(b) and notes what's simplified.
+9. **`tax_core/predicates/dependency.py`** — Add `qualifying_child_residency_test` (stub — core test only, no temporary absence exceptions), `qualifying_relative_test` (stub — relationship + gross income, support test deferred). Return structured results (pass/fail + detail) so grader and slots can inspect *why*.
+10. **`tax_core/predicates/income.py`** — Add exact predicates (`total_income`, `total_self_employment_income`, `requires_schedule_se`, `filing_threshold_for`) and careful predicates (`compute_provisional_income`, `ss_taxability_thresholds`, `compute_taxable_ss`). SS taxability tested against IRS Pub 915 worksheet examples.
+11. **`tax_core/predicates/deductions.py`** — Add all 5 deduction predicates (all exact tier).
+12. **Refundable credit stubs** — `qualifies_for_eitc` and `qualifies_for_actc` as documented stubs.
+13. Add unit tests in `tests/tax_core/` for every predicate, using hand-built `Household` fixtures. Test boundary cases explicitly (6 months exactly fails residency, $399 SE income below threshold, provisional income at each SS tier, itemized total $1 above/below standard deduction). Careful-tier predicates get additional tests against IRS publication worked examples. These tests are the regression suite for every future change.
+
+**Phase 2 checkpoint:** All 18 predicates pass their unit tests. Import graph constraint still holds. Every stub-tier predicate has a docstring noting its simplification and the IRC section governing the full rule.
+
+**Relationship to a tax engine.** Individual predicates are better written by hand — they're testable, auditable, and cite specific IRC sections. An open-source tax engine becomes relevant in **Restructure B** when we compute full ground truth (AGI → taxable income → total tax → refund). That's a return-level computation chaining dozens of rules; a tax engine may be more maintainable than hand-rolling it. The decision belongs in B's scope, not A's. See "Future: Tax Engine References" for the candidates.
 
 **Output:**
 
 - `tax_core/` exists with predicates, thresholds, state tax modules, and tests.
 - Existing generators and grader import from `tax_core` instead of defining tax logic locally.
 - The import graph is clean: nothing under `tax_core/` imports from `intake/`, `learn/`, or `api/`. Enforce this in CI (e.g., `grep` in a pre-commit check or a dedicated test).
+- Every stub-tier predicate is documented: what's simplified, what IRC section governs the full rule, and what data/generation capability is needed to remove the simplification.
 
-**Final checkpoint:** All existing tests pass. All new predicate tests pass. `tax_core` is independently importable. The concept catalog's MVP predicate inventory is fully implemented.
+**Final checkpoint:** All existing tests pass. All new predicate tests pass. `tax_core` is independently importable. The concept catalog's MVP predicate inventory is fully implemented (exact, stub, or careful as classified).
 
-**Failure mode to watch for:** The temptation to "improve" predicates while moving them in Phase 1. Resist. Move first, build new in Phase 2. Refactor in a follow-up if warranted.
+**Failure mode to watch for:** The temptation to "improve" predicates while moving them in Phase 1. Resist. Move first, build new in Phase 2. Refactor in a follow-up if warranted. For Phase 2: the temptation to implement the full rule when a stub suffices. Stubs are deliberate — they match the scenarios we can currently generate. Over-engineering a predicate against edge cases we can't test is worse than a documented simplification.
 
 ---
 
@@ -297,6 +334,120 @@ Once A–E are complete, new work follows the layered structure naturally:
 - New form sections (Part IV, Part V, etc.) → cross-layer additions, but each layer's contribution is local.
 
 Each future VITA section follows the existing pattern: extract distributions → generate facts → render documents → analyze and obfuscate → tag concepts → grade.
+
+---
+
+## Future: State Tax Generalization
+
+The expense generator currently uses hardcoded Hawaii state income tax brackets (`HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ` in `generator/expenses.py`). Restructure A moves these to `tax_core/state_tax/hawaii.py` but does not add other states. This section documents the expansion plan.
+
+### Why this isn't in PUMS
+
+State tax brackets are **statutory data** — published by each state's department of taxation and indexed annually. They are not in PUMS or any Census product. They cannot be extracted the way demographics, housing costs, or income distributions are. This is a separate data source with a separate maintenance cycle.
+
+### Recommended approach: YAML config files
+
+Store brackets as YAML (or JSON) files under `tax_core/state_tax/brackets/`, one per state:
+
+```
+tax_core/state_tax/
+├── __init__.py
+├── compute.py          # dispatch + progressive_tax() shared logic
+└── brackets/
+    ├── HI.yaml         # Hawaii brackets by year + filing status
+    ├── CA.yaml         # California (when added)
+    └── ...
+```
+
+Each file contains bracket tables keyed by year and filing status:
+
+```yaml
+# HI.yaml
+2022:
+  single:
+    - [2400, 0.014]
+    - [4800, 0.032]
+    # ...
+  married_filing_jointly:
+    - [4800, 0.014]
+    # ...
+```
+
+**Why YAML over SQLite:** Bracket data is small (< 50 lines per state per year), changes once per legislative session, and benefits from being version-controlled and diff-readable. It doesn't need query semantics. A YAML file is auditable by reading it; a SQLite row requires a query tool.
+
+**Why not a third-party package:** Adds a dependency for a narrow need. The bracket data itself is public and small. If a reliable open-source tax bracket library emerges, revisit.
+
+### Maintenance burden
+
+Adding a state is a 15-minute task: copy a YAML template, fill in brackets from Tax Foundation or the state's published rate schedule, add a test. When brackets change for a new tax year, update the YAML file and add the new year key. The `compute_state_income_tax()` dispatch function already selects the right file by state code.
+
+### Data sources for bracket compilation
+
+- **Tax Foundation** — publishes annual state income tax rate tables in structured format (taxfoundation.org). Best single source.
+- **State revenue department websites** — authoritative but harder to parse. Use for verification.
+- **IRS Publication 4012** (VITA Resource Guide) — includes state supplement pages for VITA-active states.
+
+### Prerequisite for multi-state scenarios
+
+Before adding a new state's brackets, that state must also have PUMS extraction data (`data/distributions_{state}_{year}.sqlite`). Property tax and housing cost distributions are state-specific and come from PUMS. Without both bracket data and distribution data, scenarios for that state will be incomplete.
+
+### When to implement
+
+Not during Restructure A. Implement when VITAPrep expands beyond Hawaii — likely triggered by a request to support a second VITA site's state. The `tax_core/state_tax/` directory structure established in Restructure A is designed to accommodate this without refactoring.
+
+---
+
+## Future: Tax Engine References
+
+When Restructure B requires full return-level computation (`compute_ground_truth` producing AGI, taxable income, total tax, refund), implementing it by hand means encoding the entire Form 1040 dependency chain. Two open-source projects are potential references or integration candidates.
+
+### IRS Direct File — Fact Graph
+
+**Repository:** [github.com/IRS-Public/direct-file](https://github.com/IRS-Public/direct-file)
+
+The IRS's own free filing service, open-sourced. Its core is a **declarative fact graph** — XML-based fact dictionaries define writable facts (user input), derived facts (computed from dependency chains), and collections. The Scala runtime (`fact-graph-scala/`) resolves the graph, and the result exports to IRS MeF XML for e-filing.
+
+**Architecture:** Fact dictionaries organized by tax topic (`elderlyAndDisabled.xml`, `filers.xml`, etc.). Each fact is writable or derived, with explicit dependencies. Computational nodes (`compnodes/`) evaluate derived facts. The graph handles incomplete information (partially completed returns) natively — facts are `unknown` until their dependencies resolve.
+
+**What's useful for VITAPrep:**
+- The XML fact dictionaries document which tax outcomes depend on which inputs — exactly the dependency chain `compute_ground_truth()` must encode. Even if we don't use the Scala runtime, the dictionaries are a **reference source** for correct fact-to-form-line mappings.
+- The `definitions/` and `compnodes/` source code shows how the IRS itself models derived tax computations. This is an authoritative implementation, not a third-party interpretation.
+- The approach of declaring facts and deriving outcomes is architecturally similar to what `tax_core` predicates do — VITAPrep's predicates are imperative Python functions, but they encode the same dependency relationships.
+
+**What doesn't fit:**
+- Scala/JVM stack — not Python. Integration would require a JVM sidecar or porting the fact dictionaries to a Python evaluation engine.
+- Designed for *filing* (user → IRS), not *training* (generate scenario → grade student). The data flows in opposite directions.
+- Scoped to Direct File's supported return types (currently W-2 income, limited deductions). VITAPrep's VITA scope is broader in some areas (e.g., self-employment) and narrower in others.
+
+**Recommendation:** Use as a **reference**, not a runtime dependency. When implementing `compute_ground_truth()`, consult the fact dictionary XMLs to verify that our dependency chains match the IRS's own encoding. If VITAPrep ever needs to produce actual MeF-compatible XML (e.g., for integration with a real filing workflow), Direct File's export layer is the reference implementation.
+
+### OpenTaxEngine
+
+**Repository:** [github.com/cameronehrlich/opentaxengine](https://github.com/cameronehrlich/opentaxengine)
+
+A Python rule-based tax engine using YAML-defined form specifications. Supports Form 1040, 1120-S, 1065. CLI with compute, fill, explain, inspect commands.
+
+**What's useful for VITAPrep:**
+- Python-native — no language bridge needed.
+- YAML form specs are readable and auditable.
+- The `explain` command traces how a line value was computed — useful for grading feedback.
+
+**What doesn't fit:**
+- Very early stage (as of 2026): limited to 2025 tax year, minimal test coverage.
+- Must support the tax year matching our PUMS data (currently 2022) before we can use it.
+- Uncertain long-term maintenance.
+
+**Recommendation:** Monitor for maturity. If it stabilizes and adds multi-year support, it could replace hand-rolled `compute_ground_truth()` logic. Evaluate during Restructure B scoping.
+
+### When to decide
+
+The tax engine decision belongs in **Restructure B's planning phase**, not A. Restructure A's predicates are individual rule checks that are better hand-written. Restructure B's `compute_ground_truth()` is a return-level computation where an engine adds value. Before starting B, evaluate:
+
+1. Does Direct File's fact graph cover the VITA Basic/Advanced scope we need?
+2. Has OpenTaxEngine added 2022 tax year support?
+3. Is hand-rolling `compute_ground_truth()` with our existing predicates simpler than integrating either engine?
+
+The answer determines whether B wraps an external engine or extends `tax_core` with line-level computation functions.
 
 ---
 
