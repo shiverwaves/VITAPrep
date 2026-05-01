@@ -509,6 +509,13 @@ class ExpenseGenerator:
                 "masters", "doctorate", "professional",
             ):
                 students.append(m)
+            elif (m.is_adult() and not m.is_dependent
+                  and 22 <= m.age <= 45
+                  and m.education in (
+                      "some_college", "associates", "bachelors",
+                  )
+                  and np.random.random() < 0.08):
+                students.append(m)
 
         if not students:
             return 0
@@ -600,7 +607,13 @@ class ExpenseGenerator:
                 or (22 <= m.age <= 35 and m.education in (
                     "masters", "doctorate", "professional",
                 ))
+                or (m.is_adult() and not m.is_dependent
+                    and 22 <= m.age <= 45
+                    and m.education in (
+                        "some_college", "associates", "bachelors",
+                    ))
             ]
+            enrolled.sort(key=lambda m: not m.is_full_time_student)
             recipient = enrolled[0] if enrolled else householder
             recipient.form_1098_ts.append(Form1098T(
                 institution_name=random.choice(_UNIVERSITIES),
