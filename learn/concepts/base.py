@@ -46,6 +46,8 @@ class GenerationHints:
 
     force_homeowner: bool = False
 
+    force_full_time_student: bool = False
+
 
 class Concept(ABC):
     """A tax-law feature that a scenario may exercise.

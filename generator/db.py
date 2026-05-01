@@ -37,6 +37,7 @@ PART1_TABLES = [
     "hispanic_origin_by_age",
     "spousal_age_gaps",
     "couple_sex_patterns",
+    "student_enrollment",
 ]
 
 # Part 2 tables (income/employment — 12 tables)
@@ -204,7 +205,7 @@ class DistributionLoader:
     def load_part1_tables(
         self, state: str, year: int
     ) -> Dict[str, pd.DataFrame]:
-        """Load only Part 1 distribution tables (12 tables).
+        """Load only Part 1 distribution tables (13 tables).
 
         These cover personal information: household patterns, demographics,
         race, relationships, and couple composition.

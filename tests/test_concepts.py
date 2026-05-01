@@ -1,4 +1,4 @@
-"""Tests for the six MVP concepts (D Phase 2).
+"""Tests for the seven concepts (D Phase 2 + education).
 
 Each concept has:
 - At least one positive fixture (concept matches).
@@ -32,6 +32,7 @@ from learn.concepts.income import (
     SelfEmploymentThresholdConcept,
     SocialSecurityTaxabilityConcept,
 )
+from learn.concepts.education import FullTimeStudentDependentConcept
 
 
 # =========================================================================
@@ -374,7 +375,76 @@ class TestStandardVsItemized:
 
 
 # =========================================================================
-# 7. Multi-concept scenario
+# 7. full_time_student_dependent
+# =========================================================================
+
+class TestFullTimeStudentDependent:
+    concept = FullTimeStudentDependentConcept()
+
+    def test_positive_student_age_20(self) -> None:
+        """Dependent age 20, is_full_time_student=True — concept fires."""
+        hh = _household([
+            _person(wage_income=50000),
+            _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
+                    age=20, first="Alex", wage_income=0,
+                    is_dependent=True, is_full_time_student=True),
+        ])
+        sc = _scenario(hh)
+        assert self.concept.matches(sc) is True
+
+    def test_negative_student_age_17(self) -> None:
+        """Dependent age 17, is_full_time_student=True — concept does NOT fire
+        (under 19, doesn't need the student exception)."""
+        hh = _household([
+            _person(wage_income=50000),
+            _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
+                    age=17, first="Alex", wage_income=0,
+                    is_dependent=True, is_full_time_student=True),
+        ])
+        sc = _scenario(hh)
+        assert self.concept.matches(sc) is False
+
+    def test_negative_not_student(self) -> None:
+        """Dependent age 20, NOT full-time student — concept does NOT fire."""
+        hh = _household([
+            _person(wage_income=50000),
+            _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
+                    age=20, first="Alex", wage_income=0,
+                    is_dependent=True, is_full_time_student=False),
+        ])
+        sc = _scenario(hh)
+        assert self.concept.matches(sc) is False
+
+    def test_positive_age_23(self) -> None:
+        """Dependent age 23, full-time student — boundary case, fires."""
+        hh = _household([
+            _person(wage_income=50000),
+            _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
+                    age=23, first="Alex", wage_income=0,
+                    is_dependent=True, is_full_time_student=True),
+        ])
+        sc = _scenario(hh)
+        assert self.concept.matches(sc) is True
+
+    def test_negative_age_24(self) -> None:
+        """Dependent age 24, full-time student — too old, concept does NOT fire."""
+        hh = _household([
+            _person(wage_income=50000),
+            _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
+                    age=24, first="Alex", wage_income=0,
+                    is_dependent=True, is_full_time_student=True),
+        ])
+        sc = _scenario(hh)
+        assert self.concept.matches(sc) is False
+
+    def test_hints(self) -> None:
+        hints = self.concept.generation_hints()
+        assert hints.force_full_time_student is True
+        assert "single_parent" in hints.preferred_patterns
+
+
+# =========================================================================
+# 8. Multi-concept scenario
 # =========================================================================
 
 class TestMultiConceptScenario:
@@ -408,6 +478,7 @@ class TestMultiConceptScenario:
         catalog.register(SelfEmploymentThresholdConcept())
         catalog.register(SocialSecurityTaxabilityConcept())
         catalog.register(StandardVsItemizedConcept())
+        catalog.register(FullTimeStudentDependentConcept())
 
         tags = catalog.run_all(sc)
 
@@ -418,8 +489,8 @@ class TestMultiConceptScenario:
         assert "social_security_taxability" not in tags
         assert "refundable_credit_only_filer" not in tags
 
-    def test_catalog_has_six_concepts(self) -> None:
-        """Registry holds all six MVP concepts."""
+    def test_catalog_has_seven_concepts(self) -> None:
+        """Registry holds all seven concepts."""
         catalog = ConceptCatalog()
         catalog.register(QualifyingChildResidencyConcept())
         catalog.register(HoHQualifyingPersonConcept())
@@ -427,7 +498,8 @@ class TestMultiConceptScenario:
         catalog.register(SelfEmploymentThresholdConcept())
         catalog.register(SocialSecurityTaxabilityConcept())
         catalog.register(StandardVsItemizedConcept())
-        assert len(catalog.concepts) == 6
+        catalog.register(FullTimeStudentDependentConcept())
+        assert len(catalog.concepts) == 7
 
     def test_empty_scenario_no_tags(self) -> None:
         """Simple wage earner with no special situations — no concepts fire."""
@@ -441,6 +513,7 @@ class TestMultiConceptScenario:
         catalog.register(SelfEmploymentThresholdConcept())
         catalog.register(SocialSecurityTaxabilityConcept())
         catalog.register(StandardVsItemizedConcept())
+        catalog.register(FullTimeStudentDependentConcept())
 
         tags = catalog.run_all(sc)
         assert tags == set()
@@ -453,7 +526,7 @@ class TestMultiConceptScenario:
 class TestConceptConstraint:
 
     def test_concepts_work_with_lifecycle_fields_none(self) -> None:
-        """All six concepts run without error when interview_notes and
+        """All seven concepts run without error when interview_notes and
         concept_tags are None (as they are at Stage 5)."""
         hh = _household([
             _person(wage_income=5000, se_income=500, ss_income=30000),
@@ -472,6 +545,7 @@ class TestConceptConstraint:
         catalog.register(SelfEmploymentThresholdConcept())
         catalog.register(SocialSecurityTaxabilityConcept())
         catalog.register(StandardVsItemizedConcept())
+        catalog.register(FullTimeStudentDependentConcept())
 
         tags = catalog.run_all(sc)
         assert isinstance(tags, set)

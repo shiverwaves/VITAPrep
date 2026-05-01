@@ -429,6 +429,7 @@ class TestCreditExpenses:
                         age=20, sex="F",
                         education="some_college",
                         employment_status="",
+                        is_full_time_student=True,
                     ),
                 ],
             )
@@ -646,10 +647,12 @@ class TestExpenseDocumentCreation:
             pattern="single_parent",
         )
         gen.overlay(hh)
-        householder = hh.get_householder()
         if hh.education_expenses > 0:
-            assert len(householder.form_1098_ts) == 1
-            f = householder.form_1098_ts[0]
+            recipient = next(
+                m for m in hh.members if m.is_full_time_student
+            )
+            assert len(recipient.form_1098_ts) == 1
+            f = recipient.form_1098_ts[0]
             assert f.amounts_billed == hh.education_expenses
             assert f.institution_name != ""
             assert f.institution_tin != ""

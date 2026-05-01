@@ -501,32 +501,27 @@ class ExpenseGenerator:
         return min(cost_per_child * num_children, 16000)
 
     def _education_expenses(self, household: Household) -> int:
-        students = []
+        students: List[Person] = []
         for m in household.members:
-            if 18 <= m.age <= 24 and m.education in (
-                "some_college", "associates", "bachelors",
-            ):
-                students.append("undergrad")
+            if m.is_full_time_student:
+                students.append(m)
             elif 22 <= m.age <= 35 and m.education in (
                 "masters", "doctorate", "professional",
             ):
-                students.append("graduate")
+                students.append(m)
 
         if not students:
             return 0
 
-        if np.random.random() >= 0.60:
-            return 0
-
         total = 0
-        for stype in students:
-            if stype == "undergrad":
+        for student in students:
+            if student.education in ("masters", "doctorate", "professional"):
+                tuition = int(np.random.uniform(10000, 30000))
+            else:
                 tuition = int(np.random.choice([
                     np.random.uniform(3000, 5000),
                     np.random.uniform(8000, 15000),
                 ], p=[0.4, 0.6]))
-            else:
-                tuition = int(np.random.uniform(10000, 30000))
             total += tuition
 
         return total
@@ -597,13 +592,21 @@ class ExpenseGenerator:
                     student_loan_interest=person.student_loan_interest,
                 ))
 
-        # Form 1098-T — Tuition Statement (issued to householder for household education)
+        # Form 1098-T — Tuition Statement (issued per student)
         if household.education_expenses > 0:
-            householder.form_1098_ts.append(Form1098T(
+            enrolled = [
+                m for m in household.members
+                if m.is_full_time_student
+                or (22 <= m.age <= 35 and m.education in (
+                    "masters", "doctorate", "professional",
+                ))
+            ]
+            recipient = enrolled[0] if enrolled else householder
+            recipient.form_1098_ts.append(Form1098T(
                 institution_name=random.choice(_UNIVERSITIES),
                 institution_tin=_generate_ein(),
                 amounts_billed=household.education_expenses,
-                student_ssn=householder.ssn,
+                student_ssn=recipient.ssn or "",
             ))
 
     # =========================================================================

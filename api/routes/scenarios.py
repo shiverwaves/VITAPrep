@@ -331,6 +331,7 @@ async def page_new_scenario(request: Request) -> HTMLResponse:
         "self_employment_threshold": "Self-Employment Threshold",
         "social_security_taxability": "Social Security Taxability",
         "standard_vs_itemized": "Standard vs. Itemized Deduction",
+        "full_time_student_dependent": "Full-Time Student Dependent",
     }
     concept_checkboxes = "\n".join(
         f'<label class="checkbox"><input type="checkbox" name="concepts" '
