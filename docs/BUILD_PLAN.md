@@ -1,1296 +1,241 @@
 # Build Plan — Step-by-Step Implementation Guide
 
-This document is designed to be followed sequentially. Each sprint produces
-working, testable output. Do not skip ahead — later sprints depend on earlier ones.
+This document is the chronological "what to build next" guide for VITAPrep. It is paired with [`SCENARIO_LIFECYCLE.md`](./SCENARIO_LIFECYCLE.md), which describes the target architecture and data flow this build plan converges toward. Read the lifecycle doc first if you are new to the project or picking up a sprint and need the conceptual frame.
 
 ---
 
-## Sprint 1: Data Models + Sampling Utilities
+## Architecture overview
 
-**Goal**: Define all data structures. Everything else depends on these.
+VITAPrep is organized as three logical layers. They live in one repository at the MVP stage but are designed for eventual separation into independent products (e.g. a return-preparation engine, an intake simulator, and a curriculum/progression layer).
 
-### Step 1.1: `generator/models.py`
-Create the core data models. These are Python dataclasses (not Pydantic).
+### `tax_core` — the rules engine
 
-**Person** — represents one individual in a household:
-- Statistical fields: person_id, relationship, age, sex, race, hispanic_origin
-- PII fields (empty until pii.py populates them): legal_first_name, legal_middle_name,
-  legal_last_name, suffix, ssn, dob, phone, email
-- ID document fields: id_type, id_state, id_number, id_expiry, id_address (may differ
-  from household address for "just moved" scenarios)
-- Employment fields (empty until Part 2): employment_status, education, occupation_code,
-  occupation_title
-- Income fields (empty until Part 2): wage_income, self_employment_income,
-  social_security_income, retirement_income, interest_income, dividend_income, other_income
-- Expense fields (empty until Part 3): student_loan_interest, educator_expenses, ira_contributions
-- Dependent fields: is_dependent, can_be_claimed, months_in_home
-- Helper methods: total_income(), is_adult(), is_child(), is_senior(), to_dict()
+Pure functions over scenario data. No UI, no narrative, no curriculum logic. Encodes tax-law predicates, threshold lookups, classification tests, and computation routines. Examples: `qualifying_child_residency_test()`, `is_self_employment_threshold_met()`, `filing_threshold_for(status, year)`.
 
-**Address** — physical address:
-- street, apt (optional), city, state, zip_code
+`tax_core` is the source of truth for what is correct. The scenario generator (when computing ground truth) and the grader (when evaluating submissions) both call into the same `tax_core` functions. There is exactly one definition of correctness per rule. `tax_core` has no dependencies on the layers above it.
 
-**Household** — a group of people at one address:
-- household_id, state, year, pattern, members (List[Person]), address (Address)
-- Pattern metadata: expected_adults, expected_children_range, expected_complexity
-- Household-level expenses (Part 3): property_taxes, mortgage_interest, etc.
-- Helper methods: get_adults(), get_children(), get_householder(), get_spouse(),
-  total_household_income(), filing_status (derived property)
+### `intake` — scenario generation and presentation
 
-**FilingUnit** — a tax return within a household:
-- filing_unit_id, household_id, filing_status (enum)
-- primary_filer, spouse_filer (optional), dependents list
-- Tax fields: adjusted_gross_income, taxable_income, total_tax, refund_or_owed
+Consumes `tax_core`. Generates coherent households, runs the analyzer to attach narrative cover to generated facts, renders documents, and produces the obfuscated interview-notes view the player sees. Does not know about concepts, learner progression, or curriculum.
 
-**Enums**: FilingStatus, EmploymentStatus, RelationshipType, Race, EducationLevel
+### `learn` — curriculum and progression
 
-**PATTERN_METADATA** dict: maps pattern names to expected adults, children range,
-complexity, description, and default relationships.
+Consumes both layers below. Owns the concept catalog (predicate-based labels for tax-law features), concept-driven generation requests, player progression, and grading. The only layer that knows what a "concept" is.
 
-Reference: `HouseholdRNG/generator/models.py` — port and extend with PII fields.
+### How the original sprint structure relates to this
 
-### Step 1.2: `generator/sampler.py`
-Port directly from `HouseholdRNG/generator/sampler.py`. This is stable, well-tested code.
-
-Functions needed:
-- `weighted_sample(df, weight_col, n)` — sample rows by weight
-- `sample_from_bracket(bracket_str)` — random value from "$25-50K" style strings
-- `parse_dollar_amount(s)` — "$25K" → 25000
-- `get_age_bracket(age, brackets)` — find matching bracket
-- `match_age_bracket(age, bracket)` — check if age fits "25-34" style string
-- `sample_age_from_bracket(bracket)` — random age within bracket
-- `set_random_seed(seed)` — reproducibility
-
-### Step 1.3: Tests
-- `tests/test_models.py` — create Person, Household, verify helpers
-- `tests/test_sampler.py` — test weighted sampling, bracket parsing
-
-**Checkpoint**: `pytest tests/` passes. Models can be instantiated and serialized.
+The completed sprints were authored before the three-layer split was made explicit. They remain valid as a chronological record. They cut vertically (by feature) where the new architecture cuts horizontally (by layer). Most existing sprints map cleanly onto `intake`. The restructuring sprints (A–E, below) carve out `tax_core` and `learn` as separate concerns and migrate code accordingly. New work after Sprint 9 should follow the layered structure.
 
 ---
 
-## Sprint 2: Database Layer + Part 1 Extraction
+## Completed sprints (summary)
 
-**Goal**: Get PUMS data into SQLite so generators can consume it.
+These sprints have been implemented. Detail lives in code; this section is a quick map of what exists and where it'll move during restructuring. Update this section when sprints are reordered or rescoped.
 
-### Step 2.1: `generator/db.py`
-SQLAlchemy-based distribution table loader.
+| Sprint | Scope | Current location | Target location |
+|---|---|---|---|
+| 1 — Data Models + Sampling | `Person`, `Household`, `FilingUnit`, enums, `PATTERN_METADATA`, `weighted_sample`, bracket parsing, seed control | `generator/models.py`, `generator/sampler.py` | `intake/generator/models.py`, `intake/generator/sampler.py` |
+| 2 — Database Layer + Part 1 Extraction | SQLite distribution loader, PUMS download/cache, 12 Part 1 distribution tables (household patterns, race, age, partner, etc.) | `generator/db.py`, `extraction/pums_download.py`, `extraction/extract_part1.py` | `intake/generator/db.py`, `extraction/` (unchanged) |
+| 3 — Part 1 Generators | Demographics generator (adults: age, sex, race, relationships), child generator, pipeline orchestration | `generator/demographics.py`, `generator/children.py`, `generator/pipeline.py` | `intake/generator/*` |
+| 4 — PII Generator | Names, SSNs (test range), DOBs, addresses, ID documents, phone/email overlay onto generated households | `generator/pii.py` | `intake/generator/pii.py` |
+| 5 — Document Rendering + Templates | Jinja2 templates for SSN cards, driver licenses, Form 13614-C; HTML-to-image rendering | `training/templates/`, `training/document_renderer.py` | `intake/document_renderer.py`, `intake/templates/` |
+| 6 — Error Injection + Grading | Error injector for pre-filled forms, grader, exercise engine, scenario store | `training/error_injector.py`, `training/grader.py`, `training/exercise_engine.py`, `training/scenario_store.py` | Split: error injection → `intake/modes/review.py`; grader → `learn/grader.py`; scenario store → `intake/scenario_store.py`; exercise engine → split between `intake/` and `learn/` |
+| 7 — API | FastAPI app, scenario/config/progress routes, CLI for scenario generation | `api/`, `cli.py` | `api/` (unchanged), `cli.py` (unchanged) |
+| 8 — Web UI | Document viewer + interactive intake form (Phase 2 — partial / in progress) | `web/` or equivalent | unchanged |
+| 9 — Part 2 Income | Employment/income extraction and generation (Phase 2 — partial / in progress) | `extraction/extract_part2.py`, `generator/employment.py`, `generator/income.py` | `intake/generator/*` |
 
-- `DistributionLoader` class with `__init__(connection_string=None)`
-- Auto-detect SQLite files in `data/` directory if no connection string given
-- `load_tables(state, year, table_list)` — load specific tables as DataFrames
-- `load_part1_tables(state, year)` — convenience: loads only Part 1's 12 tables
-- `load_part2_tables(state, year)` — loads Part 2's tables (for later)
-- `load_all_tables(state, year)` — loads everything
-- `list_available_states()` — scan SQLite for available state/year combos
-- Supports both SQLite and PostgreSQL via SQLAlchemy (same interface)
-
-Part 1 tables (12):
-```
-household_patterns, children_by_parent_age, child_age_distributions,
-adult_child_ages, stepchild_patterns, multigenerational_patterns,
-unmarried_partner_patterns, race_distribution, race_by_age,
-hispanic_origin_by_age, spousal_age_gaps, couple_sex_patterns
-```
-
-Part 2 tables (12):
-```
-employment_by_age, education_by_age, disability_by_age,
-social_security, retirement_income, interest_and_dividend_income,
-other_income_by_employment_status, public_assistance_income,
-occupation_wages, education_occupation_probabilities,
-age_income_adjustments, occupation_self_employment_rates
-```
-
-Part 3 tables (3):
-```
-homeownership_rates, property_taxes, mortgage_costs
-```
-
-Reference: `HouseholdRNG/generator/database.py` — simplify, add SQLite auto-detect.
-
-### Step 2.2: `extraction/pums_download.py`
-Shared PUMS file downloader with local caching.
-
-- `download_pums_files(state, year)` → returns paths to cached CSV ZIPs
-- `load_pums_data(household_zip, person_zip)` → returns (households_df, persons_df)
-- Cache directory: `extraction/pums_cache/` (gitignored)
-- Download from: `https://www2.census.gov/programs-surveys/acs/data/pums/{year}/5-Year/`
-
-Reference: `HouseholdRNG/scripts/extract_pums.py` lines 72-152 (download + load functions).
-
-### Step 2.3: `extraction/extract_part1.py`
-Extract the 12 Part 1 distribution tables from PUMS data → SQLite.
-
-Functions to port from `HouseholdRNG/scripts/extract_pums.py`:
-- `extract_household_patterns()` (line 155)
-- `extract_children_by_parent_age()` (line 258)
-- `extract_child_age_distributions()` (line 298)
-- `extract_adult_child_ages()` (line 803)
-- `extract_stepchild_patterns()` (line 853)
-- `extract_multigenerational_patterns()` (line 928)
-- `extract_unmarried_partner_patterns()` (line 1007)
-
-New extraction functions (were in extract_pums.py but categorized as Part 1):
-- `extract_race_distribution()`
-- `extract_race_by_age()`
-- `extract_hispanic_origin_by_age()`
-- `extract_spousal_age_gaps()`
-- `extract_couple_sex_patterns()`
-
-Output: `data/distributions_{state}_{year}.sqlite`
-
-CLI: `python -m extraction.extract_part1 --state HI --year 2022`
-
-### Step 2.4: Tests
-- `tests/test_db.py` — load tables from SQLite, verify shapes
-
-**Checkpoint**: SQLite file exists for HI with 12 tables. `db.py` can load them.
+If sprint scope drifted from the original plan during implementation, edit the table to match reality before working through the restructuring sprints. The migrations in A–E assume this table is accurate.
 
 ---
 
-## Sprint 3: Part 1 Generators (Demographics + Children)
+## Vocabulary shifts
 
-**Goal**: Generate a household with members (age, sex, race, relationships) but no PII yet.
+Where old terms map to new ones. Use this when reading old code or comments.
 
-### Step 3.1: `generator/demographics.py`
-Generates adult household members with demographic attributes only.
-
-Port from `HouseholdRNG/generator/adult_generator.py` but EXCLUDE:
-- `_sample_employment_status()` → moves to `employment.py` (Sprint 6)
-- `_sample_education()` → moves to `employment.py` (Sprint 6)
-- `_sample_disability()` → moves to `employment.py` (Sprint 6)
-- `_sample_occupation()` → moves to `employment.py` (Sprint 6)
-
-KEEP:
-- `generate_adults(household)` → returns list of Person with age, sex, race, relationship
-- `_determine_adult_count(pattern, metadata)`
-- `_assign_relationships(pattern, num_adults, household)`
-- `_generate_single_adult(relationship, household, existing_adults)`
-- `_sample_age()` and all age-related helpers (householder, spouse, partner, parent)
-- `_sample_sex()`
-- `_sample_race(age)`
-- `_sample_hispanic_origin(age)`
-
-Required tables: household_patterns, race_distribution, race_by_age,
-hispanic_origin_by_age, spousal_age_gaps, couple_sex_patterns
-
-### Step 3.2: `generator/children.py`
-Port from `HouseholdRNG/generator/child_generator.py` mostly as-is.
-
-- `generate_children(household)` → returns list of child Person objects
-- Child ages based on parent ages and distributions
-- Relationship types: biological_child, adopted_child, stepchild, grandchild
-- Race inherited from parents
-
-Required tables: children_by_parent_age, child_age_distributions,
-adult_child_ages, stepchild_patterns
-
-### Step 3.3: `generator/pipeline.py`
-Orchestrates generation by VITA section.
-
-```python
-class HouseholdGenerator:
-    def __init__(self, state, year, connection_string=None):
-        self.db = DistributionLoader(connection_string)
-        self.distributions = self.db.load_part1_tables(state, year)
-        self.demographics = DemographicsGenerator(self.distributions)
-        self.children = ChildGenerator(self.distributions)
-
-    def generate_part1(self, pattern=None, seed=None):
-        """Generate household with structure + demographics only."""
-        household = self._select_pattern(pattern)
-        adults = self.demographics.generate_adults(household)
-        household.members = adults
-        children = self.children.generate_children(household)
-        household.members.extend(children)
-        return household
-```
-
-### Step 3.4: Tests
-- `tests/test_demographics.py` — generate adults, verify age/sex/race populated
-- `tests/test_children.py` — generate children for various patterns
-- `tests/test_pipeline.py` — end-to-end Part 1 generation
-
-**Checkpoint**: `python -c "from generator.pipeline import HouseholdGenerator; g = HouseholdGenerator('HI', 2022); h = g.generate_part1(); print(h.to_dict())"` works.
-
----
-
-## Sprint 4: PII Generator
-
-**Goal**: Overlay realistic names, SSNs, DOBs, and addresses onto generated households.
-
-### Step 4.1: `generator/pii.py`
-Takes a Household from Sprint 3 and populates PII fields on each Person.
-
-**Name generation:**
-- Use Faker with locale hints based on Person.race and hispanic_origin
-- Spouse may have different last name (maiden name scenarios, ~30% probability)
-- Children share a parent's last name (biological) or may differ (stepchildren)
-- Blended families have mixed last names
-- Occasional suffixes (Jr., III) when father/son share first name
-
-**SSN generation:**
-- Always 9XX-XX-XXXX (IRS test/advertising range, never issued to real people)
-- Unique within household
-- Format: "9{2 random digits}-{2 random digits}-{4 random digits}"
-
-**DOB generation:**
-- Calculate from Person.age and tax_year
-- Random month and day within the valid year
-- Edge cases: born on Dec 31 (affects tax year age), born on Jan 1
-
-**Address generation:**
-- One household address shared by all members
-- Generated with Faker, state matching Household.state
-- ID address usually matches household address
-- ~15% chance of "just moved" scenario (ID has old address)
-
-**ID document details:**
-- id_type: "drivers_license" for adults, none for children
-- id_state: matches household state
-- id_number: state-specific format (see docs/DATA_DICTIONARY.md)
-- id_expiry: 4-8 years from issue, may be expired (~10% chance)
-
-**Phone and email:**
-- One phone per adult (Faker)
-- Email for primary filer (Faker)
-
-```python
-class PIIGenerator:
-    def overlay(self, household: Household, tax_year: int = 2024) -> Household:
-        """Populate PII fields on all persons in household. Modifies in place."""
-```
-
-### Step 4.2: Tests
-- `tests/test_pii.py` — verify names generated, SSNs in 9XX range, DOBs match ages,
-  addresses consistent within household, last name logic for blended families
-
-**Checkpoint**: Generate household → overlay PII → print full profile with names/SSNs/DOBs.
-
----
-
-## Sprint 5: Document Rendering + Templates
-
-**Goal**: Produce SSN card images, driver's license images, blank/filled intake forms.
-
-### Step 5.1: `training/templates/base.css`
-Shared CSS: watermark overlay, font stacks (monospace for SSN/ID numbers),
-print-friendly sizing.
-
-### Step 5.2: `training/templates/ssn_card.html`
-Jinja2 template for Social Security card mock-up.
-- Fields: legal name (first middle last), SSN
-- "SAMPLE — FOR TRAINING USE ONLY" watermark
-- Card dimensions: standard SSN card ratio (~3.375" × 2.125")
-
-### Step 5.3: `training/templates/drivers_license.html`
-Jinja2 template for state driver's license mock-up.
-- Fields: name, DOB, address, sex, ID number, expiry, photo placeholder
-- State parameter controls header/layout (start with generic, add HI-specific later)
-- Photo: placeholder silhouette for MVP, generated face for later
-- Watermark
-
-### Step 5.4: `training/templates/form_13614c_p1.html`
-Form 13614-C Part I as an HTML form.
-- Two modes: blank (student fills in) or pre-filled (student verifies)
-- Fields match IRS form layout (see docs/VITA_FORM_FIELDS.md)
-- Interactive version for web UI (input fields)
-- Static version for PDF export (text in field positions)
-
-### Step 5.5: `training/document_renderer.py`
-Renders templates to images (PNG) or PDF.
-
-```python
-class DocumentRenderer:
-    def render_ssn_card(self, person: Person) -> Path:
-    def render_drivers_license(self, person: Person) -> Path:
-    def render_intake_form(self, household: Household, prefilled: bool = False) -> Path:
-    def render_1040_header(self, household: Household) -> Path:   # Future
-    def render_w2(self, person: Person) -> Path:                   # Future
-```
-
-Uses Jinja2 for template rendering, WeasyPrint or Playwright for HTML → image/PDF.
-
-### Step 5.6: Tests
-- `tests/test_document_renderer.py` — render each doc type, verify files created
-
-**Checkpoint**: CLI generates household → overlay PII → render SSN card + DL as PNG files.
-
----
-
-## Sprint 6: Error Injection + Grading
-
-**Goal**: Seed discrepancies and grade student responses.
-
-### Step 6.1: `training/error_injector.py`
-Modifies rendered documents or pre-filled intake to introduce errors.
-
-Error categories for Part 1:
-- **name**: middle name missing, maiden vs married, suffix wrong, nickname vs legal
-- **ssn**: transposed digits, one digit off, dependent SSN reuses filer's
-- **address**: old address on ID, apt number missing, abbreviation mismatch
-- **dob**: month/day swapped, year off by 1, makes dependent age-ineligible
-- **filing_status**: wrong status selected given household composition
-- **dependent**: child >19 claimed, <6 months residency, relationship wrong
-- **expiration**: expired driver's license
-
-```python
-class ErrorInjector:
-    def inject(self, profile: Household, difficulty: str, error_count: int)
-        -> Tuple[Household, List[InjectedError]]:
-        """Returns modified household + manifest of what was changed."""
-```
-
-~15% of scenarios should be error-free (tests student confidence in clean docs).
-
-### Step 6.2: `training/grader.py`
-Compares student submission to ground truth.
-
-```python
-class Grader:
-    def grade_intake(self, submission: dict, ground_truth: Household) -> GradingResult:
-        """Mode 1: Student filled blank intake from source docs."""
-
-    def grade_verification(self, flagged_errors: List[dict],
-                          actual_errors: List[InjectedError]) -> GradingResult:
-        """Mode 2: Student identified discrepancies."""
-```
-
-GradingResult includes: score, max_score, correct_flags, missed_flags,
-false_flags, accuracy, narrative feedback, field-level feedback.
-
-### Step 6.3: `training/exercise_engine.py`
-Orchestrates full scenario creation.
-
-```python
-class ExerciseEngine:
-    def generate_scenario(self, state, mode, difficulty, ...) -> Scenario:
-        """Full pipeline: generate → PII → render docs → inject errors → package."""
-```
-
-### Step 6.4: `training/scenario_store.py`
-SQLite CRUD for persisting scenarios, submissions, and grades.
-
-### Step 6.5: Tests
-- `tests/test_error_injector.py`
-- `tests/test_grader.py`
-
-**Checkpoint**: Generate scenario with errors → grade a mock submission → get feedback.
-
----
-
-## Sprint 7: API
-
-**Goal**: Serve scenarios via REST endpoints.
-
-### Step 7.1: `api/main.py`
-FastAPI app setup, CORS, lifespan (initialize generator + scenario store).
-
-### Step 7.2: `api/routes/scenarios.py`
-- `POST /api/v1/scenarios` — generate new scenario
-- `GET /api/v1/scenarios/{id}` — get scenario metadata + document URLs
-- `GET /api/v1/scenarios/{id}/documents/{filename}` — serve document image
-- `POST /api/v1/scenarios/{id}/submit` — submit answers for grading
-- `GET /api/v1/scenarios/{id}/answer-key` — get answer key (after submit)
-
-### Step 7.3: `api/routes/config.py`
-- `GET /api/v1/config/states` — available states
-- `GET /api/v1/config/patterns/{state}` — household patterns for a state
-
-### Step 7.4: `api/routes/progress.py`
-- `GET /api/v1/progress` — student history, scores over time
-
-### Step 7.5: `cli.py`
-Command-line interface for generating scenarios without the API.
-
-```bash
-python cli.py generate --mode intake --difficulty easy --state HI
-python cli.py generate --mode verify --difficulty medium --errors 3
-python cli.py batch --count 10 --output ./packets/
-```
-
-**Checkpoint**: API running, can generate scenario via curl, view documents in browser.
-
----
-
-## Sprint 8: Web UI (Phase 2)
-
-**Goal**: Interactive browser interface.
-
-- Document viewer (left panel): SSN cards, DL images
-- Form (right panel): editable 13614-C Part I
-- Grade button → inline feedback
-- Progress dashboard
-
-Tech: React, HTMX, or plain HTML + vanilla JS — decide when you get here.
-
----
-
-## Sprint 9: Expand to Part 2 — Income
-
-**Goal**: Generate realistic employment/income data and render the source
-documents (W-2, 1099 family) that students use to verify income on the intake
-form.
-
-Each income type maps to a specific IRS source form:
-
-| Person Field | Source Form | Description |
+| Old term | New term | Lives in |
 |---|---|---|
-| `wage_income` | **W-2** | Wages, salaries, tips from employers |
-| `interest_income` | **1099-INT** | Bank/savings interest |
-| `dividend_income` | **1099-DIV** | Stock/mutual fund dividends |
-| `retirement_income` | **1099-R** | Pensions, IRA distributions, annuities |
-| `social_security_income` | **SSA-1099** | Social Security benefits |
-| `self_employment_income` | **1099-NEC** | Freelance/gig/contract work |
-| `other_income` | **1099-G, 1099-MISC** | Unemployment, misc income |
-
-The sprint is divided into foundation work, per-form tasks, and integration.
+| `training/` | split between `intake/` (rendering, modes) and `learn/` (grading, progression) | — |
+| "Error injection" | "Review mode corruption" | `intake/modes/review.py` |
+| "Exercise engine" | Lifecycle orchestrator | `intake/orchestrator.py` (new) |
+| "Profile" or raw `Household` | `Scenario` (envelope object — wraps household and adds ground truth, concepts, slots, notes) | `intake/scenario.py` (new) |
+| "Difficulty" as info-hiding | Subtlety dial on obfuscation layer + concept count/complexity | per-slot, per-concept |
+| "Answer key" | `ground_truth` field on `Scenario` | `tax_core/ground_truth.py` |
 
 ---
 
-### Foundation (must land before any form task)
+## Restructuring sprints
 
-### Step 9.1: Model extensions — `generator/models.py`
+These sprints carve out the layered architecture without rewriting the engine. Each produces a working system. Do not skip ahead.
 
-Extend Person and add new dataclasses for income documents:
+### Restructure A: Carve out `tax_core`
 
-**Employer** dataclass:
-- employer_name, employer_ein, employer_address (Address)
-- Used by W-2 and 1099-NEC
+**Goal:** Establish the rules-engine layer as a pure, dependency-free module.
 
-**W2** dataclass (one per job):
-- employer (Employer), employee (Person reference)
-- Box 1: wages, Box 2: federal_tax_withheld
-- Box 3: social_security_wages, Box 4: social_security_tax
-- Box 5: medicare_wages, Box 6: medicare_tax
-- Box 12a-d: coded items (retirement contributions, etc.)
-- Box 15-17: state/local tax info
-- control_number
+**Prerequisites:** Sprints 1–3 complete (existing code has tax-rule logic worth extracting).
 
-**Form1099INT** dataclass:
-- payer_name, payer_tin
-- Box 1: interest_income, Box 3: us_savings_bond_interest
-- Box 4: federal_tax_withheld
+**Operation:**
 
-**Form1099DIV** dataclass:
-- payer_name, payer_tin
-- Box 1a: ordinary_dividends, Box 1b: qualified_dividends
-- Box 2a: capital_gain_distributions
-- Box 4: federal_tax_withheld
+1. Create `tax_core/` at the repo root.
+2. Identify all tax-rule logic currently embedded in generators, the grader, the error injector, or anywhere else. Examples: filing-status determination from household composition, dependency tests, filing thresholds, Schedule A substantiation rules.
+3. Move that logic into `tax_core/predicates/` (one module per family: `dependency.py`, `filing_status.py`, `income.py`, `deductions.py`) and `tax_core/thresholds.py`.
+4. Replace the original call sites with imports from `tax_core`. The behavior must not change — this is a reorganization, not a rewrite.
+5. Add unit tests in `tests/tax_core/` that exercise predicates against hand-built `Household` fixtures. These tests are the regression suite for every future change.
 
-**Form1099R** dataclass:
-- payer_name, payer_tin
-- Box 1: gross_distribution, Box 2a: taxable_amount
-- Box 4: federal_tax_withheld, Box 7: distribution_code
-- Box 7 codes: "7" (normal), "1" (early), "3" (disability), "4" (death)
+**Output:**
 
-**SSA1099** dataclass:
-- Box 3: total_benefits, Box 4: benefits_repaid
-- Box 5: net_benefits (the key training field)
+- `tax_core/` exists with predicates, thresholds, and tests.
+- The import graph is clean: nothing under `tax_core/` imports from `intake/`, `learn/`, or `api/`. Enforce this in CI if practical (e.g., via `grep` in a pre-commit check).
 
-**Form1099NEC** dataclass:
-- payer_name, payer_tin
-- Box 1: nonemployee_compensation
+**Checkpoint:** All existing tests pass. The import graph constraint holds. `tax_core` is independently importable.
 
-Extend **Person**:
-- `w2s: List[W2]` — one per employer (most people have 1-2)
-- `form_1099_ints: List[Form1099INT]`
-- `form_1099_divs: List[Form1099DIV]`
-- `form_1099_rs: List[Form1099R]`
-- `ssa_1099: Optional[SSA1099]`
-- `form_1099_necs: List[Form1099NEC]`
-- `employer_name, employer_ein` — primary employer (for intake form)
-
-### Step 9.2: `extraction/extract_part2.py`
-
-Extract employment and income distributions from PUMS data → SQLite.
-
-Distribution tables (from DATA_DICTIONARY.md):
-- `employment_by_age` — ESR by age bracket (employed/unemployed/NILF)
-- `education_by_age` — SCHL by age bracket
-- `disability_by_age` — DIS by age bracket
-- `social_security` — SSP+SSIP by age bracket
-- `retirement_income` — RETP by age bracket
-- `interest_and_dividend_income` — INTP by age bracket
-- `other_income_by_employment_status` — OIP by ESR
-- `public_assistance_income` — PAP by income bracket
-- `bls_occupation_wages` — BLS OEWS wage data by SOC code
-- `education_occupation_probabilities` — SCHL × OCCP cross-tab
-- `age_income_adjustments` — AGEP × WAGP adjustment factors
-- `occupation_self_employment_probability` — OCCP × COW rates
-
-Output: appended to `data/distributions_{state}_{year}.sqlite`
-
-CLI: `python -m extraction.extract_part2 --state HI --year 2022`
-
-Reference: `HouseholdRNG/scripts/extract_pums.py` + `extract_bls.py`
-
-### Step 9.3: `generator/employment.py`
-
-Assign employment attributes to each adult Person. Reads Part 2
-distribution tables and populates:
-- `employment_status` — sampled from employment_by_age
-- `education` — sampled from education_by_age
-- `occupation_code` + `occupation_title` — sampled from
-  education_occupation_probabilities, weighted by education level
-- `has_disability` — sampled from disability_by_age
-
-Port from `HouseholdRNG/generator/adult_generator.py`:
-- `_sample_employment_status(age)`
-- `_sample_education(age)`
-- `_sample_disability(age)`
-- `_sample_occupation(education, age)`
-
-### Step 9.4: `generator/income.py`
-
-Assign income amounts by type for each adult Person. Creates the income
-document objects (W2, 1099-INT, etc.) and attaches them.
-
-Core logic:
-- **Wages**: Look up occupation in bls_occupation_wages, apply
-  age_income_adjustments, add variance. Generate 1-2 W-2s per employed
-  person.
-- **Self-employment**: occupation_self_employment_probability determines
-  if any SE income. Generate 1099-NEC if so.
-- **Interest/dividends**: age-correlated probability and amount from
-  interest_and_dividend_income. Generate 1099-INT / 1099-DIV.
-- **Social Security**: age 62+ from social_security distributions.
-  Generate SSA-1099.
-- **Retirement**: age 55+ from retirement_income distributions.
-  Generate 1099-R.
-- **Withholding calculations**: federal tax withheld estimated from
-  income bracket + filing status. SS tax = 6.2% of wages (capped).
-  Medicare = 1.45% of wages.
-
-Also generates:
-- Employer name (Faker), EIN (random format XX-XXXXXXX), employer address
-- Payer names for 1099s (bank names, brokerage names via Faker)
-- Payer TINs
+**Failure mode to watch for:** The temptation to "improve" predicates while moving them. Resist. Move first, refactor in a follow-up sprint if warranted.
 
 ---
 
-### Per-Form Tasks
+### Restructure B: Add ground truth computation
 
-### Step 9.A: W-2 — Template + Renderer
+**Goal:** Every generated scenario carries a canonical answer key from the moment of creation.
 
-**Template**: `training/templates/w2.html`
-- Generic IRS-standard layout (not vendor-specific for now)
-- All boxes labeled by number (Box 1, Box 2, etc.)
-- Employer info section (name, EIN, address)
-- Employee info section (name, SSN, address)
-- Watermark: "SAMPLE — FOR TRAINING USE ONLY"
-- Future: W-2 vendor variants (ADP, Paychex, etc.) for layout training
+**Prerequisites:** Restructure A complete.
 
-**Renderer**: Add to `training/document_renderer.py`
-- `render_w2_html(person: Person, w2_index: int = 0) -> str`
-- Handles multiple W-2s per person
+**Operation:**
 
-**Tests**: Render W-2 for person with wage income, verify HTML contains
-correct box values, employer name, SSN.
+1. Add `tax_core/ground_truth.py` with a function `compute_ground_truth(scenario) -> GroundTruth`.
+2. The function runs `tax_core` predicates and computations over a generated scenario's facts and produces a structured object containing: `filing_status`, per-person `dependent_status`, `agi`, `taxable_income`, `total_tax`, `refund_or_owed`, `credits_claimed`, `deductions_claimed`, plus per-predicate detail objects where the predicate returns rich results.
+3. Wire `compute_ground_truth` into the generation pipeline immediately after generation completes.
+4. Add a `ground_truth` field to the `Scenario` envelope (introduce the envelope here if it doesn't exist yet — it wraps the existing `Household` plus lifecycle metadata).
+5. Migrate the grader to compare submissions against `scenario.ground_truth` instead of recomputing answers ad-hoc.
 
-### Step 9.B: 1099-INT + 1099-DIV — Templates + Renderers
+**Output:**
 
-**Templates**:
-- `training/templates/1099_int.html` — interest income
-  - Payer name/TIN, recipient name/SSN
-  - Box 1 (interest income), Box 3 (US savings bonds), Box 4 (fed withheld)
-- `training/templates/1099_div.html` — dividend income
-  - Payer name/TIN, recipient name/SSN
-  - Box 1a (ordinary dividends), Box 1b (qualified), Box 2a (cap gains)
+- Every scenario has `ground_truth` populated before being served.
+- The grader has exactly one source of truth.
 
-These two forms share nearly identical structure — consider a shared
-base layout with form-specific box sections.
+**Checkpoint:** Generate a scenario, inspect `ground_truth`, hand-verify the values are correct against the household's facts. Run a submission through the grader and confirm it scores against `ground_truth`.
 
-**Renderer**: Add to `training/document_renderer.py`
-- `render_1099_int_html(person: Person, index: int = 0) -> str`
-- `render_1099_div_html(person: Person, index: int = 0) -> str`
-
-**Tests**: Render each form, verify box values match Person income fields.
-
-### Step 9.C: SSA-1099 + 1099-R — Templates + Renderers
-
-**Templates**:
-- `training/templates/ssa_1099.html` — Social Security benefits
-  - SSA as payer, beneficiary name/SSN
-  - Box 3 (total benefits), Box 4 (repaid), Box 5 (net benefits)
-  - Distinctive blue/government styling
-- `training/templates/1099_r.html` — retirement distributions
-  - Payer name/TIN, recipient name/SSN
-  - Box 1 (gross distribution), Box 2a (taxable amount)
-  - Box 7 (distribution code — important for tax treatment)
-
-**Renderer**: Add to `training/document_renderer.py`
-- `render_ssa_1099_html(person: Person) -> str`
-- `render_1099_r_html(person: Person, index: int = 0) -> str`
-
-**Tests**: Render each form, verify amounts and distribution codes.
-
-### Step 9.D: 1099-NEC — Template + Renderer
-
-**Template**: `training/templates/1099_nec.html`
-- Payer name/TIN (business that paid contractor)
-- Recipient name/SSN
-- Box 1: nonemployee compensation (the main field)
-- Simple form but different generation context (self-employment)
-
-**Renderer**: Add to `training/document_renderer.py`
-- `render_1099_nec_html(person: Person, index: int = 0) -> str`
-
-**Tests**: Render form, verify Box 1 matches self_employment_income.
+**Failure mode to watch for:** Ground truth drifting from what the grader actually compares to. If you find yourself adding logic to the grader that should be in `compute_ground_truth`, move it.
 
 ---
 
-### Integration
+### Restructure C: Build the analyzer and starter slots
 
-### Step 9.E: Extend form fields + populator for Part 2
+**Goal:** Replace ad-hoc interview-notes generation with a slot-based analyzer that produces narrative cover for generated facts.
 
-**`training/form_fields.py`**: Add income field constants matching
-Form 13614-C Part II income questions:
-- `INCOME_WAGES` — wages, salaries, tips (from W-2s)
-- `INCOME_INTEREST` — interest income (from 1099-INT)
-- `INCOME_DIVIDENDS` — dividend income (from 1099-DIV)
-- `INCOME_SOCIAL_SECURITY` — SS benefits (from SSA-1099)
-- `INCOME_RETIREMENT` — pensions/annuities (from 1099-R)
-- `INCOME_SELF_EMPLOYMENT` — self-employment (from 1099-NEC)
-- Per-source yes/no checkboxes + amount fields
+**Prerequisites:** Restructure B complete. Read the Stage 3 and Stage 6 sections of `SCENARIO_LIFECYCLE.md` before starting.
 
-**`training/form_populator.py`**: Extend `build_field_values()` to
-populate income fields from Person's income document objects.
+**Operation:**
 
-### Step 9.F: Extend intake form, grader, and error injector
+1. Create `intake/analyzer/` with `analyzer.py` (orchestrator) and `slots/` (one module per slot family).
+2. Define the `Slot` and `NarrativeTemplate` base classes per the worked example in `SCENARIO_LIFECYCLE.md`.
+3. Implement three starter slots covering the highest-frequency cases:
+   - `zero_income_reason` — fires when a person has zero total income.
+   - `dependent_residency` — fires when a child's `months_in_home < 12`.
+   - `address_mismatch` — fires when an ID address differs from the household address.
+4. For each slot, implement at least three narrative templates with distinct `requirements()` predicates. Each template produces `InterviewNote` objects at three subtlety levels (`obvious`, `moderate`, `subtle`).
+5. Add the analyzer to the pipeline. It runs after generation, before ground truth. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
+6. Build the obfuscator (`intake/obfuscator.py`) that calls each fired template's `render()` method at the chosen subtlety and assembles `scenario.interview_notes`.
+7. Update the player UI to read from `scenario.interview_notes` instead of any hardcoded interview structure.
 
-**Intake form**: Add Part II income section to `form_13614c_p1.html`
-(or create `form_13614c_p2.html`). Income questions with input fields.
+**Output:**
 
-**Error injector**: New income error types:
-- W-2 wage amount doesn't match intake total
-- Wrong employer name on intake vs W-2
-- Missing 1099 income (student forgets a source)
-- SSN mismatch between W-2 and SSN card
-- Transposed digits on income amounts
+- The interview-notes table in the player UI is populated from templates rendered against the generated household.
+- Unrescuable scenarios trigger reroll instead of being served.
 
-**Grader**: Extend `grade_intake()` and `grade_verification()` to
-cover income fields. Income amount matching with tolerance (allow
-rounding differences).
+**Checkpoint:** Generate ten scenarios. Confirm the interview notes vary, make narrative sense, and never contradict the generated facts. At least one should trigger a reroll due to slot failure (induce this with a constrained generation if needed).
 
-### Step 9.G: API routes for income documents
-
-Add endpoints to `api/routes/scenarios.py`:
-- `GET /scenarios/{id}/documents/w2/{person_id}/{index}` — W-2 HTML
-- `GET /scenarios/{id}/documents/1099-int/{person_id}/{index}`
-- `GET /scenarios/{id}/documents/1099-div/{person_id}/{index}`
-- `GET /scenarios/{id}/documents/ssa-1099/{person_id}`
-- `GET /scenarios/{id}/documents/1099-r/{person_id}/{index}`
-- `GET /scenarios/{id}/documents/1099-nec/{person_id}/{index}`
-
-Update exercise page to list all available income documents.
-
-### Step 9.H: Tests
-
-Tests are written alongside each step above, but the final checkpoint
-is an end-to-end integration test:
-- Generate household with PII + employment + income
-- Render all applicable income documents
-- Verify income fields populated on intake form
-- Inject income errors, grade, verify feedback
-
-**Checkpoint**: Full Part 2 gameplay loop works — generate scenario with
-income → view W-2s and 1099s in browser → fill income section of intake
-form → grade → get feedback on income fields.
+**Failure mode to watch for:** Templates that lie about ground truth. The obfuscation layer must preserve truth — it can introduce ambiguity, not contradictions.
 
 ---
 
-## Sprint 10: Multi-Section Intake UI
+### Restructure D: Concept catalog (generate-then-tag)
 
-The backend pipeline (Sprint 9) generates income data and documents, but
-the web UI only presents Part I of the 13614-C intake form. Sprint 10
-adds the Part II income form as a separate page and establishes the
-multi-section navigation pattern that Part III (expenses) will follow.
+**Goal:** Every scenario carries metadata identifying which tax-law features it exercises.
 
-### Design
+**Prerequisites:** Restructure C complete.
 
-The real IRS Form 13614-C is a multi-page document:
+**Operation:**
 
-- **Page 1 / Part I** — Personal Information (Sections A–F)
-- **Page 2 / Part II** — Income
-- **Page 3 / Part III** — Expenses & Life Events (future)
+1. Create `learn/concepts/` with one module per concept family (`dependency.py`, `filing_status.py`, `income.py`, `deductions.py`).
+2. Define the `Concept` base class with `matches(scenario) -> bool` and `generation_hints() -> GenerationHints` methods.
+3. Implement a starter set of three concepts for initial validation:
+   - `qualifying_child_residency`
+   - `hoh_qualifying_person`
+   - `refundable_credit_only_filer`
+4. Add `learn/concept_catalog.py` with an explicit registry (no autodiscovery) and a `run_all(scenario) -> set[str]` method.
+5. Wire concept labeling into the pipeline at Stage 5 (after ground truth, before obfuscation rendering). Every scenario gets `concept_tags` populated.
+6. Surface concept tags in the post-game screen (or wherever grading results are shown). The player sees what they were tested on after submission.
 
-The app mirrors this with separate form routes per section:
+**Output:**
 
-```
-GET /scenarios/{id}/form           → Part I  (personal info)
-GET /scenarios/{id}/form/income    → Part II (income)
-GET /scenarios/{id}/form/expenses  → Part III (future)
-```
+- Every scenario has `concept_tags` populated.
+- Post-game UI shows which concepts were exercised.
 
-Each form page:
-1. Submits only its own fields to a section-specific endpoint
-2. Shows a section nav bar (Part I / Part II / ...) so students can
-   move between sections in any order
-3. Pre-fills fields in verify mode (same as Part I today)
-4. Grades independently — the grader already handles partial submissions
+**Checkpoint:** Generate twenty scenarios and inspect their concept tags. Confirm the tags actually correspond to features present in the scenario. A scenario with a borderline-residency child should fire `qualifying_child_residency`; a scenario without one should not.
 
-The exercise landing page shows one button per available section
-instead of a single "Open Intake Form" button.
-
-### Step 10.A: Part II Income Form Page
-
-Add `GET /scenarios/{id}/form/income` route that renders an interactive
-HTML form with:
-- 6 income source rows, each with a checkbox and dollar amount input
-  (wages, interest, dividends, social security, retirement,
-  self-employment)
-- Total income field
-- Section nav bar linking to Part I and Part II
-- Pre-fill support for verify mode
-- POST to a section-aware submit endpoint
-
-**Files**: `api/routes/scenarios.py`
-
-**Checkpoint**: Navigate to `/scenarios/{id}/form/income` in the browser,
-see the income form, fill it in manually.
-
-### Step 10.B: Section-Aware Submission & Grading
-
-Update the submission flow so each section can be graded independently:
-- `POST /scenarios/{id}/submit/intake` — grades Part I fields only
-- `POST /scenarios/{id}/submit/income` — grades Part II fields only
-- Each returns a results page scoped to that section's fields
-- Grades are saved per-section so the landing page can show progress
-  (e.g., "Part I: 95%, Part II: not yet submitted")
-
-Alternatively, keep a single submit endpoint but partition feedback
-by section in the results display.
-
-**Files**: `api/routes/scenarios.py`
-
-**Checkpoint**: Submit the income form, see graded results for income
-fields only.
-
-### Step 10.C: Exercise Landing Page & Navigation
-
-Update the exercise landing page (`GET /scenarios/{id}`) to:
-- Show separate buttons for each form section (Part I, Part II)
-- Display per-section grade status if previously graded
-- Group document links by type (identity docs vs income docs) with
-  clear visual separation
-- Add section nav bar to Part I form page (matching Part II)
-
-**Files**: `api/routes/scenarios.py`
-
-**Checkpoint**: Landing page shows two form buttons. Each form page has
-a nav bar to switch between sections. Previously graded sections show
-scores on the landing page.
-
-### Step 10.D: Tests
-
-- Test Part II form renders with correct field names and pre-fill
-- Test Part II submission parses income fields and grades correctly
-- Test section nav links appear on both form pages
-- Test landing page shows per-section grade status
-- Test verify mode pre-fills income fields with injected errors
-
-**Checkpoint**: All tests pass. Full user flow works in browser:
-generate scenario → review income documents → fill Part II form →
-submit → see income-specific feedback → navigate to Part I → submit →
-see personal info feedback.
+**Failure mode to watch for:** Concepts that fire too eagerly (false positives) or too rarely (false negatives). Predicates need to be exact; "almost" doesn't count.
 
 ---
 
-## Future: Additional Income Generators
+### Restructure E: Targeted generation
 
-Sprint 9 covers the six most common VITA Basic income types. The real
-IRS Form 13614-C Part II lists ~15 income categories. The remaining
-types need their own extract → generate → render cycle before they
-can be added to the intake form and graded.
+**Goal:** Players can request scenarios that exercise specific concepts.
 
-### VITA Basic level (high priority)
+**Prerequisites:** Restructure D complete. This is the most fragile sprint and should not be attempted until A–D are stable in production.
 
-| Income Type | Document | Generator Needed | Notes |
-|-------------|----------|-----------------|-------|
-| Tips | W-2 (Box 7/8) | Extend W2 model | Already on W-2, add tip fields |
-| Unemployment | 1099-G | New model + generator | State unemployment benefits |
-| Disability benefits | 1099-R / W-2 | Extend existing | Distribution code "3" on 1099-R |
+**Operation:**
 
-### VITA Advanced level (medium priority)
+1. Add a `concepts` parameter to the `ScenarioRequest` model.
+2. In the orchestrator, when concepts are requested, query their `generation_hints()` and merge into the generator's hint object.
+3. After generation, verify all requested concepts actually fired (in Stage 5). If not, reroll with a new seed up to `MAX_GEN_ATTEMPTS`.
+4. Surface the concept selector in the scenario-generation UI — replace the old "Difficulty: easy/medium/hard" dropdown with a concept picker plus a subtlety slider.
+5. Document the failure path: if `MAX_GEN_ATTEMPTS` is exhausted, surface a clear error to the player ("This concept combination is too rare or contradictory; try fewer concepts").
 
-| Income Type | Document | Generator Needed | Notes |
-|-------------|----------|-----------------|-------|
-| Stock/bond sales | 1099-B | New model + generator | Cost basis, short/long term |
-| Rental income | Schedule E | New model + generator | Rental expenses offset |
-| Gambling winnings | W-2G | New model + generator | Withholding varies |
-| Alimony | None (verbal) | Client profile fact | Pre-2019 vs post-2019 rules |
-| State/local refund | 1099-G (Box 2) | Extend 1099-G model | Only taxable if itemized prior year |
+**Output:**
 
-### Out of scope for VITA
+- Concept-driven generation works end to end.
+- The UI exposes it cleanly.
 
-| Income Type | Reason |
-|-------------|--------|
-| 1099-K (payment apps) | Reporting threshold changes; complex |
-| 1099-MISC (miscellaneous) | Mostly replaced by 1099-NEC for VITA |
-| Foreign income | Not in VITA scope |
-| Crypto/digital assets | Not in VITA Basic/Advanced scope |
+**Checkpoint:** For each starter concept, request a scenario targeting only that concept and verify the resulting scenario fires it. Then request two concepts simultaneously and verify both fire. Then request a deliberately incompatible pair and confirm graceful failure.
 
-Each new income type follows the same sprint pattern:
-1. Add model dataclass and document fields
-2. Add distribution data or generation logic
-3. Add Jinja2 template for document rendering
-4. Add form fields, populator entries, and error injection targets
-5. Add grading support and tests
-
-The intake form UI (Sprint 10) is designed to accept new income rows
-without structural changes — each row is a checkbox + amount input
-keyed by field name.
+**Failure mode to watch for:** Generation hints from different concepts conflicting silently. Add hint-conflict detection (or document that last-write-wins is the policy) before this sprint ships.
 
 ---
 
-## Future: Zero-Income Household Filtering
+## Beyond restructuring
 
-About 10% of generated households end up with zero income and no tax
-documents. This happens when all adults are sampled as `unemployed` or
-`not_in_labor_force` and the probabilistic investment/SS/retirement
-income assignments also produce nothing.
+Once A–E are complete, new work follows the layered structure naturally:
 
-In real life, these households typically **don't need to file** (below
-the filing threshold) and wouldn't visit a VITA site — unless filing
-voluntarily for refundable credits (EITC, CTC, recovery rebate).
-Either way, a zero-income scenario makes for a poor training exercise
-since there's nothing to practice on the income form.
+- New tax rules → new predicates in `tax_core/predicates/`.
+- New scenario types → new generation hints + slots in `intake/`.
+- New training drills → new concepts in `learn/concepts/`.
+- New form sections (Part IV, Part V, etc.) → cross-layer additions, but each layer's contribution is local.
 
-### Recommended approach
-
-Filter at the **exercise level**, not the generator level. Keep the
-generators statistically honest — they produce what the data says.
-The `ExerciseEngine` decides whether a scenario is useful for training.
-
-**Implementation:**
-- In `ExerciseEngine.generate_scenario()`, after generation, check
-  whether the household has at least one income document (W-2, 1099,
-  or SSA-1099)
-- If not, regenerate with a new seed (up to N retries, e.g. 5)
-- If all retries produce zero income, accept the scenario but add a
-  client fact noting "Client is filing to claim refundable credits"
-- Optionally log a warning so we can tune the distributions if the
-  retry rate is too high
-
-**Files:** `training/exercise_engine.py`
-
-**Why not fix in the generators:**
-- The employment/income distributions reflect real Census data — some
-  people genuinely have no income
-- Special-casing "force at least one employed adult" distorts the
-  demographics and creates odd scenarios (e.g. forcing a 75-year-old
-  retiree into employment)
-- Filtering at the exercise layer cleanly separates statistical
-  accuracy from training usefulness
+Each future VITA section follows the existing pattern: extract distributions → generate facts → render documents → analyze and obfuscate → tag concepts → grade.
 
 ---
 
-## Future: Revisit Difficulty Design
+## Testing surface
 
-The current difficulty system (`easy`, `medium`, `hard`) only controls
-which client facts (verbal interview notes) are shown to the student.
-This is a narrow definition — at `hard`, facts like employment status
-are withheld, but the student can still read it directly off the W-2.
-The difficulty lever doesn't meaningfully change how hard the exercise
-actually is.
+Each layer has its own test directory:
 
-In a real VITA training context, difficulty could come from multiple
-dimensions:
+- `tests/tax_core/` — unit tests of predicates and computations against hand-built scenarios.
+- `tests/intake/generator/` — existing generator tests; no change.
+- `tests/intake/analyzer/` — slot firing logic and template requirement matching.
+- `tests/intake/obfuscator/` — snapshot tests on rendered interview notes per subtlety level.
+- `tests/learn/concepts/` — each concept tested against scenarios that should and should not match.
+- `tests/end_to_end/` — full lifecycle smoke tests producing scenarios from fixed seeds and asserting all expected fields populated.
 
-| Dimension | Easy | Medium | Hard |
-|-----------|------|--------|------|
-| **Information availability** | All client facts provided | Required facts only | Minimal/no verbal facts |
-| **Household complexity** | Single adult, one W-2 | Married couple, 2–3 income sources | Blended family, dependents with income, multiple filing status considerations |
-| **Income diversity** | Wages only | Wages + interest/dividends | Wages + SS + retirement + self-employment + investment |
-| **Document volume** | 2–3 documents | 4–6 documents | 7+ documents to cross-reference |
-| **Error subtlety** (verify mode) | Obvious errors (wrong name) | Plausible errors (transposed digits) | Subtle errors (wrong filing status, missed dependent) |
-| **Ambiguity** | Clear-cut scenarios | Some judgment calls | Edge cases (who qualifies as dependent, HOH vs single) |
-
-### Recommended approach
-
-Redesign difficulty as a composite score rather than a single toggle.
-The `ExerciseEngine` would select household patterns, income profiles,
-and error types based on the target difficulty, producing scenarios
-that are genuinely harder — not just less informed.
-
-**Files:** `training/exercise_engine.py`, `training/client_profile.py`,
-`training/error_injector.py`
+Add the import-graph check (`tax_core` must not import from `intake` or `learn`) to CI as a separate test or pre-commit hook.
 
 ---
 
-Each future VITA section follows this same pattern:
-extract → generate → render → exercise → grade.
-
----
-
-## Sprint 12: Part 3 — Expenses, Deductions & Credits
-
-Part 3 of the 13614-C (Page 3) covers expenses and tax-related events. The
-client checks which expenses apply; the volunteer identifies deductions,
-credits, and supporting documents. This sprint adds expense generation,
-document rendering, and a graded Part III form section.
-
-**Reference**: HouseholdRNG `generator/expense_generator.py` — full working
-implementation (~550 lines) covering housing, state tax, medical, charitable,
-above-the-line deductions, and credit-related expenses. Port and adapt.
-
-**Key curriculum element**: Standard vs itemized deduction. The student must
-evaluate whether the taxpayer benefits more from the standard deduction or
-itemizing. This is a core VITA competency and should be graded.
-
-### 13614-C Page 3 Field Mapping
-
-#### Itemized Deductions (Schedule A)
-
-| Client Question (left) | Volunteer Field (right) | Generator Source |
-|------------------------|------------------------|-----------------|
-| Mortgage interest | 1098 checkbox + amount | `household.mortgage_interest` |
-| State/local/RE/sales taxes | (SALT, subject to $10K cap) | `household.state_income_tax + property_taxes` |
-| Medical/dental/prescription | Standard deduction ☐ / Itemized deduction ☐ | `household.medical_expenses` |
-| Charitable contributions | (included in Schedule A) | `household.charitable_contributions` |
-
-#### Above-the-Line Deductions (Adjustments to Income)
-
-| Client Question (left) | Volunteer Field (right) | Generator Source |
-|------------------------|------------------------|-----------------|
-| Student loan interest | 1098-E checkbox | `person.student_loan_interest` |
-| Child and dependent care | Child and dependent care credit | `household.child_care_expenses` |
-| Retirement contributions | IRA (Basic/Roth/401K) | `person.ira_contributions` |
-| Educator expenses (K-12) | Educator expenses deduction + amount | `person.educator_expenses` |
-| Alimony payments | Alimony with spouse's SSN + amount | (future — rare in VITA) |
-
-#### Life Events & Credits
-
-| Client Question (left) | Volunteer Field (right) | Priority |
-|------------------------|------------------------|----------|
-| Educational classes | 1098-T, education credit/deduction | High |
-| Home sale | 1099-S | Medium |
-| HSA | HSA contributions / distributions | Medium |
-| Marketplace insurance | 1095-A | High (ACA) |
-| Energy-efficient improvements | Form 5695, Part II | Low |
-| Vehicle purchase | VIN # | Low |
-| Cancelled/forgiven debt | 1099-C | Low |
-| Federal disaster loss | 1099-A | Low |
-| Prior disallowed credits | EITC/CTC/AOTC/HOH year + reason | Medium |
-| IRS letters/bills | (informational) | Medium |
-| Estimated tax payments | Amount fields | Medium |
-| Last year's return | (informational) | Low |
-
-### Step 12.A: Part 3 Extraction (`extraction/extract_part3.py`)
-
-Extract distribution tables from PUMS for expense generation:
-
-| Table | PUMS Variables | Purpose |
-|-------|---------------|---------|
-| `homeownership_rates` | TEN, AGEP, HINCP | Owner vs renter probability by age × income bracket |
-| `property_taxes` | TAXAMT, TEN, HINCP | Property tax amounts by income bracket (owners only) |
-| `mortgage_costs` | MRGP, TEN, HINCP, AGEP | Monthly mortgage payment by income × age bracket |
-
-**Mortgage interest note**: PUMS does not provide a direct mortgage-interest
-variable. `MRGP` gives the total first-mortgage monthly payment (principal +
-interest combined). We extract the raw MRGP distribution by income and age
-bracket. The expense generator then estimates the interest portion using a
-standard amortization heuristic: younger householders are earlier in their loan
-term, so ~70-80% of the payment is interest; older householders have paid down
-more principal, so ~20-30% is interest. This is a reasonable approximation
-for VITA training scenarios. `SMOCP` (selected monthly owner costs, which
-bundles mortgage + insurance + taxes) is also loaded for potential future use.
-
-Implementation:
-- Wire into `extract_all.py` as `part == 3`
-- Add `MRGP` and `SMOCP` to household columns in `pums_download.py`
-- Update `data-management.yml` default parts to `1 2 3`
-- Run via GitHub Actions workflow, merge resulting SQLite update
-
-**Checkpoint**: `data/distributions_hi_2022.sqlite` has 27+ tables (24 existing + 3 new).
-
-### Step 12.B: Expense Generator (`generator/expenses.py`)
-
-Port from HouseholdRNG `expense_generator.py`. The generator assigns expenses
-to households based on demographics, income, and distribution data.
-
-```
-class ExpenseGenerator:
-    def __init__(self, distributions, state='HI')
-    def assign_expenses(self, household) -> Household
-
-    # 1. Housing expenses
-    _determine_homeownership(household) -> bool
-    _sample_property_taxes(household) -> int
-    _sample_mortgage_interest(household) -> int
-
-    # 2. State income tax (progressive brackets)
-    _assign_state_income_tax(household)
-
-    # 3. Medical expenses (probabilistic, 7.5% AGI floor)
-    _assign_medical_expenses(household)
-
-    # 4. Charitable contributions (income-based rates)
-    _assign_charitable_contributions(household)
-
-    # 5. Above-the-line deductions (per-person)
-    _calculate_student_loan_interest(person) -> int
-    _calculate_educator_expenses(person) -> int
-    _calculate_ira_contributions(person) -> int
-
-    # 6. Credit-related expenses
-    _calculate_child_care_expenses(household) -> int
-    _calculate_education_expenses(household) -> int
-
-    # 7. Standard vs itemized determination
-    _calculate_totals(household)
-```
-
-Add `generate_part3(household)` to `HouseholdGenerator` in `pipeline.py`.
-Update `generate_with_pii()` to call Part 3 after Part 2.
-
-**Checkpoint**: Generated households have realistic expense fields populated.
-Running `generate_sample.py` shows expense data in the JSON output.
-
-### Step 12.C: Part 3 Form Fields (`training/form_fields.py`)
-
-Define `PART3_FIELDS` constants for Page 3 of the 13614-C.
-
-**Design decision**: Page 3 of the 13614-C has a two-column layout — left
-column is client questions, right column is volunteer-completed fields. We
-model Part 3 the same way as Part 2: checkbox + amount pairs for each expense
-category. The client questions are conveyed through scenario interview notes
-(not graded); the volunteer fields (checkboxes, amounts, and the standard vs
-itemized choice) are what the student fills in and the grader scores. This
-keeps the form field contract simple and consistent across all sections. If
-the two-column structure needs richer modeling later (e.g., separating client
-prompts from volunteer responses), the field names can be extended without
-breaking existing grading logic.
-
-Property taxes are included as a separate amount field because the volunteer
-needs that value to evaluate the SALT cap ($10K) and determine whether
-itemizing beats the standard deduction.
-
-```python
-# Itemized deductions
-EXPENSE_MORTGAGE_INTEREST = "expense.mortgage_interest"
-EXPENSE_MORTGAGE_INTEREST_AMOUNT = "expense.mortgage_interest.amount"
-EXPENSE_PROPERTY_TAXES = "expense.property_taxes"
-EXPENSE_PROPERTY_TAXES_AMOUNT = "expense.property_taxes.amount"
-EXPENSE_MEDICAL = "expense.medical"
-EXPENSE_CHARITABLE = "expense.charitable"
-EXPENSE_CHARITABLE_AMOUNT = "expense.charitable.amount"
-EXPENSE_DEDUCTION_TYPE = "expense.deduction_type"  # standard / itemized
-
-# Above-the-line
-EXPENSE_STUDENT_LOAN = "expense.student_loan"
-EXPENSE_STUDENT_LOAN_AMOUNT = "expense.student_loan.amount"
-EXPENSE_CHILD_CARE = "expense.child_care"
-EXPENSE_CHILD_CARE_AMOUNT = "expense.child_care.amount"
-EXPENSE_EDUCATOR = "expense.educator"
-EXPENSE_EDUCATOR_AMOUNT = "expense.educator.amount"
-EXPENSE_IRA = "expense.ira"
-EXPENSE_IRA_AMOUNT = "expense.ira.amount"
-
-# Education credits
-EXPENSE_EDUCATION = "expense.education"
-EXPENSE_EDUCATION_AMOUNT = "expense.education.amount"
-
-PART3_FIELDS = EXPENSE_CHECKBOX_FIELDS + EXPENSE_AMOUNT_FIELDS
-    + [EXPENSE_DEDUCTION_TYPE]
-ALL_FIELDS = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
-```
-
-**Checkpoint**: `PART1_FIELDS + PART2_FIELDS + PART3_FIELDS == ALL_FIELDS`,
-no overlap between sections.
-
-### Step 12.D: Answer Key + Grading ✅ (completed as part of 12.C)
-
-*This step was fully implemented during 12.C.* Both `_build_expense_key()` in
-`grader.py` and `_populate_expense_fields()` in `form_populator.py` were added
-alongside the field constants, since the grader answer key and populator logic
-are tightly coupled to the field definitions.
-
-Key grading logic for standard vs itemized:
-- Calculate total itemized deductions (SALT-capped + mortgage + medical floor + charitable)
-- Compare against standard deduction for filing status
-- Correct answer is whichever is larger
-- Grade the student's choice of standard vs itemized
-
-**Checkpoint**: `grader.grade_intake(submission, hh, fields=PART3_FIELDS)`
-correctly scores expense fields including deduction type choice. ✅
-
-### Step 12.E: Document Rendering — Expense Documents
-
-Render mock documents referenced by Page 3. Phase 1 (common):
-
-| Document | Template | Data Source |
-|----------|----------|-------------|
-| Form 1098 (Mortgage Interest) | `templates/form_1098.html` | `household.mortgage_interest` |
-| Form 1098-E (Student Loan Interest) | `templates/form_1098e.html` | `person.student_loan_interest` |
-| Form 1098-T (Tuition) | `templates/form_1098t.html` | `household.education_expenses` |
-| Form 1095-A (Marketplace Insurance) | `templates/form_1095a.html` | (future generator) |
-
-Phase 2 (less common, deferred):
-- 1099-S (home sale), 1099-C (cancelled debt), 1099-A (disaster)
-
-Each document gets the standard "SAMPLE — FOR TRAINING USE ONLY" watermark.
-
-**Checkpoint**: Landing page shows expense documents alongside identity and
-income documents when the household has relevant expenses.
-
-### Step 12.F: Part III Form + Route
-
-- HTML template `form_13614c_p3.html` for Page 3 fields
-- Route: `GET /scenarios/{id}/form/expenses` → Part III form
-- Route: `POST /scenarios/{id}/submit/expenses` → grade Part III
-- Section nav updated: Part I | Part II | Part III
-- Landing page shows Part III grade card
-
-**Checkpoint**: Full user flow works: generate scenario → review expense
-documents → fill Part III form → submit → see expense-specific feedback
-with standard vs itemized determination.
-
-### Step 12.G: Tests
-
-- `test_expenses.py`: expense generator unit tests (housing, deductions, credits)
-- `test_extract_part3.py`: Part 3 extraction table validation
-- Update `test_multi_section_ui.py`: Part III form, submission, grading, nav
-- Update `test_grader.py`: Part 3 field filtering, standard vs itemized grading
-
-**Checkpoint**: All tests pass. 13614-C coverage extends through Page 3.
-
-### Post-Sprint 12 Fixes
-
-#### Fix 12.H: Data Inventory — Part 3 support + table name corrections
-
-The `scripts/data_inventory.py` inventory was written before Part 3 extraction
-existed. Three issues fixed:
-
-1. **Wrong table names** in `PART2_TABLES`: `mortgage_interest` →
-   `mortgage_costs`, `bls_occupation_wages` → `occupation_wages`,
-   `occupation_self_employment_probability` → `occupation_self_employment_rates`
-2. **Part 3 tables misclassified**: `homeownership_rates` and `property_taxes`
-   were listed under `PART2_TABLES` — moved to new `PART3_TABLES` list
-3. **No Part 3 completeness check**: added `part3_complete` flag and "P3"
-   badge in text/markdown output
-
-Also added descriptive captions to each input in the GitHub Actions
-`data-management.yml` workflow explaining what each setting controls.
-
-**Files**: `scripts/data_inventory.py`, `.github/workflows/data-management.yml`
-
-#### Fix 12.I: Scenario Store — Document deserialization
-
-Income and expense documents (W-2, 1099-INT, 1099-DIV, 1099-R, SSA-1099,
-1099-NEC, Form 1098, 1098-E, 1098-T) were lost on scenario save/reload.
-
-**Root cause**: `_serialize_household()` uses `dataclasses.asdict()` which
-correctly serializes all nested dataclasses to JSON. But
-`_deserialize_person()` only reconstructed scalar fields — all document
-lists defaulted to empty on reload.
-
-**Fix**: Added deserialization for all 9 document types in
-`_deserialize_person()` plus helper functions `_deserialize_w2()` and
-`_deserialize_employer()` (W-2 has nested Employer with Address, and
-`box_12` stores as list-of-dicts). Also added missing Household fields:
-`is_homeowner`, `total_itemized_deductions`, `total_above_line_deductions`,
-`uses_standard_deduction`.
-
-**Files**: `training/scenario_store.py`
-
-**Checkpoint**: Generate scenario → reload from SQLite → landing page shows
-all income and expense document links. Document routes render correctly.
-
----
-
-## Future: Scenario Validation & Realism
-
-The current pipeline is a solid baseline — it generates households, assigns
-income/expenses, renders documents, and grades forms end-to-end. The issues
-below were identified during local testing of the Sprint 12 build. They
-require careful design to resolve gracefully without over-constraining the
-generator or adding brittle validation logic.
-
-### Zero-Income Scenarios
-
-The generator can produce households where no member has any income at all.
-In real life, virtually every VITA client has at least one income source —
-that's why they're filing. The only legitimate zero-income filing is to
-claim refundable credits (CTC, EITC with prior-year earned income), which
-should be a deliberate scenario pattern, not an accidental artifact.
-
-Possible approaches (needs design work):
-- Pipeline retry with fallback income assignment
-- Exercise engine gate with max attempts
-- Explicit `"zero_income_credits"` pattern for the intentional case
-- Minimum income guarantee per household pattern
-
-### Missing Client Interview Facts for Expenses
-
-The 13614-C Page 3 left column is client self-reported questions ("Did you
-pay mortgage interest?", "Did you make charitable contributions?", "Did you
-pay child/dependent care?", etc.). Currently, `exercise_engine.py` generates
-client facts for Part 1 (demographics) and Part 2 (income) but not Part 3.
-Without expense interview notes, the student has no way to discover expenses
-that lack a formal document (charitable, medical, child care) in intake mode.
-
-Facts needed (from 13614-C Page 3 left column):
-- "Did you pay mortgage interest on your home?" → Yes/No
-- "Did you pay property taxes?" → Yes/No
-- "Did you have unreimbursed medical or dental expenses?" → Yes/No
-- "Did you make charitable contributions?" → Yes/No + approximate amount
-- "Did you pay student loan interest?" → Yes/No
-- "Did you pay child or dependent care expenses?" → Yes/No
-- "Did you pay for higher education tuition?" → Yes/No
-- "Did you contribute to an IRA or retirement account?" → Yes/No
-- "Are you a K-12 educator who paid classroom expenses?" → Yes/No
-
-### Expense Document Consistency
-
-Scenarios can generate with zero expense documents. Unlike zero-income, this
-is often legitimate (renters with no student loans or college students). But
-the generation logic should be verified to ensure it isn't short-circuiting —
-e.g., a homeowner with mortgage interest should always produce a Form 1098,
-employed persons should always have W-2s, etc. A lightweight post-generation
-validation pass could catch these inconsistencies without adding complexity
-to the generators themselves.
-
----
-
-## Future: State Tax Generalization
-
-The expense generator currently uses hardcoded Hawaii state tax brackets.
-To support multiple states:
-
-1. Extract state income tax brackets from a reference source (Tax Foundation,
-   state revenue department publications) into a config file or database table
-2. Make `ExpenseGenerator` load brackets dynamically by state code
-3. Property tax and housing cost distributions already come from PUMS and are
-   state-specific by extraction
-4. Consider a `config/state_taxes/` directory with YAML files per state,
-   or a single `state_tax_brackets` table in the distribution database
-
-This is a prerequisite for expanding beyond Hawaii to other VITA sites.
-
----
-
-## Future: OpenTaxEngine Integration
-
-When the curriculum expands from intake form exercises to full 1040 completion,
-a tax calculation engine becomes valuable. The open-source
-[OpenTaxEngine](https://github.com/cameronehrlich/opentaxengine) is a candidate:
-
-- Python, rule-based, YAML-defined tax form specifications
-- Supports Form 1040, 1120-S, 1065
-- CLI with compute, fill, explain, inspect commands
-- Very early stage (as of 2026): limited to 2025 tax year, minimal test coverage
-
-**Integration point**: After the student completes the 1040, pass the same
-household data through the tax engine to compute the correct answer. Compare
-the student's line-by-line entries against engine output for grading.
-
-**Prerequisites before integrating**:
-- Engine must support the tax year matching our PUMS data (currently 2022)
-- Engine must handle all VITA Basic/Advanced form scenarios
-- Alternatively, write a focused tax calculator for the specific VITA scope
-
-**Current state**: VITAPrep grading is field-matching (did you copy the W-2
-correctly?), not tax computation. A tax engine only adds value when grading
-computed lines (AGI, taxable income, tax owed, refund amount).
+## Open questions
+
+These are not decided here. Resolve in code, then update this document.
+
+- Whether to use Python `random.Random` instances or NumPy generators throughout.
+- Whether `tax_core` predicates return rich result objects or simple booleans (the worked example used rich; revisit per predicate).
+- How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).
+- Where document corruption manifests live for Review mode (in `Scenario` or sidecar table).
+- Subtlety dial: global per scenario, per slot, or per concept? Pick one when implementing Restructure C.
+- Concept catalog registration: explicit list vs decorator-based vs autodiscovery. Recommend explicit list for MVP.
