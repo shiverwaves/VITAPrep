@@ -420,9 +420,10 @@ class TestPipelineIntegration:
         result = engine.generate_scenario(mode="intake", difficulty="easy")
         assert result.narrative_slots is None
 
-    def test_client_facts_still_populated(self, engine) -> None:
+    def test_interview_notes_populated(self, engine) -> None:
         result = engine.generate_scenario(mode="intake", difficulty="easy")
-        assert len(result.client_facts) > 0
+        assert result.interview_notes is not None
+        assert len(result.interview_notes) > 0
 
     def test_retry_on_unrescuable(self, engine) -> None:
         call_count = {"n": 0}

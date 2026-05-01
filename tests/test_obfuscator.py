@@ -5,7 +5,7 @@ Covers:
 - ExerciseEngine registers all three starter slots.
 - Pipeline integration: narrative_slots and interview_notes populated
   when slots fire, None when no slots fire.
-- Old client_facts path still works alongside new interview_notes.
+- Boilerplate notes included in interview_notes alongside slot-rendered notes.
 """
 
 from datetime import date
@@ -16,7 +16,6 @@ import pytest
 
 from generator.models import (
     Address,
-    ClientFact,
     Household,
     Person,
     RelationshipType,
@@ -351,11 +350,20 @@ def _engine_with_household(household: Household) -> ExerciseEngine:
 
 class TestPipelineIntegration:
 
-    def test_clean_scenario_no_narrative(self) -> None:
+    def test_clean_scenario_no_slot_notes(self) -> None:
         eng = _engine_with_household(_make_household_clean())
         result = eng.generate_scenario(mode="intake", difficulty="easy")
         assert result.narrative_slots is None or result.narrative_slots == {}
-        assert result.interview_notes is None or result.interview_notes == []
+        slot_notes = [
+            n for n in (result.interview_notes or [])
+            if n["source_slot"] is not None
+        ]
+        assert slot_notes == []
+        boilerplate = [
+            n for n in result.interview_notes
+            if n["source_slot"] is None
+        ]
+        assert len(boilerplate) > 0
 
     def test_address_mismatch_populates_notes(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
@@ -399,11 +407,11 @@ class TestPipelineIntegration:
             assert "answer" in note
             assert "source_slot" in note
 
-    def test_client_facts_still_populated(self) -> None:
+    def test_boilerplate_notes_included(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
         result = eng.generate_scenario(mode="intake", difficulty="easy")
-        assert len(result.client_facts) > 0
-        assert all(isinstance(f, ClientFact) for f in result.client_facts)
+        boilerplate = [n for n in result.interview_notes if n["source_slot"] is None]
+        assert len(boilerplate) > 0
 
     def test_ground_truth_still_computed(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
