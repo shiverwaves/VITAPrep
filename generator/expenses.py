@@ -32,6 +32,7 @@ from .models import (
     Person,
 )
 
+from learn.concepts.base import GenerationHints
 from tax_core.thresholds import (
     educator_expense_limit,
     ira_contribution_limit,
@@ -118,11 +119,16 @@ class ExpenseGenerator:
         if missing:
             logger.info("Expense tables missing (will use fallbacks): %s", missing)
 
-    def overlay(self, household: Household) -> None:
+    def overlay(
+        self,
+        household: Household,
+        hints: Optional[GenerationHints] = None,
+    ) -> None:
         """Assign all expense types to household.
 
         Args:
             household: Household with income from Part 2.
+            hints: Generation hints for biasing expense assignment.
         """
         income = household.total_household_income()
         logger.info(
@@ -130,7 +136,7 @@ class ExpenseGenerator:
             household.household_id, f"{income:,}",
         )
 
-        self._assign_housing_expenses(household)
+        self._assign_housing_expenses(household, hints=hints)
         self._assign_state_income_tax(household)
         self._assign_medical_expenses(household)
         self._assign_charitable_contributions(household)
@@ -151,8 +157,15 @@ class ExpenseGenerator:
     # 1. HOUSING EXPENSES
     # =========================================================================
 
-    def _assign_housing_expenses(self, household: Household) -> None:
-        household.is_homeowner = self._determine_homeownership(household)
+    def _assign_housing_expenses(
+        self,
+        household: Household,
+        hints: Optional[GenerationHints] = None,
+    ) -> None:
+        if hints and hints.force_homeowner:
+            household.is_homeowner = True
+        else:
+            household.is_homeowner = self._determine_homeownership(household)
 
         if not household.is_homeowner:
             household.property_taxes = 0

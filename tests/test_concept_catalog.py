@@ -136,7 +136,8 @@ class TestConceptBase:
         hints = c.generation_hints()
         assert isinstance(hints, GenerationHints)
         assert hints.preferred_patterns == []
-        assert hints.hints == {}
+        assert hints.force_self_employment is False
+        assert hints.child_months_in_home_range is None
 
 
 # =========================================================================
@@ -148,15 +149,22 @@ class TestGenerationHints:
     def test_default_fields(self) -> None:
         hints = GenerationHints()
         assert hints.preferred_patterns == []
-        assert hints.hints == {}
+        assert hints.force_self_employment is False
+        assert hints.force_ss_recipient is False
+        assert hints.force_homeowner is False
+        assert hints.child_months_in_home_range is None
+        assert hints.max_wage_income is None
+        assert hints.min_other_income is None
 
     def test_custom_fields(self) -> None:
         hints = GenerationHints(
-            preferred_patterns=["single_adult"],
-            hints={"min_se_income": 500},
+            preferred_patterns=["single_parent"],
+            force_self_employment=True,
+            child_months_in_home_range=(1, 11),
         )
-        assert hints.preferred_patterns == ["single_adult"]
-        assert hints.hints["min_se_income"] == 500
+        assert hints.preferred_patterns == ["single_parent"]
+        assert hints.force_self_employment is True
+        assert hints.child_months_in_home_range == (1, 11)
 
 
 # =========================================================================

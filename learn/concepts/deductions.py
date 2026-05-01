@@ -6,7 +6,7 @@ choice correctly.
 
 from typing import Any
 
-from learn.concepts.base import Concept
+from learn.concepts.base import Concept, GenerationHints
 
 
 class StandardVsItemizedConcept(Concept):
@@ -18,6 +18,11 @@ class StandardVsItemizedConcept(Concept):
     itemizing produces a larger deduction.
     """
     name = "standard_vs_itemized"
+
+    def generation_hints(self) -> GenerationHints:
+        return GenerationHints(
+            force_homeowner=True,
+        )
 
     def matches(self, scenario: Any) -> bool:
         gt = scenario.ground_truth

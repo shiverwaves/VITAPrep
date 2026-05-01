@@ -17,12 +17,14 @@ Optional tables:
 """
 
 import logging
+import random
 import uuid
 from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
+from learn.concepts.base import GenerationHints
 from .models import Household, Person, RelationshipType, PATTERN_METADATA
 from .sampler import match_age_bracket, weighted_sample
 
@@ -95,11 +97,17 @@ class ChildGenerator:
     # Public API
     # =================================================================
 
-    def generate_children(self, household: Household) -> List[Person]:
+    def generate_children(
+        self,
+        household: Household,
+        hints: Optional[GenerationHints] = None,
+    ) -> List[Person]:
         """Generate child members based on household pattern and parents.
 
         Args:
             household: Household with adult members already populated.
+            hints: Generation hints; if ``child_months_in_home_range``
+                is set, at least one child gets a partial-year value.
 
         Returns:
             List of child Person objects with demographics populated
@@ -134,6 +142,11 @@ class ChildGenerator:
                 existing_children=children,
             )
             children.append(child)
+
+        if hints and hints.child_months_in_home_range and children:
+            lo, hi = hints.child_months_in_home_range
+            target = children[random.randrange(len(children))]
+            target.months_in_home = random.randint(lo, hi)
 
         logger.debug(
             "Generated %d children for pattern '%s'", len(children), pattern,

@@ -6,7 +6,7 @@ requiring additional forms or computations.
 
 from typing import Any
 
-from learn.concepts.base import Concept
+from learn.concepts.base import Concept, GenerationHints
 from tax_core.predicates.income import (
     compute_taxable_ss,
     requires_schedule_se,
@@ -21,6 +21,11 @@ class SelfEmploymentThresholdConcept(Concept):
     as ordinary income and miss Schedule SE entirely.
     """
     name = "self_employment_threshold"
+
+    def generation_hints(self) -> GenerationHints:
+        return GenerationHints(
+            force_self_employment=True,
+        )
 
     def matches(self, scenario: Any) -> bool:
         hh = scenario.household
@@ -40,6 +45,12 @@ class SocialSecurityTaxabilityConcept(Concept):
     preparers either tax SS fully or not at all.
     """
     name = "social_security_taxability"
+
+    def generation_hints(self) -> GenerationHints:
+        return GenerationHints(
+            force_ss_recipient=True,
+            min_other_income=15000,
+        )
 
     def matches(self, scenario: Any) -> bool:
         hh = scenario.household

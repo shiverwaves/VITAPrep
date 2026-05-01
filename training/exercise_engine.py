@@ -19,8 +19,9 @@ Modes:
 
 import logging
 import uuid
+from dataclasses import fields as dataclass_fields
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional, Set
 
 from generator.models import Scenario
 from generator.pipeline import HouseholdGenerator
@@ -32,6 +33,7 @@ from intake.analyzer.types import Unrescuable
 from intake.boilerplate import generate_boilerplate
 from intake.obfuscator import obfuscate
 from learn.concept_catalog import ConceptCatalog
+from learn.concepts.base import GenerationHints
 from learn.concepts.deductions import StandardVsItemizedConcept
 from learn.concepts.dependency import QualifyingChildResidencyConcept
 from learn.concepts.filing_status import (
@@ -47,6 +49,20 @@ from .error_injector import ErrorInjector
 from .grader import build_form_answers
 
 logger = logging.getLogger(__name__)
+
+MAX_GEN_ATTEMPTS = 5
+
+
+class ConceptMissed(Exception):
+    """Raised when a generated scenario doesn't fire all requested concepts."""
+
+    def __init__(self, missing: Set[str]) -> None:
+        self.missing = missing
+        super().__init__(
+            f"Couldn't generate a scenario matching all selected concepts. "
+            f"Missing: {', '.join(sorted(missing))}. "
+            f"Try fewer concepts or different combinations."
+        )
 
 
 class ExerciseEngine:
@@ -74,11 +90,14 @@ class ExerciseEngine:
         error_count: int = 3,
         pattern: Optional[str] = None,
         seed: Optional[int] = None,
+        concepts: Optional[List[str]] = None,
     ) -> Scenario:
         """Generate a complete training scenario.
 
         Retries with a new seed if the analyzer deems the scenario
         unrescuable (no matching narrative templates for a fired slot).
+        When *concepts* is provided, also retries if the generated
+        scenario doesn't fire all requested concepts.
 
         Args:
             mode: "intake" (fill blank form), "verify" (find errors),
@@ -88,22 +107,33 @@ class ExerciseEngine:
                 Ignored for intake mode.
             pattern: Specific household pattern or None for random.
             seed: Random seed for reproducibility.
+            concepts: Optional list of concept names to target. When
+                provided, generation hints are merged and the engine
+                rerolls if requested concepts don't all fire.
 
         Returns:
             Scenario with household, ground truth, errors, and interview notes.
 
         Raises:
             Unrescuable: If all retry attempts produce unrescuable scenarios.
+            ConceptMissed: If requested concepts can't be satisfied after
+                MAX_GEN_ATTEMPTS attempts.
         """
-        for attempt in range(MAX_REROLL_ATTEMPTS):
+        hints = self._merge_hints(concepts) if concepts else None
+        max_attempts = MAX_GEN_ATTEMPTS if concepts else MAX_REROLL_ATTEMPTS
+        requested = set(concepts) if concepts else set()
+        last_missing: Set[str] = set()
+
+        for attempt in range(max_attempts):
             try:
-                return self._build_scenario(
+                scenario = self._build_scenario(
                     mode=mode,
                     difficulty=difficulty,
                     error_count=error_count,
                     pattern=pattern,
                     seed=seed,
                     attempt=attempt,
+                    hints=hints,
                 )
             except Unrescuable:
                 logger.warning(
@@ -111,11 +141,54 @@ class ExerciseEngine:
                     attempt + 1,
                 )
                 seed = None
+                continue
+
+            if requested:
+                fired = set(scenario.concept_tags or [])
+                last_missing = requested - fired
+                if last_missing:
+                    logger.warning(
+                        "Attempt %d missing concepts %s, retrying",
+                        attempt + 1, last_missing,
+                    )
+                    seed = None
+                    continue
+
+            return scenario
+
+        if requested and last_missing:
+            raise ConceptMissed(last_missing)
 
         raise Unrescuable(
             f"Failed to generate rescuable scenario after "
-            f"{MAX_REROLL_ATTEMPTS} attempts"
+            f"{max_attempts} attempts"
         )
+
+    def _merge_hints(self, concept_names: List[str]) -> GenerationHints:
+        """Merge generation hints from requested concepts (last-write-wins)."""
+        merged = GenerationHints()
+        empty = GenerationHints()
+        by_name = {c.name: c for c in self.concept_catalog.concepts}
+
+        for name in concept_names:
+            concept = by_name.get(name)
+            if concept is None:
+                continue
+            hints = concept.generation_hints()
+            if hints.preferred_patterns:
+                merged.preferred_patterns.extend(hints.preferred_patterns)
+            for f in dataclass_fields(GenerationHints):
+                if f.name == "preferred_patterns":
+                    continue
+                val = getattr(hints, f.name)
+                if val != getattr(empty, f.name):
+                    setattr(merged, f.name, val)
+
+        if merged.preferred_patterns:
+            merged.preferred_patterns = list(dict.fromkeys(merged.preferred_patterns))
+
+        logger.info("Merged hints for concepts %s: %s", concept_names, merged)
+        return merged
 
     def _build_scenario(
         self,
@@ -125,13 +198,14 @@ class ExerciseEngine:
         pattern: Optional[str],
         seed: Optional[int],
         attempt: int,
+        hints: Optional[GenerationHints] = None,
     ) -> Scenario:
         """Single attempt at building a scenario. May raise Unrescuable."""
         scenario_id = f"sc-{uuid.uuid4().hex[:12]}"
 
         # Stage 1: Generate household with demographics + PII
         household = self.generator.generate_with_pii(
-            pattern=pattern, seed=seed,
+            pattern=pattern, seed=seed, hints=hints,
         )
 
         # Stage 2: Build provisional scenario for analysis
