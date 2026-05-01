@@ -409,7 +409,7 @@ Connect Phase 2's content to the pipeline and add the obfuscation layer. After t
 2. Classify each fact into one of three buckets:
    - **Slot-rendered** — covered by a C1 slot, or requires a new slot to be written before C2 ships. If a new slot is needed, note it and add it to C2's scope.
    - **Boilerplate** — read directly from household fields (name, SSN, address, filing status claim, citizenship, contact info). These are rendered by the boilerplate renderer in Stage 6, not by slots.
-   - **Deferred** — acceptable to drop in C2 with a logged decision and a tracking item. Example: expense-related interview notes that depend on Restructure D concepts.
+   - **Deferred** — acceptable to drop in C2 with a logged decision and a tracking item. Example: expense-related interview notes that depend on Restructure D concepts. See "Future: 13614-C Pages 2–3 Interview Notes" for the full scope.
 3. Produce the coverage checklist. Every fact is accounted for. No fact is silently dropped.
 
 **Output:**
@@ -626,6 +626,77 @@ Once A–E are complete, new work follows the layered structure naturally:
 - New form sections (Part IV, Part V, etc.) → cross-layer additions, but each layer's contribution is local.
 
 Each future VITA section follows the existing pattern: extract distributions → generate facts → render documents → analyze and obfuscate → tag concepts → grade.
+
+---
+
+## Future: 13614-C Pages 2–3 Interview Notes
+
+The current interview notes cover Page 1 of the 13614-C (personal info, filing status, dependents). Pages 2 (income) and 3 (expenses/tax events) are entirely absent — the student receives income and expense documents but is never "asked" the corresponding intake questions. In a real VITA intake the volunteer walks through every checkbox on Pages 2–3 with the client before matching answers to documents.
+
+This sprint adds boilerplate interview notes for the income and expense questions we already generate data for, closing the gap identified in Restructure C1.5 ("expense-related interview notes — deferred").
+
+### Scope
+
+**Income notes** (Page 2 left column → `intake/boilerplate.py`):
+
+| 13614-C Question | Data source | Note |
+|---|---|---|
+| Wages as part/full-time employee? How many jobs? | `wage_income`, `len(w2s)` | Count of W-2s is a real VITA question |
+| Payments for contract or self-employment? | `self_employment_income`, `form_1099_necs` | |
+| Social Security or Railroad Retirement? | `social_security_income`, `ssa_1099` | |
+| Retirement account, pension, annuity? | `retirement_income`, `form_1099_rs` | |
+| Interest or dividends? | `interest_income`, `dividend_income` | |
+
+**Expense notes** (Page 3 left column → `intake/boilerplate.py`):
+
+| 13614-C Question | Data source | Note |
+|---|---|---|
+| Mortgage interest? | `mortgage_interest`, `form_1098s` | |
+| Taxes: state, local, real estate? | `property_taxes`, `state_income_tax` | |
+| Medical, dental, prescription expenses? | `medical_expenses` | |
+| Charitable contributions? | `charitable_contributions` | |
+| Student loan interest? | `student_loan_interest`, `form_1098_es` | |
+| Child and dependent care? | `child_care_expenses` | |
+| Contributions to retirement account? | `ira_contributions` | |
+| School supplies by educator? | `educator_expenses` | |
+| Educational classes? | `education_expenses`, `form_1098_ts` | |
+
+**Not in scope** (we don't generate data for these):
+- Tips, unemployment, alimony, rental income, gambling, sale of stocks/real estate
+- HSA, Marketplace insurance (1095-A), energy credits, cancelled debt (1099-C)
+- Estimated tax payments, prior-year return
+
+### Design decisions
+
+1. **Boilerplate, not analyzer slots.** These are direct field reads ("Did you receive wages?" → yes/no based on `wage_income > 0`). No narrative judgment needed. They belong in `intake/boilerplate.py` alongside the existing citizenship/filing/dependent notes.
+
+2. **Difficulty filtering.** Follow the existing pattern:
+   - `easy` → all income + expense questions with answers
+   - `medium` → income questions only (expenses require the student to discover from documents)
+   - `hard` → no income or expense notes (student must ask for everything)
+
+3. **Categories.** Two new categories: `"income"` and `"expenses"`. These match the 13614-C page structure and keep notes groupable in the UI.
+
+4. **Yes/No + detail pattern.** Each note is a yes/no question matching the 13614-C left column. When the answer is "Yes", a follow-up detail note provides the count or amount (e.g., "How many W-2s?" → "2"). This mirrors how VITA volunteers work through the form.
+
+5. **Negative answers matter.** If the client has zero self-employment income, the note should still appear as "No" at easy/medium difficulty. Training VITA volunteers to confirm negatives (not just skip) is part of the intake workflow.
+
+### Implementation plan
+
+1. Add `_income_notes(household)` and `_expense_notes(household)` functions to `intake/boilerplate.py`.
+2. Wire into `generate_boilerplate()` with difficulty filtering.
+3. Update form populator to use income/expense notes for Parts II and III pre-fill.
+4. Add tests for each note (positive and negative cases).
+5. Update the UI to group notes by category with section headers matching 13614-C pages.
+
+### Potential analyzer slots (future)
+
+Some income/expense scenarios could benefit from narrative slots beyond yes/no boilerplate:
+- **Multiple W-2s** — "I had three jobs this year" (common VITA scenario, tests W-2 consolidation)
+- **Mixed income** — "I do some freelance work on the side" (self-employment + wages)
+- **Standard vs. itemized ambiguity** — "I'm not sure if I should itemize" (tests the volunteer's judgment)
+
+These are additive and can be built as analyzer slots after the boilerplate is in place.
 
 ---
 
