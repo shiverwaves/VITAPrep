@@ -36,6 +36,7 @@ from .models import (
     SSA1099,
     W2,
 )
+from learn.concepts.base import GenerationHints
 from .sampler import sample_from_bracket, weighted_sample
 
 logger = logging.getLogger(__name__)
@@ -180,25 +181,62 @@ class IncomeGenerator:
         self.distributions = distributions
         self.tax_year = tax_year
 
-    def overlay(self, household: Household) -> None:
+    def overlay(
+        self,
+        household: Household,
+        hints: Optional[GenerationHints] = None,
+    ) -> None:
         """Populate income fields and create document objects for all adults.
 
         Args:
             household: Household with employment attributes already set.
+            hints: Generation hints for biasing income assignment.
         """
         state = household.state or "HI"
+        forced_se = False
 
         for person in household.members:
             if not person.is_adult():
                 continue
 
             if person.employment_status == "employed":
-                self._assign_wage_income(person, state)
+                self._assign_wage_income(person, state, hints=hints)
+                if hints and hints.force_self_employment and not forced_se:
+                    if person.self_employment_income == 0:
+                        se_amount = random.randint(400, 5000)
+                        self._create_1099_nec(person, se_amount, state)
+                    forced_se = True
 
+            self._assign_social_security(person, hints=hints)
             self._assign_investment_income(person)
-            self._assign_social_security(person)
             self._assign_retirement_income(person)
             self._assign_other_income(person)
+
+        if hints and hints.force_ss_recipient:
+            has_ss = any(
+                p.social_security_income > 0 for p in household.members
+            )
+            if not has_ss:
+                adults = [p for p in household.members if p.is_adult()]
+                if adults:
+                    target = max(adults, key=lambda p: p.age)
+                    amount = random.randint(12000, 24000)
+                    target.social_security_income = amount
+                    target.ssa_1099 = SSA1099(
+                        total_benefits=amount,
+                        benefits_repaid=0,
+                        net_benefits=amount,
+                    )
+
+        if hints and hints.min_other_income is not None:
+            total = household.total_household_income()
+            if total < hints.min_other_income:
+                adults = [p for p in household.members if p.is_adult()]
+                if adults:
+                    target = adults[0]
+                    gap = hints.min_other_income - total + random.randint(1000, 5000)
+                    target.wage_income += gap
+                    target.w2s.append(self._create_w2(target, gap, state))
 
         total = household.total_household_income()
         logger.info(
@@ -211,10 +249,18 @@ class IncomeGenerator:
     # Wage income → W-2 / 1099-NEC
     # =================================================================
 
-    def _assign_wage_income(self, person: Person, state: str) -> None:
+    def _assign_wage_income(
+        self,
+        person: Person,
+        state: str,
+        hints: Optional[GenerationHints] = None,
+    ) -> None:
         """Assign wage income and create W-2 or 1099-NEC documents."""
         base_wage = self._sample_occupation_wage(person)
         adjusted_wage = self._apply_age_adjustment(base_wage, person.age)
+
+        if hints and hints.max_wage_income is not None:
+            adjusted_wage = min(adjusted_wage, hints.max_wage_income)
 
         # Check for self-employment
         if self._is_self_employed(person):
@@ -422,7 +468,11 @@ class IncomeGenerator:
     # Social Security → SSA-1099
     # =================================================================
 
-    def _assign_social_security(self, person: Person) -> None:
+    def _assign_social_security(
+        self,
+        person: Person,
+        hints: Optional[GenerationHints] = None,
+    ) -> None:
         """Assign Social Security benefits for eligible persons (62+)."""
         if person.age < 62:
             return

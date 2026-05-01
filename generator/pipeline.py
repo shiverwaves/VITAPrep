@@ -14,6 +14,7 @@ from typing import Optional
 
 import numpy as np
 
+from learn.concepts.base import GenerationHints
 from .models import Household, PATTERN_METADATA
 from .db import DistributionLoader
 from .demographics import DemographicsGenerator
@@ -70,21 +71,32 @@ class HouseholdGenerator:
 
         logger.info("Initialized generator for %s (%d)", self.state, self.year)
 
-    def _select_pattern(self, pattern: Optional[str] = None) -> Household:
+    def _select_pattern(
+        self,
+        pattern: Optional[str] = None,
+        hints: Optional[GenerationHints] = None,
+    ) -> Household:
         """Select a household pattern and create the initial Household.
 
-        If *pattern* is provided, uses it directly. Otherwise samples
-        from the ``household_patterns`` distribution table, falling
-        back to a uniform random choice over ``PATTERN_METADATA`` keys.
+        If *pattern* is provided, uses it directly. If *hints* has
+        ``preferred_patterns``, samples uniformly from those. Otherwise
+        samples from the ``household_patterns`` distribution table,
+        falling back to a uniform random choice over ``PATTERN_METADATA`` keys.
 
         Args:
             pattern: Specific pattern name, or None to sample.
+            hints: Generation hints with optional preferred_patterns.
 
         Returns:
             A new Household with pattern and metadata fields set.
         """
         if pattern is not None:
             chosen = pattern
+        elif hints and hints.preferred_patterns:
+            valid = [p for p in hints.preferred_patterns if p in PATTERN_METADATA]
+            chosen = str(np.random.choice(valid)) if valid else str(
+                np.random.choice(list(PATTERN_METADATA.keys()))
+            )
         else:
             hp_df = self.distributions.get("household_patterns")
             if hp_df is not None and len(hp_df) > 0:
@@ -116,6 +128,7 @@ class HouseholdGenerator:
         self,
         pattern: Optional[str] = None,
         seed: Optional[int] = None,
+        hints: Optional[GenerationHints] = None,
     ) -> Household:
         """Generate a household with Part 1 data: structure and demographics.
 
@@ -129,6 +142,7 @@ class HouseholdGenerator:
                 "married_couple_with_children"). If None, randomly
                 samples from the distribution.
             seed: Random seed for reproducibility.
+            hints: Generation hints for biasing output.
 
         Returns:
             Household with members populated (demographics only,
@@ -138,14 +152,14 @@ class HouseholdGenerator:
             set_random_seed(seed)
 
         # Stage 1: Select pattern
-        household = self._select_pattern(pattern)
+        household = self._select_pattern(pattern, hints=hints)
 
         # Stage 2: Generate adults
         adults = self.demographics.generate_adults(household)
         household.members = adults
 
         # Stage 3: Generate children
-        children = self.children.generate_children(household)
+        children = self.children.generate_children(household, hints=hints)
         household.members.extend(children)
 
         logger.info(
@@ -156,7 +170,11 @@ class HouseholdGenerator:
         )
         return household
 
-    def generate_part2(self, household: Household) -> Household:
+    def generate_part2(
+        self,
+        household: Household,
+        hints: Optional[GenerationHints] = None,
+    ) -> Household:
         """Add Part 2 data to a household: employment and income.
 
         Assigns employment status, education, occupation, then income
@@ -165,12 +183,13 @@ class HouseholdGenerator:
 
         Args:
             household: Household with Part 1 demographics populated.
+            hints: Generation hints for biasing income assignment.
 
         Returns:
             The same Household with employment and income fields set.
         """
         self.employment.overlay(household)
-        self.income.overlay(household)
+        self.income.overlay(household, hints=hints)
 
         logger.info(
             "Generated Part 2 for household: members=%d",
@@ -178,7 +197,11 @@ class HouseholdGenerator:
         )
         return household
 
-    def generate_part3(self, household: Household) -> Household:
+    def generate_part3(
+        self,
+        household: Household,
+        hints: Optional[GenerationHints] = None,
+    ) -> Household:
         """Add Part 3 data to a household: expenses and deductions.
 
         Assigns housing costs, state taxes, medical expenses, charitable
@@ -187,11 +210,12 @@ class HouseholdGenerator:
 
         Args:
             household: Household with Part 2 income populated.
+            hints: Generation hints for biasing expense assignment.
 
         Returns:
             The same Household with expense fields set.
         """
-        self.expenses.overlay(household)
+        self.expenses.overlay(household, hints=hints)
 
         logger.info(
             "Generated Part 3 for household: itemized=$%s, standard=%s",
@@ -204,6 +228,7 @@ class HouseholdGenerator:
         self,
         pattern: Optional[str] = None,
         seed: Optional[int] = None,
+        hints: Optional[GenerationHints] = None,
     ) -> Household:
         """Generate a household with demographics, PII, income, and expenses.
 
@@ -215,14 +240,16 @@ class HouseholdGenerator:
                 "married_couple_with_children"). If None, randomly
                 samples from the distribution.
             seed: Random seed for reproducibility.
+            hints: Generation hints for biasing output toward
+                specific concepts.
 
         Returns:
             Household with all fields populated.
         """
-        household = self.generate_part1(pattern=pattern, seed=seed)
+        household = self.generate_part1(pattern=pattern, seed=seed, hints=hints)
         self.pii.overlay(household)
-        self.generate_part2(household)
-        self.generate_part3(household)
+        self.generate_part2(household, hints=hints)
+        self.generate_part3(household, hints=hints)
 
         logger.info(
             "Generated full household: pattern=%s, members=%d",

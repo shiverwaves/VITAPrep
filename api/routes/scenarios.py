@@ -66,10 +66,11 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from generator.models import PATTERN_METADATA
+from training.exercise_engine import ConceptMissed
 from training.form_fields import (
     FILING_STATUS,
     FILING_STATUS_CHOICES,
@@ -138,6 +139,7 @@ class GenerateRequest(BaseModel):
     error_count: int = 3
     pattern: Optional[str] = None
     seed: Optional[int] = None
+    concepts: Optional[List[str]] = None
 
 
 # =========================================================================
@@ -156,13 +158,27 @@ async def api_generate_scenario(
     engine = request.app.state.engine
     store = request.app.state.store
 
-    scenario = engine.generate_scenario(
-        mode=body.mode,
-        difficulty=body.difficulty,
-        error_count=body.error_count,
-        pattern=body.pattern,
-        seed=body.seed,
-    )
+    if body.concepts:
+        registered = {c.name for c in engine.concept_catalog.concepts}
+        invalid = set(body.concepts) - registered
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown concepts: {', '.join(sorted(invalid))}",
+            )
+
+    try:
+        scenario = engine.generate_scenario(
+            mode=body.mode,
+            difficulty=body.difficulty,
+            error_count=body.error_count,
+            pattern=body.pattern,
+            seed=body.seed,
+            concepts=body.concepts,
+        )
+    except ConceptMissed as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     store.save_scenario(scenario)
 
     logger.info("Created scenario %s via API", scenario.scenario_id)
@@ -174,6 +190,7 @@ async def api_generate_scenario(
             "difficulty": scenario.difficulty,
             "pattern": scenario.household.pattern if scenario.household else "",
             "member_count": len(scenario.household.members) if scenario.household else 0,
+            "concept_tags": scenario.concept_tags or [],
             "exercise_url": f"/scenarios/{scenario.scenario_id}",
         },
     )
@@ -307,6 +324,20 @@ async def page_new_scenario(request: Request) -> HTMLResponse:
         f'<option value="{p}">{PATTERN_METADATA[p]["description"]}</option>'
         for p in patterns
     )
+    concept_labels = {
+        "qualifying_child_residency": "Qualifying Child Residency",
+        "hoh_qualifying_person": "Head of Household",
+        "refundable_credit_only_filer": "Refundable Credit Only Filer",
+        "self_employment_threshold": "Self-Employment Threshold",
+        "social_security_taxability": "Social Security Taxability",
+        "standard_vs_itemized": "Standard vs. Itemized Deduction",
+    }
+    concept_checkboxes = "\n".join(
+        f'<label class="checkbox"><input type="checkbox" name="concepts" '
+        f'value="{name}"> {label}</label>'
+        for name, label in concept_labels.items()
+    )
+
     html = f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -317,10 +348,15 @@ async def page_new_scenario(request: Request) -> HTMLResponse:
 body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }}
 h1 {{ color: #1a3a5c; }}
 label {{ display: block; margin-top: 16px; font-weight: bold; }}
-select, input {{ padding: 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }}
+select, input[type="text"], input[type="number"] {{ padding: 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }}
 button {{ margin-top: 24px; padding: 12px 24px; background: #1a3a5c; color: white;
          border: none; cursor: pointer; font-size: 16px; border-radius: 4px; }}
 button:hover {{ background: #2c5f8a; }}
+fieldset {{ border: 1px solid #ccc; border-radius: 6px; padding: 12px 16px; margin-top: 16px; }}
+legend {{ font-weight: bold; color: #1a3a5c; }}
+.checkbox {{ font-weight: normal; margin-top: 6px; }}
+.checkbox input {{ width: auto; margin-right: 6px; }}
+.hint {{ font-size: 13px; color: #666; margin-top: 4px; font-weight: normal; }}
 </style>
 </head>
 <body>
@@ -345,6 +381,11 @@ button:hover {{ background: #2c5f8a; }}
             {options_html}
         </select>
     </label>
+    <fieldset>
+        <legend>Target Concepts (optional)</legend>
+        <div class="hint">Select concepts to practice. The generator will create a scenario that exercises these tax-law features.</div>
+        {concept_checkboxes}
+    </fieldset>
     <button type="submit">Generate Scenario</button>
 </form>
 </body>
@@ -358,16 +399,42 @@ async def page_create_scenario(
     mode: str = Form("intake"),
     difficulty: str = Form("easy"),
     pattern: str = Form(""),
-) -> RedirectResponse:
+    concepts: Optional[List[str]] = Form(None),
+) -> Response:
     """Handle the browser form POST — generate and redirect to exercise."""
     engine = request.app.state.engine
     store = request.app.state.store
 
-    scenario = engine.generate_scenario(
-        mode=mode,
-        difficulty=difficulty,
-        pattern=pattern or None,
-    )
+    concept_list = concepts if concepts else None
+
+    try:
+        scenario = engine.generate_scenario(
+            mode=mode,
+            difficulty=difficulty,
+            pattern=pattern or None,
+            concepts=concept_list,
+        )
+    except ConceptMissed as exc:
+        return HTMLResponse(
+            content=f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Generation Failed</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }}
+h1 {{ color: #c62828; }}
+.message {{ background: #ffebee; padding: 16px; border-radius: 6px; border-left: 4px solid #c62828; }}
+.actions {{ margin-top: 24px; }}
+.actions a {{ padding: 12px 24px; background: #1a3a5c; color: white; text-decoration: none; border-radius: 4px; }}
+</style></head>
+<body>
+<h1>Generation Failed</h1>
+<div class="message">{exc}</div>
+<div class="actions"><a href="/scenarios/new">Try Again</a></div>
+</body></html>""",
+            status_code=422,
+        )
+
     store.save_scenario(scenario)
 
     logger.info("Created scenario %s via browser", scenario.scenario_id)

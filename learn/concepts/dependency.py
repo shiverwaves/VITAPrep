@@ -11,12 +11,22 @@ evaluate the rule rather than assuming full-year residency.
 
 from typing import Any
 
-from learn.concepts.base import Concept
+from learn.concepts.base import Concept, GenerationHints
 
 
 class QualifyingChildResidencyConcept(Concept):
     """Fires when a dependent has partial-year residency."""
     name = "qualifying_child_residency"
+
+    def generation_hints(self) -> GenerationHints:
+        return GenerationHints(
+            preferred_patterns=[
+                "single_parent",
+                "married_couple_with_children",
+                "blended_family",
+            ],
+            child_months_in_home_range=(1, 11),
+        )
 
     def matches(self, scenario: Any) -> bool:
         hh = scenario.household

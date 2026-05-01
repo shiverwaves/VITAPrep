@@ -6,7 +6,7 @@ non-obvious filing situations.
 
 from typing import Any
 
-from learn.concepts.base import Concept
+from learn.concepts.base import Concept, GenerationHints
 from tax_core.predicates.credits import qualifies_for_actc, qualifies_for_eitc
 from tax_core.predicates.filing_status import has_qualifying_person_for_hoh
 from tax_core.predicates.income import filing_threshold_for, total_income
@@ -20,6 +20,11 @@ class HoHQualifyingPersonConcept(Concept):
     default to "single" for unmarried clients, missing HoH eligibility.
     """
     name = "hoh_qualifying_person"
+
+    def generation_hints(self) -> GenerationHints:
+        return GenerationHints(
+            preferred_patterns=["single_parent"],
+        )
 
     def matches(self, scenario: Any) -> bool:
         hh = scenario.household
@@ -41,6 +46,12 @@ class RefundableCreditOnlyFilerConcept(Concept):
     must recognize that "below filing threshold" doesn't mean "can't file."
     """
     name = "refundable_credit_only_filer"
+
+    def generation_hints(self) -> GenerationHints:
+        return GenerationHints(
+            preferred_patterns=["single_parent"],
+            max_wage_income=12000,
+        )
 
     def matches(self, scenario: Any) -> bool:
         hh = scenario.household

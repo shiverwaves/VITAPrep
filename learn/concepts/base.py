@@ -14,26 +14,37 @@ constraint is enforced by pipeline ordering and verified by test.
 
 GenerationHints
 ---------------
-A placeholder for Restructure E. Concepts return empty hints in D;
-E will populate them to bias the generator toward scenarios that
-exercise specific concepts.
+Best-effort biases passed to the generator to increase the likelihood
+of a concept firing. Each field is optional; unset fields leave the
+generator's default behavior unchanged. Fields are flat and per-concept
+(Option A from BUILD_PLAN). If flat hints become unwieldy, refactor to
+named trait bundles (Option B).
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional, Tuple
 
 
 @dataclass
 class GenerationHints:
     """Best-effort biases passed to the generator.
 
-    Empty in Restructure D. Restructure E will add fields like
-    preferred patterns, income ranges, and household compositions
-    that increase the likelihood of a concept firing.
+    Each concept populates only the fields it needs. The engine merges
+    hints from all requested concepts before passing to the generator.
     """
     preferred_patterns: List[str] = field(default_factory=list)
-    hints: Dict[str, Any] = field(default_factory=dict)
+
+    child_months_in_home_range: Optional[Tuple[int, int]] = None
+
+    force_self_employment: bool = False
+
+    force_ss_recipient: bool = False
+    min_other_income: Optional[int] = None
+
+    max_wage_income: Optional[int] = None
+
+    force_homeowner: bool = False
 
 
 class Concept(ABC):
@@ -67,7 +78,8 @@ class Concept(ABC):
     def generation_hints(self) -> GenerationHints:
         """Return generation hints for targeting this concept.
 
-        Returns empty hints in Restructure D. Override in E to bias
-        the generator toward scenarios that exercise this concept.
+        Override to bias the generator toward scenarios that exercise
+        this concept. The engine merges hints from all requested
+        concepts before passing to the generator.
         """
         return GenerationHints()
