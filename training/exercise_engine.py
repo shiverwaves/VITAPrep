@@ -31,6 +31,17 @@ from intake.analyzer.slots.zero_income_reason import ZeroIncomeReasonSlot
 from intake.analyzer.types import Unrescuable
 from intake.boilerplate import generate_boilerplate
 from intake.obfuscator import obfuscate
+from learn.concept_catalog import ConceptCatalog
+from learn.concepts.deductions import StandardVsItemizedConcept
+from learn.concepts.dependency import QualifyingChildResidencyConcept
+from learn.concepts.filing_status import (
+    HoHQualifyingPersonConcept,
+    RefundableCreditOnlyFilerConcept,
+)
+from learn.concepts.income import (
+    SelfEmploymentThresholdConcept,
+    SocialSecurityTaxabilityConcept,
+)
 from tax_core.ground_truth import compute_ground_truth
 from .error_injector import ErrorInjector
 from .grader import build_form_answers
@@ -48,6 +59,13 @@ class ExerciseEngine:
         self.analyzer.register(AddressMismatchSlot())
         self.analyzer.register(ZeroIncomeReasonSlot())
         self.analyzer.register(DependentResidencySlot())
+        self.concept_catalog = ConceptCatalog()
+        self.concept_catalog.register(QualifyingChildResidencyConcept())
+        self.concept_catalog.register(HoHQualifyingPersonConcept())
+        self.concept_catalog.register(RefundableCreditOnlyFilerConcept())
+        self.concept_catalog.register(SelfEmploymentThresholdConcept())
+        self.concept_catalog.register(SocialSecurityTaxabilityConcept())
+        self.concept_catalog.register(StandardVsItemizedConcept())
 
     def generate_scenario(
         self,
@@ -136,6 +154,10 @@ class ExerciseEngine:
         gt.form_answers = build_form_answers(household)
         gt_dict = gt.to_dict()
 
+        # Stage 4b: Concept labeling — tag the scenario for learning analytics
+        scenario.ground_truth = gt_dict
+        concept_tags = sorted(self.concept_catalog.run_all(scenario))
+
         # Stage 5: Obfuscate — render fired templates into interview notes
         slot_notes = obfuscate(narrative_slots, scenario, difficulty)
 
@@ -167,6 +189,7 @@ class ExerciseEngine:
         scenario.household = household
         scenario.injected_errors = injected_errors
         scenario.ground_truth = gt_dict
+        scenario.concept_tags = concept_tags if concept_tags else None
         scenario.narrative_slots = {
             name: [
                 {"slot_name": ft.slot_name, "instance_id": _instance_id(ft.instance)}
@@ -178,12 +201,13 @@ class ExerciseEngine:
 
         logger.info(
             "Generated scenario %s (attempt %d): mode=%s, difficulty=%s, "
-            "members=%d, errors=%d, slots_fired=%d, notes=%d",
+            "members=%d, errors=%d, slots_fired=%d, notes=%d, concepts=%d",
             scenario_id, attempt + 1, mode, difficulty,
             len(household.members),
             len(injected_errors),
             len(narrative_slots),
             len(all_notes),
+            len(concept_tags),
         )
         return scenario
 

@@ -409,6 +409,26 @@ class TestPipelineIntegration:
                 lambda hh, **kw: (hh, [])
             )
             eng.analyzer = ScenarioAnalyzer()
+
+            from learn.concept_catalog import ConceptCatalog
+            from learn.concepts.deductions import StandardVsItemizedConcept
+            from learn.concepts.dependency import QualifyingChildResidencyConcept
+            from learn.concepts.filing_status import (
+                HoHQualifyingPersonConcept,
+                RefundableCreditOnlyFilerConcept,
+            )
+            from learn.concepts.income import (
+                SelfEmploymentThresholdConcept,
+                SocialSecurityTaxabilityConcept,
+            )
+            eng.concept_catalog = ConceptCatalog()
+            eng.concept_catalog.register(QualifyingChildResidencyConcept())
+            eng.concept_catalog.register(HoHQualifyingPersonConcept())
+            eng.concept_catalog.register(RefundableCreditOnlyFilerConcept())
+            eng.concept_catalog.register(SelfEmploymentThresholdConcept())
+            eng.concept_catalog.register(SocialSecurityTaxabilityConcept())
+            eng.concept_catalog.register(StandardVsItemizedConcept())
+
             yield eng
 
     def test_scenario_generated_with_ground_truth(self, engine) -> None:

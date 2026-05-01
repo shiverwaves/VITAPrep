@@ -345,6 +345,26 @@ def _engine_with_household(household: Household) -> ExerciseEngine:
     eng.analyzer.register(AddressMismatchSlot())
     eng.analyzer.register(ZeroIncomeReasonSlot())
     eng.analyzer.register(DependentResidencySlot())
+
+    from learn.concept_catalog import ConceptCatalog
+    from learn.concepts.deductions import StandardVsItemizedConcept
+    from learn.concepts.dependency import QualifyingChildResidencyConcept
+    from learn.concepts.filing_status import (
+        HoHQualifyingPersonConcept,
+        RefundableCreditOnlyFilerConcept,
+    )
+    from learn.concepts.income import (
+        SelfEmploymentThresholdConcept,
+        SocialSecurityTaxabilityConcept,
+    )
+    eng.concept_catalog = ConceptCatalog()
+    eng.concept_catalog.register(QualifyingChildResidencyConcept())
+    eng.concept_catalog.register(HoHQualifyingPersonConcept())
+    eng.concept_catalog.register(RefundableCreditOnlyFilerConcept())
+    eng.concept_catalog.register(SelfEmploymentThresholdConcept())
+    eng.concept_catalog.register(SocialSecurityTaxabilityConcept())
+    eng.concept_catalog.register(StandardVsItemizedConcept())
+
     return eng
 
 

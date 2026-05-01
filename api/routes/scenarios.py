@@ -275,6 +275,7 @@ async def api_get_scenario(
         "members": members_info,
         "document_urls": doc_urls,
         "interview_notes": scenario.interview_notes or [],
+        "concept_tags": scenario.concept_tags or [],
         "form_url": f"/scenarios/{scenario_id}/form",
         "exercise_url": f"/scenarios/{scenario_id}",
         "created_at": scenario.created_at,
@@ -1016,7 +1017,10 @@ async def page_submit(
         scenario_id, result.score, result.max_score, result.accuracy * 100,
     )
 
-    html = _build_results_html(scenario_id, scenario.mode, result, section="intake")
+    html = _build_results_html(
+        scenario_id, scenario.mode, result, section="intake",
+        concept_tags=scenario.concept_tags,
+    )
     return HTMLResponse(content=html)
 
 
@@ -1063,6 +1067,7 @@ async def page_submit_income(
 
     html = _build_results_html(
         scenario_id, scenario.mode, result, section="income",
+        concept_tags=scenario.concept_tags,
     )
     return HTMLResponse(content=html)
 
@@ -1139,6 +1144,7 @@ async def page_submit_expenses(
 
     html = _build_results_html(
         scenario_id, scenario.mode, result, section="expenses",
+        concept_tags=scenario.concept_tags,
     )
     return HTMLResponse(content=html)
 
@@ -1170,7 +1176,10 @@ async def page_results(
             raise HTTPException(status_code=404, detail="No grades found for this scenario")
         result = grades[-1]
 
-    html = _build_results_html(scenario_id, scenario.mode, result, section=section or "intake")
+    html = _build_results_html(
+        scenario_id, scenario.mode, result, section=section or "intake",
+        concept_tags=scenario.concept_tags,
+    )
     return HTMLResponse(content=html)
 
 
@@ -1633,6 +1642,7 @@ td {{ padding: 8px 12px; border-bottom: 1px solid #eee; }}
 
 def _build_results_html(
     scenario_id: str, mode: str, result, section: str = "intake",
+    concept_tags: Optional[List[str]] = None,
 ) -> str:
     """Build the grading results HTML page.
 
@@ -1702,6 +1712,21 @@ def _build_results_html(
 <tbody>{field_rows}</tbody>
 </table>"""
 
+    concepts_html = ""
+    if concept_tags:
+        tag_labels = {
+            "qualifying_child_residency": "Qualifying Child Residency",
+            "hoh_qualifying_person": "Head of Household",
+            "refundable_credit_only_filer": "Refundable Credit Only Filer",
+            "self_employment_threshold": "Self-Employment Threshold",
+            "social_security_taxability": "Social Security Taxability",
+            "standard_vs_itemized": "Standard vs. Itemized Deduction",
+        }
+        items = ", ".join(tag_labels.get(t, t) for t in concept_tags)
+        concepts_html = (
+            f'<div class="concepts"><strong>Concepts tested:</strong> {items}</div>'
+        )
+
     section_labels = {
         "intake": "Part I — Personal Info",
         "income": "Part II — Income",
@@ -1739,6 +1764,8 @@ ul {{ line-height: 1.8; }}
               border-radius: 4px; }}
 .actions a:hover {{ background: #2c5f8a; }}
 .actions a.secondary {{ background: #6c757d; }}
+.concepts {{ background: #e8edf3; padding: 12px 16px; border-radius: 6px; margin-top: 24px;
+             font-size: 14px; color: #333; }}
 </style>
 </head>
 <body>
@@ -1750,6 +1777,7 @@ ul {{ line-height: 1.8; }}
 <div class="feedback">{result.feedback}</div>
 {field_table}
 {flags_html}
+{concepts_html}
 <div class="actions">
     <a href="/scenarios/{scenario_id}">Back to Scenario</a>
     <a href="/scenarios/{scenario_id}/form{"/income" if section == "income" else ""}" class="secondary">Try Again</a>
