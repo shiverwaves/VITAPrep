@@ -28,6 +28,7 @@ from generator.models import (
     RelationshipType,
     Scenario,
 )
+from tax_core.ground_truth import SCHEMA_VERSION, GroundTruth, PersonClassification
 from training.scenario_store import ScenarioStore
 
 
@@ -582,3 +583,132 @@ class TestRelationshipRoundTrip:
         assert got is not None
         for orig, loaded in zip(members, got.household.members):
             assert loaded.relationship == orig.relationship
+
+
+# =========================================================================
+# Ground truth round-trip through store
+# =========================================================================
+
+class TestGroundTruthStore:
+
+    def _make_ground_truth(self) -> dict:
+        """Build a GroundTruth, return its serialized dict form."""
+        gt = GroundTruth(
+            schema_version=SCHEMA_VERSION,
+            tax_year=2022,
+            filing_status="married_filing_jointly",
+            agi=75000,
+            taxable_income=49100,
+            total_tax=5400,
+            refund_or_owed=600,
+            deduction_type="standard",
+            standard_deduction=25900,
+            itemized_deduction_total=0,
+            credits_claimed={"ctc": 2000},
+            person_classifications={
+                "p-01": PersonClassification(
+                    person_id="p-01", role="primary",
+                    dependency_type="none",
+                    credit_eligibility={"ctc": False},
+                ),
+                "p-03": PersonClassification(
+                    person_id="p-03", role="dependent",
+                    dependency_type="qualifying_child",
+                    credit_eligibility={"ctc": True},
+                ),
+            },
+            predicate_results={
+                "qualifying_child_residency_test_p-03": {
+                    "passed": True, "months_in_home": 12,
+                },
+            },
+        )
+        return gt.to_dict()
+
+    def test_save_and_load_with_ground_truth(
+        self, store: ScenarioStore, sample_household: Household,
+    ) -> None:
+        gt_dict = self._make_ground_truth()
+        sc = Scenario(
+            scenario_id="sc-gt-1",
+            mode="intake",
+            difficulty="easy",
+            household=sample_household,
+            ground_truth=gt_dict,
+        )
+        store.save_scenario(sc)
+        loaded = store.get_scenario("sc-gt-1")
+
+        assert loaded is not None
+        assert loaded.ground_truth is not None
+        assert loaded.ground_truth["schema_version"] == SCHEMA_VERSION
+        assert loaded.ground_truth["filing_status"] == "married_filing_jointly"
+        assert loaded.ground_truth["agi"] == 75000
+        assert loaded.ground_truth["credits_claimed"]["ctc"] == 2000
+
+    def test_ground_truth_none_for_pre_b_scenarios(
+        self, store: ScenarioStore,
+    ) -> None:
+        """Scenarios without ground_truth load with ground_truth=None."""
+        sc = Scenario(
+            scenario_id="sc-pre-b",
+            mode="intake",
+            difficulty="easy",
+        )
+        store.save_scenario(sc)
+        loaded = store.get_scenario("sc-pre-b")
+        assert loaded is not None
+        assert loaded.ground_truth is None
+
+    def test_ground_truth_full_round_trip(
+        self, store: ScenarioStore, sample_household: Household,
+    ) -> None:
+        """to_dict → store → load → from_dict → assert equal."""
+        gt_dict = self._make_ground_truth()
+        sc = Scenario(
+            scenario_id="sc-gt-rt",
+            mode="verify",
+            difficulty="medium",
+            household=sample_household,
+            ground_truth=gt_dict,
+        )
+        store.save_scenario(sc)
+        loaded = store.get_scenario("sc-gt-rt")
+
+        rebuilt = GroundTruth.from_dict(loaded.ground_truth)
+        assert rebuilt.schema_version == SCHEMA_VERSION
+        assert rebuilt.tax_year == 2022
+        assert rebuilt.filing_status == "married_filing_jointly"
+        assert rebuilt.agi == 75000
+        assert rebuilt.taxable_income == 49100
+        assert rebuilt.total_tax == 5400
+        assert rebuilt.refund_or_owed == 600
+        assert rebuilt.deduction_type == "standard"
+        assert rebuilt.standard_deduction == 25900
+        assert rebuilt.credits_claimed == {"ctc": 2000}
+        assert len(rebuilt.person_classifications) == 2
+        assert rebuilt.person_classifications["p-03"].dependency_type == "qualifying_child"
+        assert rebuilt.predicate_results["qualifying_child_residency_test_p-03"]["passed"] is True
+
+    def test_schema_version_mismatch_on_load(
+        self, store: ScenarioStore,
+    ) -> None:
+        """Loading a scenario with wrong schema_version raises ValueError."""
+        bad_gt = {"schema_version": 999, "tax_year": 2022}
+        sc = Scenario(
+            scenario_id="sc-bad-v",
+            mode="intake",
+            difficulty="easy",
+            ground_truth=bad_gt,
+        )
+        store.save_scenario(sc)
+        with pytest.raises(ValueError, match="schema version mismatch"):
+            store.get_scenario("sc-bad-v")
+
+    def test_lifecycle_fields_default_none(self) -> None:
+        """New Scenario lifecycle fields all default to None."""
+        sc = Scenario(scenario_id="sc-new", mode="intake", difficulty="easy")
+        assert sc.ground_truth is None
+        assert sc.narrative_slots is None
+        assert sc.concept_tags is None
+        assert sc.interview_notes is None

@@ -617,7 +617,16 @@ class GradingResult:
 
 @dataclass
 class Scenario:
-    """A complete exercise package."""
+    """A complete exercise package wrapping a Household with lifecycle metadata.
+
+    Fields are populated stage by stage — each stage appends, none mutates
+    fields written by an earlier stage. Optional fields document preconditions:
+    a consumer that asserts ``scenario.ground_truth is not None`` documents
+    what it requires.
+
+    Moves to intake/scenario.py in Restructure C when the intake/ package
+    is created.
+    """
     scenario_id: str = ""
     mode: str = ""  # "intake", "verify", "crosscheck"
     difficulty: str = ""  # "easy", "medium", "hard"
@@ -626,6 +635,16 @@ class Scenario:
     client_facts: List[ClientFact] = field(default_factory=list)
     document_paths: dict = field(default_factory=dict)  # {"ssn_primary": "/path/to.pdf", ...}
     created_at: Optional[str] = None
+
+    # --- Lifecycle fields (Restructure B+) ---
+    # Populated by compute_ground_truth() after generation.
+    ground_truth: Optional[dict] = None  # serialized GroundTruth via to_dict()
+    # Populated by the analyzer (Restructure C).
+    narrative_slots: Optional[dict] = None
+    # Populated by concept evaluation (Restructure D).
+    concept_tags: Optional[List[str]] = None
+    # Populated by the obfuscator (Restructure C).
+    interview_notes: Optional[List[dict]] = None
 
 
 # =============================================================================

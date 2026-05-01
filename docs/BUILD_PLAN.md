@@ -60,7 +60,7 @@ Where old terms map to new ones. Use this when reading old code or comments.
 | `training/` | split between `intake/` (rendering, modes) and `learn/` (grading, progression) | — |
 | "Error injection" | "Review mode corruption" | `intake/modes/review.py` |
 | "Exercise engine" | Lifecycle orchestrator | `intake/orchestrator.py` (new) |
-| "Profile" or raw `Household` | `Scenario` (envelope object — wraps household and adds ground truth, concepts, slots, notes) | `intake/scenario.py` (new) |
+| "Profile" or raw `Household` | `Scenario` (envelope object — wraps household and adds ground truth, concepts, slots, notes) | `generator/models.py` (extended in B, moves to `intake/scenario.py` in C) |
 | "Difficulty" as info-hiding | Subtlety dial on obfuscation layer + concept count/complexity | per-slot, per-concept |
 | "Answer key" | `ground_truth` field on `Scenario` | `tax_core/ground_truth.py` |
 
@@ -288,7 +288,7 @@ The scenario store (Fix 12.I) demonstrated the cost of relying on `dataclasses.a
 Build the data structures and prove they round-trip through the store. Nothing computes yet.
 
 1. **Define `GroundTruth` and `PersonClassification`** in `tax_core/ground_truth.py`. Schema version 1. Include `to_dict()` / `from_dict()` from the start. `PersonClassification` holds role (primary/spouse/dependent), dependency type (qualifying child/qualifying relative/none), and credit eligibility flags (CTC, ACTC, EITC qualifying child).
-2. **Define `Scenario`** wrapper in `intake/scenario.py`. All lifecycle fields start as `None`. `Scenario` delegates to `scenario.household` for generator/renderer compatibility — existing code doesn't change.
+2. **Extend the existing `Scenario`** in `generator/models.py` with lifecycle fields (`ground_truth`, `narrative_slots`, `concept_tags`, `interview_notes`, etc.), all defaulting to `None`. The `intake/scenario.py` move is deferred to Restructure C when the `intake/` package is created — avoids creating that package prematurely and avoids updating every import site. Existing code continues to work unchanged via `scenario.household`.
 3. **Migrate the scenario store** to serialize/deserialize `Scenario` (not `Household` directly). The store writes `Scenario.to_dict()` and reads via `Scenario.from_dict()`. `GroundTruth` is serialized as a nested dict within the scenario JSON; `schema_version` is checked on load.
 4. **Round-trip serialization tests** for both `GroundTruth` and `Scenario` — `to_dict → JSON → from_dict → assert equal`. Cover: empty `GroundTruth` (all fields populated), `Scenario` with `ground_truth=None` (pre-computation state), `Scenario` with populated `ground_truth`, `PersonClassification` with various roles. Also test that loading a scenario with wrong `schema_version` raises cleanly.
 
