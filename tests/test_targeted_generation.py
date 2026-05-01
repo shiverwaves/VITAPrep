@@ -79,6 +79,13 @@ class TestConceptHints:
         h = c.generation_hints()
         assert h.force_homeowner is True
 
+    def test_full_time_student_dependent_hints(self) -> None:
+        from learn.concepts.education import FullTimeStudentDependentConcept
+        c = FullTimeStudentDependentConcept()
+        h = c.generation_hints()
+        assert h.force_full_time_student is True
+        assert "single_parent" in h.preferred_patterns
+
 
 # =========================================================================
 # 2. Hint merging
@@ -98,6 +105,8 @@ class TestHintMerging:
             eng.concept_catalog.register(SelfEmploymentThresholdConcept())
             eng.concept_catalog.register(SocialSecurityTaxabilityConcept())
             eng.concept_catalog.register(StandardVsItemizedConcept())
+            from learn.concepts.education import FullTimeStudentDependentConcept
+            eng.concept_catalog.register(FullTimeStudentDependentConcept())
             yield eng
 
     def test_single_concept_merge(self, engine) -> None:
@@ -319,3 +328,72 @@ class TestPatternSelection:
             hints = GenerationHints(preferred_patterns=["single_parent"])
             hh = gen._select_pattern(pattern="single_adult", hints=hints)
             assert hh.pattern == "single_adult"
+
+
+# =========================================================================
+# 7. Student status assignment
+# =========================================================================
+
+class TestStudentStatus:
+
+    def test_student_assigned_from_distribution(self) -> None:
+        """Children aged 18-23 get is_full_time_student based on distribution."""
+        import pandas as pd
+        from generator.children import ChildGenerator
+        enrollment_df = pd.DataFrame([
+            {"age_bracket": "18-19", "enrolled_proportion": 1.0, "weight": 100},
+            {"age_bracket": "20-21", "enrolled_proportion": 1.0, "weight": 100},
+            {"age_bracket": "22-24", "enrolled_proportion": 1.0, "weight": 100},
+        ])
+        cg = ChildGenerator({"student_enrollment": enrollment_df})
+        hh = _household(
+            [_person(age=45)],
+            pattern="single_parent",
+        )
+        hh.expected_children_range = (1, 3)
+        children = cg.generate_children(hh)
+        students = [c for c in children if 18 <= c.age <= 23]
+        for s in students:
+            assert s.is_full_time_student is True
+
+    def test_young_child_never_student(self) -> None:
+        """Children under 18 never get is_full_time_student."""
+        from generator.children import ChildGenerator
+        cg = ChildGenerator({})
+        hh = _household(
+            [_person(age=35)],
+            pattern="single_parent",
+        )
+        hh.expected_children_range = (1, 3)
+        children = cg.generate_children(hh)
+        for c in children:
+            if c.age < 18:
+                assert c.is_full_time_student is False
+
+    def test_force_full_time_student_hint(self) -> None:
+        """force_full_time_student hint guarantees at least one student."""
+        from generator.children import ChildGenerator
+        import pandas as pd
+        enrollment_df = pd.DataFrame([
+            {"age_bracket": "18-19", "enrolled_proportion": 0.0, "weight": 100},
+            {"age_bracket": "20-21", "enrolled_proportion": 0.0, "weight": 100},
+            {"age_bracket": "22-24", "enrolled_proportion": 0.0, "weight": 100},
+        ])
+        cg = ChildGenerator({"student_enrollment": enrollment_df})
+        parent = _person(age=50)
+        child = _person(pid="p-02", rel=RelationshipType.BIOLOGICAL_CHILD,
+                        age=20, is_dependent=True)
+        hh = _household([parent, child], pattern="single_parent")
+        hh.expected_children_range = (1, 3)
+        hints = GenerationHints(force_full_time_student=True)
+        children = cg.generate_children(hh, hints=hints)
+        eligible = [c for c in children if 18 <= c.age <= 23]
+        if eligible:
+            assert any(c.is_full_time_student for c in eligible)
+
+    def test_national_fallback_used(self) -> None:
+        """When no distribution table, national rates are used (no crash)."""
+        from generator.children import ChildGenerator
+        cg = ChildGenerator({})
+        prob = cg._enrollment_probability(19, None)
+        assert 0.0 < prob <= 1.0

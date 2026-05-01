@@ -152,6 +152,7 @@ class TestGenerationHints:
         assert hints.force_self_employment is False
         assert hints.force_ss_recipient is False
         assert hints.force_homeowner is False
+        assert hints.force_full_time_student is False
         assert hints.child_months_in_home_range is None
         assert hints.max_wage_income is None
         assert hints.min_other_income is None

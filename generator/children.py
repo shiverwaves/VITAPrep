@@ -148,6 +148,8 @@ class ChildGenerator:
             target = children[random.randrange(len(children))]
             target.months_in_home = random.randint(lo, hi)
 
+        self._assign_student_status(children, hints)
+
         logger.debug(
             "Generated %d children for pattern '%s'", len(children), pattern,
         )
@@ -401,6 +403,68 @@ class ChildGenerator:
         if any(a.hispanic_origin for a in adults):
             return bool(np.random.random() < 0.9)
         return False
+
+    # =================================================================
+    # Student status
+    # =================================================================
+
+    # ACS national enrollment rates by age bracket (fallback when
+    # student_enrollment table is absent).  Source: 2022 ACS 1-Year.
+    _NATIONAL_ENROLLMENT = {
+        "18-19": 0.55,
+        "20-21": 0.40,
+        "22-24": 0.20,
+    }
+
+    def _assign_student_status(
+        self,
+        children: List[Person],
+        hints: Optional[GenerationHints] = None,
+    ) -> None:
+        """Set ``is_full_time_student`` on dependents aged 18–23.
+
+        Uses the ``student_enrollment`` distribution table when available,
+        falling back to national ACS averages.  If ``force_full_time_student``
+        is set in hints, the first eligible child is forced to be a student.
+        """
+        enrollment = self.distributions.get("student_enrollment")
+
+        eligible = [c for c in children if 18 <= c.age <= 23]
+        if not eligible:
+            return
+
+        forced_one = False
+        for child in eligible:
+            prob = self._enrollment_probability(child.age, enrollment)
+            if np.random.random() < prob:
+                child.is_full_time_student = True
+                forced_one = True
+
+        if hints and hints.force_full_time_student and not forced_one and eligible:
+            eligible[0].is_full_time_student = True
+
+    def _enrollment_probability(
+        self,
+        age: int,
+        enrollment_df: Optional[pd.DataFrame],
+    ) -> float:
+        """Look up enrollment probability for *age* from distribution or fallback."""
+        bracket = self._student_age_to_bracket(age)
+
+        if enrollment_df is not None and not enrollment_df.empty:
+            row = enrollment_df[enrollment_df["age_bracket"] == bracket]
+            if not row.empty:
+                return float(row.iloc[0]["enrolled_proportion"])
+
+        return self._NATIONAL_ENROLLMENT.get(bracket, 0.0)
+
+    @staticmethod
+    def _student_age_to_bracket(age: int) -> str:
+        if age <= 19:
+            return "18-19"
+        if age <= 21:
+            return "20-21"
+        return "22-24"
 
     # =================================================================
     # Helpers

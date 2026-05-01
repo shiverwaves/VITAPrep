@@ -214,6 +214,7 @@ def load_pums_data(
         "RELSHIPP",  # Relationship to householder
         "MAR",       # Marital status
         "SCHL",      # Educational attainment
+        "SCH",       # School enrollment in last 3 months
         "ESR",       # Employment status recode
         "DIS",       # Disability recode
         "OCCP",      # Occupation code

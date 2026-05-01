@@ -364,6 +364,8 @@ def _engine_with_household(household: Household) -> ExerciseEngine:
     eng.concept_catalog.register(SelfEmploymentThresholdConcept())
     eng.concept_catalog.register(SocialSecurityTaxabilityConcept())
     eng.concept_catalog.register(StandardVsItemizedConcept())
+    from learn.concepts.education import FullTimeStudentDependentConcept
+    eng.concept_catalog.register(FullTimeStudentDependentConcept())
 
     return eng
 

@@ -142,6 +142,8 @@ def engine():
         eng.concept_catalog.register(SelfEmploymentThresholdConcept())
         eng.concept_catalog.register(SocialSecurityTaxabilityConcept())
         eng.concept_catalog.register(StandardVsItemizedConcept())
+        from learn.concepts.education import FullTimeStudentDependentConcept
+        eng.concept_catalog.register(FullTimeStudentDependentConcept())
 
         yield eng
 
@@ -401,7 +403,7 @@ class TestConceptTags:
     def test_concept_catalog_registered(
         self, engine: ExerciseEngine,
     ) -> None:
-        assert len(engine.concept_catalog.concepts) == 6
+        assert len(engine.concept_catalog.concepts) == 7
 
     def test_concept_tags_none_when_empty(
         self, engine: ExerciseEngine,

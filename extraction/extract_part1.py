@@ -1,13 +1,13 @@
 """
 Part 1 extraction — household structure + demographics tables.
 
-Extracts 12 distribution tables from PUMS data needed for Part 1 of VITA intake.
+Extracts 13 distribution tables from PUMS data needed for Part 1 of VITA intake.
 Output: SQLite file in data/distributions_{state}_{year}.sqlite
 
 Usage:
     python -m extraction.extract_part1 --state HI --year 2022
 
-The 12 tables extracted:
+The 13 tables extracted:
     1. household_patterns       — Household type distribution
     2. children_by_parent_age   — Child count by parent age bracket
     3. child_age_distributions  — Child ages by relationship type
@@ -20,8 +20,9 @@ The 12 tables extracted:
     10. hispanic_origin_by_age  — Hispanic/Latino origin by age bracket
     11. spousal_age_gaps        — Age difference between householder and spouse
     12. couple_sex_patterns     — Same-sex vs opposite-sex couple distribution
+    13. student_enrollment      — School enrollment rates by age bracket (18-24)
 
-Reference: HouseholdRNG/scripts/extract_pums.py — port the 12 Part 1 functions.
+Reference: HouseholdRNG/scripts/extract_pums.py — port the Part 1 functions.
 See docs/DATA_DICTIONARY.md for the complete table list.
 """
 
@@ -720,6 +721,61 @@ def extract_couple_sex_patterns(persons_df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================================
+# 13. Student enrollment by age
+# =========================================================================
+
+
+def extract_student_enrollment(persons_df: pd.DataFrame) -> pd.DataFrame:
+    """Extract school enrollment rates by age bracket for persons 18-24.
+
+    Uses PUMS variable SCH (school enrollment in last 3 months):
+    1 = Not enrolled, 2 = Public school/college, 3 = Private school/college.
+
+    Args:
+        persons_df: Person-level PUMS records.
+
+    Returns:
+        DataFrame with columns: [age_bracket, enrolled_proportion, weight].
+    """
+    logger.info("Extracting student_enrollment...")
+
+    students = persons_df[
+        (persons_df["AGEP"] >= 18) & (persons_df["AGEP"] <= 24)
+    ].copy()
+
+    if students.empty or "SCH" not in students.columns:
+        logger.warning("  No SCH data or no persons 18-24; returning empty")
+        return pd.DataFrame(
+            columns=["age_bracket", "enrolled_proportion", "weight"]
+        )
+
+    students["age_bracket"] = students["AGEP"].apply(
+        lambda a: "18-19" if a <= 19 else ("20-21" if a <= 21 else "22-24")
+    )
+    students["enrolled"] = students["SCH"].isin([2, 3])
+
+    records = []
+    for bracket, group in students.groupby("age_bracket"):
+        total_weight = group["PWGTP"].sum()
+        enrolled_weight = group.loc[group["enrolled"], "PWGTP"].sum()
+        proportion = enrolled_weight / total_weight if total_weight > 0 else 0
+        records.append({
+            "age_bracket": bracket,
+            "enrolled_proportion": round(proportion, 4),
+            "weight": int(total_weight),
+        })
+
+    result = pd.DataFrame(records)
+    for _, row in result.iterrows():
+        logger.info(
+            "  %s: %.1f%% enrolled",
+            row["age_bracket"], row["enrolled_proportion"] * 100,
+        )
+
+    return result
+
+
+# =========================================================================
 # Main extraction pipeline
 # =========================================================================
 
@@ -778,6 +834,7 @@ def extract_all_part1(
         "hispanic_origin_by_age": extract_hispanic_origin_by_age(persons_df),
         "spousal_age_gaps": extract_spousal_age_gaps(persons_df),
         "couple_sex_patterns": extract_couple_sex_patterns(persons_df),
+        "student_enrollment": extract_student_enrollment(persons_df),
     }
 
     # Write to SQLite

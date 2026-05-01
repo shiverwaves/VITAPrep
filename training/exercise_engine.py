@@ -36,6 +36,7 @@ from learn.concept_catalog import ConceptCatalog
 from learn.concepts.base import GenerationHints
 from learn.concepts.deductions import StandardVsItemizedConcept
 from learn.concepts.dependency import QualifyingChildResidencyConcept
+from learn.concepts.education import FullTimeStudentDependentConcept
 from learn.concepts.filing_status import (
     HoHQualifyingPersonConcept,
     RefundableCreditOnlyFilerConcept,
@@ -82,6 +83,7 @@ class ExerciseEngine:
         self.concept_catalog.register(SelfEmploymentThresholdConcept())
         self.concept_catalog.register(SocialSecurityTaxabilityConcept())
         self.concept_catalog.register(StandardVsItemizedConcept())
+        self.concept_catalog.register(FullTimeStudentDependentConcept())
 
     def generate_scenario(
         self,
