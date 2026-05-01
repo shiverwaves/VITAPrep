@@ -336,6 +336,10 @@ class Person:
     can_be_claimed: bool = False
     months_in_home: int = 12
     is_full_time_student: bool = False
+    # Narrative fields (populated by generator for analyzer slots, C1+)
+    has_other_parent: bool = False  # child has a non-custodial parent
+    entered_household_during_year: bool = False  # joined mid-year
+    temporary_absence_reason: Optional[str] = None  # "school", "illness", etc.
 
     # === Employment (populated by employment.py — Sprint 9) ===
     employment_status: str = ""
