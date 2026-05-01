@@ -92,7 +92,7 @@ Restructure A is both a **move** (extracting existing tax logic) and a **build**
 4. **`tax_core/predicates/filing_status.py`** — Move `Household.derive_filing_status()` logic. The `Household` method becomes a thin wrapper that delegates to `tax_core`.
 5. **`tax_core/predicates/deductions.py`** — Move the SALT cap application, medical 7.5% AGI floor, itemized total aggregation, and standard-vs-itemized comparison from `ExpenseGenerator._calculate_totals()`. The expense generator calls these functions instead of doing the math inline.
 6. Replace all original call sites with imports from `tax_core`. Behavior must not change.
-7. **Stays in `intake`:** Income withholding calculation (`generator/income.py`). On a real return, withholding is *read* from a W-2, not computed. The calculation exists only to make documents look realistic.
+7. **Stays in `intake`:** Income withholding calculation (`generator/income.py`). On a real return, withholding is *read* from a W-2, not computed. The calculation exists only to make documents look realistic. More generally: functions that aggregate per-person or per-household fields without consulting a tax rule stay in the generator. They produce data; they don't apply rules.
 
 **Phase 1 checkpoint:** All existing tests pass. `tax_core/` is independently importable. The import graph is clean: nothing under `tax_core/` imports from `generator/`, `training/`, `api/`, or any future `intake/`/`learn/` path.
 

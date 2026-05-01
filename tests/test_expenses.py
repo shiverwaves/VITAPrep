@@ -19,16 +19,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from generator.expenses import (
-    EDUCATOR_EXPENSE_LIMIT,
-    HAWAII_TAX_BRACKETS_MFJ,
-    HAWAII_TAX_BRACKETS_SINGLE,
-    IRA_CONTRIBUTION_LIMIT,
-    IRA_CONTRIBUTION_LIMIT_50_PLUS,
-    SALT_CAP,
-    STANDARD_DEDUCTION,
-    STUDENT_LOAN_INTEREST_LIMIT,
-    ExpenseGenerator,
+from generator.expenses import ExpenseGenerator
+from tax_core.state_tax.hawaii import (
+    BRACKETS_SINGLE as HAWAII_TAX_BRACKETS_SINGLE,
+    BRACKETS_MFJ as HAWAII_TAX_BRACKETS_MFJ,
+    progressive_tax,
+)
+from tax_core.thresholds import (
+    educator_expense_limit,
+    ira_contribution_limit,
+    salt_cap,
+    standard_deduction_for,
+    student_loan_interest_limit,
 )
 from generator.models import (
     Address,
@@ -210,11 +212,11 @@ class TestMortgageInterest:
 
 class TestStateIncomeTax:
     def test_progressive_brackets(self) -> None:
-        tax = ExpenseGenerator._progressive_tax(50000, HAWAII_TAX_BRACKETS_SINGLE)
+        tax = progressive_tax(50000, HAWAII_TAX_BRACKETS_SINGLE)
         assert tax > 0
 
     def test_zero_income(self) -> None:
-        tax = ExpenseGenerator._progressive_tax(0, HAWAII_TAX_BRACKETS_SINGLE)
+        tax = progressive_tax(0, HAWAII_TAX_BRACKETS_SINGLE)
         assert tax == 0
 
     def test_married_uses_mfj_brackets(self) -> None:
@@ -234,8 +236,8 @@ class TestStateIncomeTax:
         assert hh.state_income_tax > 0
 
     def test_higher_income_higher_tax(self) -> None:
-        low = ExpenseGenerator._progressive_tax(30000, HAWAII_TAX_BRACKETS_SINGLE)
-        high = ExpenseGenerator._progressive_tax(100000, HAWAII_TAX_BRACKETS_SINGLE)
+        low = progressive_tax(30000, HAWAII_TAX_BRACKETS_SINGLE)
+        high = progressive_tax(100000, HAWAII_TAX_BRACKETS_SINGLE)
         assert high > low
 
 
@@ -321,7 +323,7 @@ class TestAboveLine:
             np.random.seed(i)
             p = _make_person(age=28, education="masters")
             amount = gen._student_loan_interest(p)
-            assert amount <= STUDENT_LOAN_INTEREST_LIMIT
+            assert amount <= student_loan_interest_limit(2022)
 
     def test_educator_requires_soc_25(self) -> None:
         gen = ExpenseGenerator(_empty_distributions())
@@ -336,7 +338,7 @@ class TestAboveLine:
             p = _make_person(occupation_code="2500")
             results.append(gen._educator_expenses(p))
         assert any(e > 0 for e in results)
-        assert all(e <= EDUCATOR_EXPENSE_LIMIT for e in results)
+        assert all(e <= educator_expense_limit(2022) for e in results)
 
     def test_ira_requires_employment(self) -> None:
         gen = ExpenseGenerator(_empty_distributions())
@@ -349,7 +351,7 @@ class TestAboveLine:
             np.random.seed(i)
             p = _make_person(age=55, wage_income=80000)
             amount = gen._ira_contributions(p)
-            assert amount <= IRA_CONTRIBUTION_LIMIT_50_PLUS
+            assert amount <= ira_contribution_limit(55, 2022)
 
     def test_ira_under_50_limit(self) -> None:
         gen = ExpenseGenerator(_empty_distributions())
@@ -357,7 +359,7 @@ class TestAboveLine:
             np.random.seed(i)
             p = _make_person(age=35, wage_income=80000)
             amount = gen._ira_contributions(p)
-            assert amount <= IRA_CONTRIBUTION_LIMIT
+            assert amount <= ira_contribution_limit(35, 2022)
 
 
 # =========================================================================
@@ -458,7 +460,7 @@ class TestStandardVsItemized:
         hh.charitable_contributions = 2000
         hh.medical_expenses = 0
         gen._calculate_totals(hh)
-        salt_portion = min(8000 + 5000, SALT_CAP)
+        salt_portion = min(8000 + 5000, salt_cap(2022))
         expected = salt_portion + 10000 + 2000
         assert hh.total_itemized_deductions == expected
 
@@ -471,7 +473,7 @@ class TestStandardVsItemized:
         hh.charitable_contributions = 5000
         hh.medical_expenses = 0
         gen._calculate_totals(hh)
-        standard = STANDARD_DEDUCTION["single"]
+        standard = standard_deduction_for("single", 2022)
         if hh.total_itemized_deductions > standard:
             assert hh.uses_standard_deduction is False
 
