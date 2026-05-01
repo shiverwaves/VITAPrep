@@ -100,24 +100,61 @@ Restructure A is both a **move** (extracting existing tax logic) and a **build**
 
 Implement the 18 MVP predicates listed in [`CONCEPT_CATALOG.md` § "MVP predicates"](./CONCEPT_CATALOG.md#mvp-predicates-restructure-a-first-pass). These are net-new `tax_core` functions that don't exist in the codebase today.
 
-8. **`tax_core/predicates/filing_status.py`** — Add `is_unmarried(filer, year)`, `paid_more_than_half_household_costs(filer, household)`, `has_qualifying_person_for_hoh(filer)`. These encode HoH eligibility logic per IRC §2(b).
-9. **`tax_core/predicates/dependency.py`** — Add `qualifying_child_residency_test(child, year)`, `qualifying_relative_test(person, household)`. Return structured results (pass/fail + detail) so grader and slots can inspect *why*.
-10. **`tax_core/predicates/income.py`** — Add `total_income(person)`, `total_self_employment_income(person)`, `requires_schedule_se(person)`, `compute_provisional_income(filer)`, `ss_taxability_thresholds(filing_status, year)`, `compute_taxable_ss(filer, year)`, `filing_threshold_for(status, year)`.
-11. **`tax_core/predicates/deductions.py`** — Add `standard_deduction_for(status, year)`, `compute_salt(state_tax, property_tax, year)`, `compute_medical_deduction(medical_expenses, agi)`, `compute_itemized_total(household, year)`, `should_itemize(household, year)`.
-12. **Refundable credit stubs** — Add `qualifies_for_eitc(filer, year)` and `qualifies_for_actc(filer, year)` as stubs (qualifying child + earned income > 0). Full implementation in P2.
-13. Add unit tests in `tests/tax_core/` for every predicate, using hand-built `Household` fixtures. Test boundary cases explicitly (6 months exactly fails residency, $399 SE income below threshold, provisional income at each SS tier). These tests are the regression suite for every future change.
+**Accuracy tiers.** Not all 18 predicates require the same level of tax-law scrutiny. The table below classifies each by how much work is needed now vs what can be deferred.
 
-**Phase 2 checkpoint:** All 18 predicates pass their unit tests. Import graph constraint still holds.
+| Tier | Description | Count | Approach |
+|---|---|---|---|
+| **Exact** | Arithmetic or table lookups. Hard to get wrong. | 8 | Implement fully, cite source in docstring. |
+| **Stub** | Simplified version works for scenarios we generate today. Full rule requires data or edge cases we don't yet produce. | 7 | Implement simplified logic. Docstring notes what's simplified and cites the IRC section for the full rule. Refine incrementally as generation capabilities expand. |
+| **Careful** | Requires faithful encoding of an IRS worksheet or multi-step rule. Getting it wrong produces wrong grading. | 3 | Implement against the IRS publication worksheet. Test with worked examples from the publication. |
+
+**Exact (8) — implement fully:**
+- `standard_deduction_for(status, year)` — lookup table, 2022 values already in `expenses.py`
+- `compute_salt(state_tax, property_tax, year)` — `min(total, 10000)`
+- `compute_medical_deduction(medical_expenses, agi)` — `max(0, expenses - agi * 0.075)`
+- `compute_itemized_total(household, year)` — aggregation of Schedule A categories
+- `should_itemize(household, year)` — comparison of itemized total vs standard deduction
+- `total_income(person)` — sum of income fields, already exists as `Person.total_income()`
+- `total_self_employment_income(person)` — sum of 1099-NEC amounts
+- `requires_schedule_se(person)` — `se_income >= 400`
+
+**Stub (7) — simplified now, refine later:**
+- `derive_filing_status(household)` — current logic (married → MFJ, has kids → HoH, else single) is wrong for edge cases (HoH requires more than just having children) but correct for the household patterns we generate today. Refine when `hoh_qualifying_person` concept is drilled.
+- `is_unmarried(filer, year)` — stub as "no spouse in household." Full rule includes "considered unmarried" status (lived apart last 6 months with dependent child), which requires data we don't generate yet.
+- `paid_more_than_half_household_costs(filer, household)` — stub as `True` for single-adult households. We don't generate cost-of-household data. Document as a known gap.
+- `has_qualifying_person_for_hoh(filer)` — depends on residency and relationship tests. Can compose from simplified versions of those tests.
+- `qualifying_child_residency_test(child, year)` — core "more than half the year" test is straightforward using `months_in_home`. Temporary absence exceptions (school, illness, military, kidnapping) deferred — we don't generate those scenarios yet.
+- `qualifying_relative_test(person, household)` — four-part test (relationship, gross income under threshold, support, not a QC of another). Implement the parts we have data for (relationship, gross income); stub the support test as `True` for now.
+- `qualifies_for_eitc(filer, year)` / `qualifies_for_actc(filer, year)` — explicitly stubs (qualifying child + earned income > 0). Full EITC rules are a P2 concept (`eitc_qualifying_child_rules`).
+
+**Careful (3) — requires IRS worksheet fidelity:**
+- `filing_threshold_for(status, year)` — straightforward lookup but the values must be exact for each year and filing status. Source: IRS Publication 501, Table 1.
+- `compute_provisional_income(filer)` — AGI + tax-exempt interest + ½ SS benefits. We don't generate tax-exempt interest, so for current scenarios it simplifies to `income + ss/2`. Document that tax-exempt interest is a known gap.
+- `ss_taxability_thresholds(filing_status, year)` / `compute_taxable_ss(filer, year)` — must faithfully encode the two-tier IRS Publication 915 worksheet (~10 steps). Test against worked examples from the publication. The MFS-living-with-spouse edge case (zero threshold, 85% taxable) must be handled correctly.
+
+**Steps:**
+
+8. **`tax_core/predicates/filing_status.py`** — Add `is_unmarried` (stub), `paid_more_than_half_household_costs` (stub), `has_qualifying_person_for_hoh` (stub). Each docstring cites IRC §2(b) and notes what's simplified.
+9. **`tax_core/predicates/dependency.py`** — Add `qualifying_child_residency_test` (stub — core test only, no temporary absence exceptions), `qualifying_relative_test` (stub — relationship + gross income, support test deferred). Return structured results (pass/fail + detail) so grader and slots can inspect *why*.
+10. **`tax_core/predicates/income.py`** — Add exact predicates (`total_income`, `total_self_employment_income`, `requires_schedule_se`, `filing_threshold_for`) and careful predicates (`compute_provisional_income`, `ss_taxability_thresholds`, `compute_taxable_ss`). SS taxability tested against IRS Pub 915 worksheet examples.
+11. **`tax_core/predicates/deductions.py`** — Add all 5 deduction predicates (all exact tier).
+12. **Refundable credit stubs** — `qualifies_for_eitc` and `qualifies_for_actc` as documented stubs.
+13. Add unit tests in `tests/tax_core/` for every predicate, using hand-built `Household` fixtures. Test boundary cases explicitly (6 months exactly fails residency, $399 SE income below threshold, provisional income at each SS tier, itemized total $1 above/below standard deduction). Careful-tier predicates get additional tests against IRS publication worked examples. These tests are the regression suite for every future change.
+
+**Phase 2 checkpoint:** All 18 predicates pass their unit tests. Import graph constraint still holds. Every stub-tier predicate has a docstring noting its simplification and the IRC section governing the full rule.
+
+**Relationship to a tax engine.** Individual predicates are better written by hand — they're testable, auditable, and cite specific IRC sections. An open-source tax engine (e.g., OpenTaxEngine) becomes relevant in **Restructure B** when we compute full ground truth (AGI → taxable income → total tax → refund). That's a return-level computation chaining dozens of rules; a tax engine may be more maintainable than hand-rolling it. The decision belongs in B's scope, not A's.
 
 **Output:**
 
 - `tax_core/` exists with predicates, thresholds, state tax modules, and tests.
 - Existing generators and grader import from `tax_core` instead of defining tax logic locally.
 - The import graph is clean: nothing under `tax_core/` imports from `intake/`, `learn/`, or `api/`. Enforce this in CI (e.g., `grep` in a pre-commit check or a dedicated test).
+- Every stub-tier predicate is documented: what's simplified, what IRC section governs the full rule, and what data/generation capability is needed to remove the simplification.
 
-**Final checkpoint:** All existing tests pass. All new predicate tests pass. `tax_core` is independently importable. The concept catalog's MVP predicate inventory is fully implemented.
+**Final checkpoint:** All existing tests pass. All new predicate tests pass. `tax_core` is independently importable. The concept catalog's MVP predicate inventory is fully implemented (exact, stub, or careful as classified).
 
-**Failure mode to watch for:** The temptation to "improve" predicates while moving them in Phase 1. Resist. Move first, build new in Phase 2. Refactor in a follow-up if warranted.
+**Failure mode to watch for:** The temptation to "improve" predicates while moving them in Phase 1. Resist. Move first, build new in Phase 2. Refactor in a follow-up if warranted. For Phase 2: the temptation to implement the full rule when a stub suffices. Stubs are deliberate — they match the scenarios we can currently generate. Over-engineering a predicate against edge cases we can't test is worse than a documented simplification.
 
 ---
 
