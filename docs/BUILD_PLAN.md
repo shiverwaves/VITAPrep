@@ -76,17 +76,26 @@ These sprints carve out the layered architecture without rewriting the engine. E
 
 **Prerequisites:** Sprints 1–3 complete (existing code has tax-rule logic worth extracting).
 
+**Line-drawing principle:** Would this function be called during preparation of an actual return against real client data? If yes → `tax_core`. If it exists only to fabricate plausible documents or scenarios → `intake`. When ambiguous, ask: is this a fact about the return we'd compute, or about a document we'd fabricate?
+
 **Operation:**
 
 1. Create `tax_core/` at the repo root.
-2. Identify all tax-rule logic currently embedded in generators, the grader, the error injector, or anywhere else. Examples: filing-status determination from household composition, dependency tests, filing thresholds, Schedule A substantiation rules.
-3. Move that logic into `tax_core/predicates/` (one module per family: `dependency.py`, `filing_status.py`, `income.py`, `deductions.py`) and `tax_core/thresholds.py`.
+2. Identify all tax-rule logic currently embedded in generators, the grader, the error injector, or anywhere else, applying the line-drawing principle above. The extraction targets below are specific to the current codebase as of Sprint 12.
+3. Move that logic into `tax_core/` modules:
+   - `tax_core/predicates/filing_status.py` — filing status derivation (currently `Household.derive_filing_status()` in `generator/models.py`)
+   - `tax_core/predicates/dependency.py` — dependency tests (qualifying child/relative)
+   - `tax_core/predicates/income.py` — income classification predicates
+   - `tax_core/predicates/deductions.py` — standard vs itemized comparison logic (currently in `ExpenseGenerator._calculate_totals()` in `generator/expenses.py`)
+   - `tax_core/thresholds.py` — SALT cap ($10K), standard deduction amounts by filing status, IRA contribution limits, student loan interest limit, educator expense limit (currently module-level constants in `generator/expenses.py`)
+   - `tax_core/state_tax/hawaii.py` — Hawaii state tax brackets and progressive tax calculation (currently `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and `_assign_state_income_tax()` in `generator/expenses.py`). State-specific tax law is still tax law; the fact that it varies by state doesn't change its category. This structure (`tax_core/state_tax/<state>.py`) supports adding other states later.
 4. Replace the original call sites with imports from `tax_core`. The behavior must not change — this is a reorganization, not a rewrite.
-5. Add unit tests in `tests/tax_core/` that exercise predicates against hand-built `Household` fixtures. These tests are the regression suite for every future change.
+5. **Stays in `intake`:** Income withholding calculation (`generator/income.py`). On a real return, withholding is *read* from a W-2, not computed. The calculation exists only to make the W-2 document look realistic — that's a generation concern.
+6. Add unit tests in `tests/tax_core/` that exercise predicates against hand-built `Household` fixtures. These tests are the regression suite for every future change.
 
 **Output:**
 
-- `tax_core/` exists with predicates, thresholds, and tests.
+- `tax_core/` exists with predicates, thresholds, state tax modules, and tests.
 - The import graph is clean: nothing under `tax_core/` imports from `intake/`, `learn/`, or `api/`. Enforce this in CI if practical (e.g., via `grep` in a pre-commit check).
 
 **Checkpoint:** All existing tests pass. The import graph constraint holds. `tax_core` is independently importable.
@@ -101,6 +110,14 @@ These sprints carve out the layered architecture without rewriting the engine. E
 
 **Prerequisites:** Restructure A complete.
 
+**Serialization contract (bake in from day one):**
+
+The scenario store (Fix 12.I) already demonstrated the cost of relying on `dataclasses.asdict()` for serialization without matching deserialization. `GroundTruth` must not repeat that pattern:
+
+1. `GroundTruth` gets explicit `to_dict()` and `from_dict()` methods (or a trusted serialization library). Never rely on `__dict__`, `asdict()` alone, or pickle.
+2. Include a `schema_version: int` field from the first commit. Future predicate changes will produce different ground-truth shapes; the store must refuse mismatched versions cleanly rather than silently loading stale truth against a newer grader.
+3. Round-trip serialization tests (`to_dict → JSON → from_dict → assert equal`) are part of B's checkpoint, not a follow-up.
+
 **Operation:**
 
 1. Add `tax_core/ground_truth.py` with a function `compute_ground_truth(scenario) -> GroundTruth`.
@@ -108,21 +125,23 @@ These sprints carve out the layered architecture without rewriting the engine. E
 3. Wire `compute_ground_truth` into the generation pipeline immediately after generation completes.
 4. Add a `ground_truth` field to the `Scenario` envelope (introduce the envelope here if it doesn't exist yet — it wraps the existing `Household` plus lifecycle metadata).
 5. Migrate the grader to compare submissions against `scenario.ground_truth` instead of recomputing answers ad-hoc.
+6. Update `scenario_store.py` to serialize/deserialize `GroundTruth` using the explicit `to_dict()`/`from_dict()` methods, checking `schema_version` on load.
 
 **Output:**
 
 - Every scenario has `ground_truth` populated before being served.
 - The grader has exactly one source of truth.
+- `GroundTruth` round-trips cleanly through the scenario store.
 
-**Checkpoint:** Generate a scenario, inspect `ground_truth`, hand-verify the values are correct against the household's facts. Run a submission through the grader and confirm it scores against `ground_truth`.
+**Checkpoint:** Generate a scenario, inspect `ground_truth`, hand-verify the values are correct against the household's facts. Run a submission through the grader and confirm it scores against `ground_truth`. Serialize the scenario to SQLite, reload it, and confirm `ground_truth` survives intact with correct `schema_version`.
 
 **Failure mode to watch for:** Ground truth drifting from what the grader actually compares to. If you find yourself adding logic to the grader that should be in `compute_ground_truth`, move it.
 
 ---
 
-### Restructure C: Build the analyzer and starter slots
+### Restructure C1: Analyzer framework and starter slots (additive)
 
-**Goal:** Replace ad-hoc interview-notes generation with a slot-based analyzer that produces narrative cover for generated facts.
+**Goal:** Build the slot-based analyzer that produces narrative cover for generated facts. Wire it into the pipeline alongside the existing interview-notes path. The old path continues to work; nothing changes for the player.
 
 **Prerequisites:** Restructure B complete. Read the Stage 3 and Stage 6 sections of `SCENARIO_LIFECYCLE.md` before starting.
 
@@ -135,18 +154,45 @@ These sprints carve out the layered architecture without rewriting the engine. E
    - `dependent_residency` — fires when a child's `months_in_home < 12`.
    - `address_mismatch` — fires when an ID address differs from the household address.
 4. For each slot, implement at least three narrative templates with distinct `requirements()` predicates. Each template produces `InterviewNote` objects at three subtlety levels (`obvious`, `moderate`, `subtle`).
-5. Add the analyzer to the pipeline. It runs after generation, before ground truth. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
-6. Build the obfuscator (`intake/obfuscator.py`) that calls each fired template's `render()` method at the chosen subtlety and assembles `scenario.interview_notes`.
-7. Update the player UI to read from `scenario.interview_notes` instead of any hardcoded interview structure.
+5. Add the analyzer to the pipeline. It runs after generation, before ground truth. Populate `scenario.narrative_slots` on every scenario. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
+6. Build the obfuscator (`intake/obfuscator.py`) that calls each fired template's `render()` method at the chosen subtlety and assembles `scenario.interview_notes`. Store the result on the scenario but **do not yet wire it to the UI**.
 
 **Output:**
 
-- The interview-notes table in the player UI is populated from templates rendered against the generated household.
+- Every scenario carries `narrative_slots` and new-path `interview_notes`.
+- The player UI still reads the old hardcoded interview structure (unchanged).
 - Unrescuable scenarios trigger reroll instead of being served.
 
-**Checkpoint:** Generate ten scenarios. Confirm the interview notes vary, make narrative sense, and never contradict the generated facts. At least one should trigger a reroll due to slot failure (induce this with a constrained generation if needed).
+**Checkpoint:** Generate ten scenarios. Confirm `narrative_slots` and new-path `interview_notes` are populated, vary across scenarios, make narrative sense, and never contradict the generated facts. At least one should trigger a reroll due to slot failure (induce this with a constrained generation if needed). All existing tests still pass — the old UI path is untouched.
 
 **Failure mode to watch for:** Templates that lie about ground truth. The obfuscation layer must preserve truth — it can introduce ambiguity, not contradictions.
+
+**Ships as:** Separate PR from C2. At the end of C1, the new pipeline is running and testable but invisible to the player.
+
+---
+
+### Restructure C2: Swap to analyzer-driven interview notes (substitution)
+
+**Goal:** Replace the old hardcoded interview-notes path with the analyzer-driven path from C1. Delete the old code.
+
+**Prerequisites:** C1 merged and stable.
+
+**Operation:**
+
+1. Update the player UI to read from `scenario.interview_notes` (the analyzer-driven field) instead of the old hardcoded interview structure.
+2. Delete the old interview-notes generation code.
+3. Verify all exercise modes (intake and verify) work against the new path.
+
+**Output:**
+
+- The player UI is reading the new analyzer-driven path.
+- The old hardcoded interview-notes path is gone.
+
+**Checkpoint:** Full player flow works: generate scenario → review documents → read interview notes → fill form → submit → grade. Interview notes vary by scenario and subtlety level. No references to the old interview path remain in the codebase.
+
+**Failure mode to watch for:** Edge cases where the old path produced notes that the new analyzer doesn't cover yet (e.g., expense-related interview facts — see Future: Scenario Validation). Audit the old path's output before deleting to ensure coverage parity or document known gaps.
+
+**Ships as:** Separate PR from C1. Independently revertible if the swap reveals issues in production.
 
 ---
 
@@ -201,6 +247,26 @@ These sprints carve out the layered architecture without rewriting the engine. E
 **Checkpoint:** For each starter concept, request a scenario targeting only that concept and verify the resulting scenario fires it. Then request two concepts simultaneously and verify both fire. Then request a deliberately incompatible pair and confirm graceful failure.
 
 **Failure mode to watch for:** Generation hints from different concepts conflicting silently. Add hint-conflict detection (or document that last-write-wins is the policy) before this sprint ships.
+
+---
+
+## A–E coverage of post-Sprint 9 code
+
+The restructuring sprints were originally scoped when Sprint 9 was the frontier. Sprints 10, 12, and post-sprint fixes added code surfaces that the migrations must cover. This section confirms where each new surface lands.
+
+| New code surface | Introduced in | Migration | Notes |
+|---|---|---|---|
+| `generator/expenses.py` — Hawaii tax brackets, SALT cap, standard deduction thresholds, standard vs itemized comparison | Sprint 12 | **A** | Tax-law constants and deduction-type determination → `tax_core/thresholds.py`, `tax_core/state_tax/hawaii.py`, `tax_core/predicates/deductions.py`. The expense *generation* logic (sampling housing costs, medical probability, charitable rates) stays in `intake`. |
+| `generator/expenses.py` — withholding-style fabrication logic | Sprint 12 | stays in `intake` | Same principle as income withholding: exists to make documents look realistic, not to compute return values. |
+| `generator/models.py` — `Household.derive_filing_status()` | Sprint 1 (updated through Sprint 12) | **A** | Filing status derivation is a tax-law predicate → `tax_core/predicates/filing_status.py`. `Household` retains a thin wrapper that delegates to `tax_core`. |
+| `training/form_fields.py` — Part 3 field constants | Sprint 12 | stays in `intake` | Field constants define the UI contract, not tax rules. The grader's use of thresholds (standard deduction lookup) migrates to `tax_core` calls in **A**; the field names themselves stay. |
+| `training/grader.py` — `_build_expense_key()` standard vs itemized logic | Sprint 12 | **B** | Currently recomputes the answer inline. After **B**, reads from `scenario.ground_truth` instead. |
+| `training/form_populator.py` — expense field population | Sprint 12 | stays in `intake` | Presentation concern: populates form fields for verify mode. |
+| `api/routes/scenarios.py` — multi-section routing, Part III form/grading | Sprint 10, Sprint 12 | stays in `api` | Routing is pure API/UI. No tax-rule logic to extract. |
+| `training/scenario_store.py` — document deserialization (12.I) | Post-Sprint 12 | stays in `intake` | The `to_dict()`/`from_dict()` patterns established here inform **B**'s `GroundTruth` serialization design. |
+| `scripts/data_inventory.py`, `.github/workflows/data-management.yml` | Post-Sprint 12 (12.H) | unchanged | Tooling; not part of the runtime layering. |
+
+Everything folds in cleanly. No new migration steps are needed beyond what A–E already describe; the new code surfaces are additional extraction targets within existing operations.
 
 ---
 
