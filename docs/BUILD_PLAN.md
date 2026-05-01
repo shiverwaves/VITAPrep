@@ -409,7 +409,7 @@ Connect Phase 2's content to the pipeline and add the obfuscation layer. After t
 2. Classify each fact into one of three buckets:
    - **Slot-rendered** — covered by a C1 slot, or requires a new slot to be written before C2 ships. If a new slot is needed, note it and add it to C2's scope.
    - **Boilerplate** — read directly from household fields (name, SSN, address, filing status claim, citizenship, contact info). These are rendered by the boilerplate renderer in Stage 6, not by slots.
-   - **Deferred** — acceptable to drop in C2 with a logged decision and a tracking item. Example: expense-related interview notes that depend on Restructure D concepts.
+   - **Deferred** — acceptable to drop in C2 with a logged decision and a tracking item. Example: expense-related interview notes that depend on Restructure D concepts. See "Future: 13614-C Pages 2–3 Interview Notes" for the full scope.
 3. Produce the coverage checklist. Every fact is accounted for. No fact is silently dropped.
 
 **Output:**
@@ -629,6 +629,116 @@ Each future VITA section follows the existing pattern: extract distributions →
 
 ---
 
+## Future: 13614-C Pages 2–3 Interview Notes
+
+The current interview notes cover Page 1 of the 13614-C (personal info, filing status, dependents). Pages 2 (income) and 3 (expenses/tax events) are entirely absent — the student receives income and expense documents but is never "asked" the corresponding intake questions. In a real VITA intake the volunteer walks through every checkbox on Pages 2–3 with the client before matching answers to documents.
+
+This sprint adds boilerplate interview notes for the income and expense questions we already generate data for, closing the gap identified in Restructure C1.5 ("expense-related interview notes — deferred").
+
+### Scope
+
+**Income notes** (Page 2 left column → `intake/boilerplate.py`):
+
+| 13614-C Question | Data source | Note |
+|---|---|---|
+| Wages as part/full-time employee? How many jobs? | `wage_income`, `len(w2s)` | Count of W-2s is a real VITA question |
+| Payments for contract or self-employment? | `self_employment_income`, `form_1099_necs` | |
+| Social Security or Railroad Retirement? | `social_security_income`, `ssa_1099` | |
+| Retirement account, pension, annuity? | `retirement_income`, `form_1099_rs` | |
+| Interest or dividends? | `interest_income`, `dividend_income` | |
+
+**Expense notes** (Page 3 left column → `intake/boilerplate.py`):
+
+| 13614-C Question | Data source | Note |
+|---|---|---|
+| Mortgage interest? | `mortgage_interest`, `form_1098s` | |
+| Taxes: state, local, real estate? | `property_taxes`, `state_income_tax` | |
+| Medical, dental, prescription expenses? | `medical_expenses` | |
+| Charitable contributions? | `charitable_contributions` | |
+| Student loan interest? | `student_loan_interest`, `form_1098_es` | |
+| Child and dependent care? | `child_care_expenses` | |
+| Contributions to retirement account? | `ira_contributions` | |
+| School supplies by educator? | `educator_expenses` | |
+| Educational classes? | `education_expenses`, `form_1098_ts` | |
+
+**Not in scope** (we don't generate data for these):
+- Tips, unemployment, alimony, rental income, gambling, sale of stocks/real estate
+- HSA, Marketplace insurance (1095-A), energy credits, cancelled debt (1099-C)
+- Estimated tax payments, prior-year return
+
+### Design decisions
+
+1. **Boilerplate, not analyzer slots.** These are direct field reads ("Did you receive wages?" → yes/no based on `wage_income > 0`). No narrative judgment needed. They belong in `intake/boilerplate.py` alongside the existing citizenship/filing/dependent notes.
+
+2. **Difficulty filtering.** Follow the existing pattern:
+   - `easy` → all income + expense questions with answers
+   - `medium` → income questions only (expenses require the student to discover from documents)
+   - `hard` → no income or expense notes (student must ask for everything)
+
+3. **Categories.** Two new categories: `"income"` and `"expenses"`. These match the 13614-C page structure and keep notes groupable in the UI.
+
+4. **Yes/No + detail pattern.** Each note is a yes/no question matching the 13614-C left column. When the answer is "Yes", a follow-up detail note provides the count or amount (e.g., "How many W-2s?" → "2"). This mirrors how VITA volunteers work through the form.
+
+5. **Negative answers matter.** If the client has zero self-employment income, the note should still appear as "No" at easy/medium difficulty. Training VITA volunteers to confirm negatives (not just skip) is part of the intake workflow.
+
+### Implementation plan
+
+1. Add `_income_notes(household)` and `_expense_notes(household)` functions to `intake/boilerplate.py`.
+2. Wire into `generate_boilerplate()` with difficulty filtering.
+3. Update form populator to use income/expense notes for Parts II and III pre-fill.
+4. Add tests for each note (positive and negative cases).
+5. Update the UI to group notes by category with section headers matching 13614-C pages.
+
+### Potential analyzer slots (future)
+
+Some income/expense scenarios could benefit from narrative slots beyond yes/no boilerplate:
+- **Multiple W-2s** — "I had three jobs this year" (common VITA scenario, tests W-2 consolidation)
+- **Mixed income** — "I do some freelance work on the side" (self-employment + wages)
+- **Standard vs. itemized ambiguity** — "I'm not sure if I should itemize" (tests the volunteer's judgment)
+
+These are additive and can be built as analyzer slots after the boilerplate is in place.
+
+---
+
+## Future: Guided Workflow and Procedural Nudging
+
+VITAPrep currently trains **tax knowledge** — can the student identify the correct filing status, apply the dependency test, match documents to form lines? But real VITA intake also requires **procedural knowledge** — knowing *what to do next* and in what order. A new volunteer who understands the earned income credit rules may still freeze at a live intake because they don't know whether to verify identity first or ask about dependents first.
+
+### The opportunity
+
+Interview notes already carry a `category` field (`citizenship`, `filing`, `dependent`, `income`, `expenses`, `address`, `contact`). These categories map naturally to the 13614-C's page-by-page structure, which is itself a recommended processing order:
+
+1. **Identity & citizenship** — verify ID documents, confirm SSN, citizenship status
+2. **Filing status** — marital status, determine correct filing status
+3. **Dependents** — qualifying child/relative tests, months in home, student status
+4. **Income** — walk through each income type, match to documents (W-2, 1099s, SSA-1099)
+5. **Expenses & deductions** — itemized vs standard, above-the-line deductions
+6. **Credits & other events** — education credits, child care credit, prior-year items
+7. **Review & complete** — verify entries, compute refund/balance due
+
+Each step has a clear input (category of interview notes + corresponding documents), a clear action (fill the relevant form section), and a clear completion signal (that section is graded correctly).
+
+### What this enables
+
+- **Step-by-step tutorial mode**: Reveal one category at a time. The student completes identity verification before seeing income questions. Teaches the procedure alongside the rules. Useful for brand-new VITA volunteers who have never done a live intake.
+
+- **Procedural nudging**: All sections visible, but the system highlights the recommended next action when the student stalls or works out of order. "You haven't verified the dependent's months in home yet — check the interview notes." Useful for volunteers who know the rules but lose track during a complex scenario.
+
+- **Scenario-specific workflow**: The workflow adapts to the scenario. A single filer with one W-2 has a short workflow; a head of household with three dependents, SE income, and itemized deductions has a long one. The category sequence is fixed but the *content* within each step is scenario-driven.
+
+### Design considerations
+
+- The workflow ordering is a **presentation concern**, not a generation concern. VITAPrep generates the same scenario data regardless. The workflow layer decides how to reveal it.
+- Categories already exist on interview notes. The infrastructure for grouping and ordering is mostly in place — the gap is the UI progression model and the "what's next" logic.
+- This could operate as a separate consumer of VITAPrep's scenario data. The scenario envelope (household, documents, interview notes, ground truth, concept tags) contains everything a workflow engine needs. The workflow engine adds sequencing, state tracking, and nudge logic on top.
+- The same approach extends to tax return preparation training (Form 1040 workflow), not just intake. The processing order for a return maps to form sections the same way intake maps to 13614-C pages.
+
+### Prerequisite from VITAPrep
+
+The main prerequisite is the **13614-C Pages 2–3 interview notes** sprint (above). Without income and expense interview notes, the workflow has gaps in steps 4-6. Once those notes exist, the category sequence covers the full intake procedure.
+
+---
+
 ## Future: State Tax Generalization
 
 The expense generator currently uses hardcoded Hawaii state income tax brackets (`HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ` in `generator/expenses.py`). Restructure A moves these to `tax_core/state_tax/hawaii.py` but does not add other states. This section documents the expansion plan.
@@ -764,10 +874,45 @@ These are not decided here. Resolve in code, then update this document.
 
 - Whether to use Python `random.Random` instances or NumPy generators throughout.
 - Whether `tax_core` predicates return rich result objects or simple booleans (the worked example used rich; revisit per predicate).
-- How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).
 - Where document corruption manifests live for Review mode (in `Scenario` or sidecar table).
 - Concept catalog registration: explicit list vs decorator-based vs autodiscovery. Recommend explicit list for MVP.
 
 **Resolved:**
 
 - ~~Subtlety dial: global per scenario, per slot, or per concept?~~ **Global per scenario for MVP**, derived from `request.difficulty` (`easy → obvious`, `medium → moderate`, `hard → subtle`). Per-slot or per-concept overrides deferred to Restructure D. See `SCENARIO_LIFECYCLE.md` § Stage 6.
+- ~~How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).~~ **Last-write-wins for MVP.** See known issues below.
+
+---
+
+## Known issues: targeted generation (Restructure E)
+
+Targeted generation works for individual concepts and compatible pairs but has rough edges when concepts are combined or when hints don't constrain enough.
+
+### 1. Refundable credit only filer generates with too much income
+
+**Symptom:** Scenarios targeted for `refundable_credit_only_filer` often have household income well above the filing threshold, causing the concept not to fire.
+
+**Root cause:** The hint sets `max_wage_income=12000` but doesn't cap total household income. The income generator still adds SE income, interest, dividends, retirement, and SS income on top of the capped wages. The concept's `matches()` checks whether total income is below the filing threshold, so it fails.
+
+**Options:**
+1. Add a `max_total_income` hint field that caps the household-level total, not just per-person wages.
+2. Add `suppress_other_income: bool` hint that zeroes out non-wage income sources when set.
+3. Tighten the concept's hints to also set `force_self_employment=False` and zero floors for other income — but `GenerationHints` currently has no "force off" semantics, only "force on."
+
+**Recommendation:** Option 1 (`max_total_income`) is the most general. The income generator would check total after assignment and scale back if over the cap. This also benefits future concepts that need low-income scenarios.
+
+### 2. Conflicting concept combinations exhaust reroll attempts
+
+**Symptom:** Selecting 2-3+ concepts sometimes returns ConceptMissed after 5 attempts, even when each concept works individually.
+
+**Root cause:** Last-write-wins hint merging can silently override critical hints. Example conflicts:
+- `refundable_credit_only_filer` (wants `max_wage_income=12000`) + `social_security_taxability` (wants `min_other_income=15000`) — the income floor contradicts the low-income requirement.
+- `qualifying_child_residency` (wants partial-year child) + `full_time_student_dependent` (wants child aged 19-21) — both are achievable together but the reroll loop may not land on a scenario with an 19+ child who also has partial months.
+
+**Options:**
+1. **Concept cap in UI.** Limit the picker to 1-2 concepts per scenario. Simple, effective, avoids the problem entirely. This is appropriate for an MVP training tool.
+2. **Compatibility matrix.** Declare which concept pairs are compatible. The API rejects incompatible combos with a clear error ("These concepts can't appear in the same scenario") rather than silently rerolling and failing.
+3. **Smarter merging.** Replace last-write-wins with conflict detection: if two hints set the same field to different values, raise an error or pick the more restrictive value. More complex but more correct.
+4. **Increase MAX_GEN_ATTEMPTS.** Brute force — helps with borderline combos but doesn't fix true conflicts. Risk of slow generation.
+
+**Recommendation:** Option 1 (cap at 2 concepts) for MVP. Add Option 2 (compatibility matrix) when the concept catalog grows beyond 7-8 concepts. Option 3 is the long-term correct solution but over-engineered for current scale.
