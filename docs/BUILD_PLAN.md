@@ -835,10 +835,45 @@ These are not decided here. Resolve in code, then update this document.
 
 - Whether to use Python `random.Random` instances or NumPy generators throughout.
 - Whether `tax_core` predicates return rich result objects or simple booleans (the worked example used rich; revisit per predicate).
-- How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).
 - Where document corruption manifests live for Review mode (in `Scenario` or sidecar table).
 - Concept catalog registration: explicit list vs decorator-based vs autodiscovery. Recommend explicit list for MVP.
 
 **Resolved:**
 
 - ~~Subtlety dial: global per scenario, per slot, or per concept?~~ **Global per scenario for MVP**, derived from `request.difficulty` (`easy → obvious`, `medium → moderate`, `hard → subtle`). Per-slot or per-concept overrides deferred to Restructure D. See `SCENARIO_LIFECYCLE.md` § Stage 6.
+- ~~How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).~~ **Last-write-wins for MVP.** See known issues below.
+
+---
+
+## Known issues: targeted generation (Restructure E)
+
+Targeted generation works for individual concepts and compatible pairs but has rough edges when concepts are combined or when hints don't constrain enough.
+
+### 1. Refundable credit only filer generates with too much income
+
+**Symptom:** Scenarios targeted for `refundable_credit_only_filer` often have household income well above the filing threshold, causing the concept not to fire.
+
+**Root cause:** The hint sets `max_wage_income=12000` but doesn't cap total household income. The income generator still adds SE income, interest, dividends, retirement, and SS income on top of the capped wages. The concept's `matches()` checks whether total income is below the filing threshold, so it fails.
+
+**Options:**
+1. Add a `max_total_income` hint field that caps the household-level total, not just per-person wages.
+2. Add `suppress_other_income: bool` hint that zeroes out non-wage income sources when set.
+3. Tighten the concept's hints to also set `force_self_employment=False` and zero floors for other income — but `GenerationHints` currently has no "force off" semantics, only "force on."
+
+**Recommendation:** Option 1 (`max_total_income`) is the most general. The income generator would check total after assignment and scale back if over the cap. This also benefits future concepts that need low-income scenarios.
+
+### 2. Conflicting concept combinations exhaust reroll attempts
+
+**Symptom:** Selecting 2-3+ concepts sometimes returns ConceptMissed after 5 attempts, even when each concept works individually.
+
+**Root cause:** Last-write-wins hint merging can silently override critical hints. Example conflicts:
+- `refundable_credit_only_filer` (wants `max_wage_income=12000`) + `social_security_taxability` (wants `min_other_income=15000`) — the income floor contradicts the low-income requirement.
+- `qualifying_child_residency` (wants partial-year child) + `full_time_student_dependent` (wants child aged 19-21) — both are achievable together but the reroll loop may not land on a scenario with an 19+ child who also has partial months.
+
+**Options:**
+1. **Concept cap in UI.** Limit the picker to 1-2 concepts per scenario. Simple, effective, avoids the problem entirely. This is appropriate for an MVP training tool.
+2. **Compatibility matrix.** Declare which concept pairs are compatible. The API rejects incompatible combos with a clear error ("These concepts can't appear in the same scenario") rather than silently rerolling and failing.
+3. **Smarter merging.** Replace last-write-wins with conflict detection: if two hints set the same field to different values, raise an error or pick the more restrictive value. More complex but more correct.
+4. **Increase MAX_GEN_ATTEMPTS.** Brute force — helps with borderline combos but doesn't fix true conflicts. Risk of slow generation.
+
+**Recommendation:** Option 1 (cap at 2 concepts) for MVP. Add Option 2 (compatibility matrix) when the concept catalog grows beyond 7-8 concepts. Option 3 is the long-term correct solution but over-engineered for current scale.
