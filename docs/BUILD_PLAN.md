@@ -143,7 +143,7 @@ Implement the 18 MVP predicates listed in [`CONCEPT_CATALOG.md` § "MVP predicat
 
 **Phase 2 checkpoint:** All 18 predicates pass their unit tests. Import graph constraint still holds. Every stub-tier predicate has a docstring noting its simplification and the IRC section governing the full rule.
 
-**Relationship to a tax engine.** Individual predicates are better written by hand — they're testable, auditable, and cite specific IRC sections. An open-source tax engine (e.g., OpenTaxEngine) becomes relevant in **Restructure B** when we compute full ground truth (AGI → taxable income → total tax → refund). That's a return-level computation chaining dozens of rules; a tax engine may be more maintainable than hand-rolling it. The decision belongs in B's scope, not A's.
+**Relationship to a tax engine.** Individual predicates are better written by hand — they're testable, auditable, and cite specific IRC sections. An open-source tax engine becomes relevant in **Restructure B** when we compute full ground truth (AGI → taxable income → total tax → refund). That's a return-level computation chaining dozens of rules; a tax engine may be more maintainable than hand-rolling it. The decision belongs in B's scope, not A's. See "Future: Tax Engine References" for the candidates.
 
 **Output:**
 
@@ -394,6 +394,60 @@ Before adding a new state's brackets, that state must also have PUMS extraction 
 ### When to implement
 
 Not during Restructure A. Implement when VITAPrep expands beyond Hawaii — likely triggered by a request to support a second VITA site's state. The `tax_core/state_tax/` directory structure established in Restructure A is designed to accommodate this without refactoring.
+
+---
+
+## Future: Tax Engine References
+
+When Restructure B requires full return-level computation (`compute_ground_truth` producing AGI, taxable income, total tax, refund), implementing it by hand means encoding the entire Form 1040 dependency chain. Two open-source projects are potential references or integration candidates.
+
+### IRS Direct File — Fact Graph
+
+**Repository:** [github.com/IRS-Public/direct-file](https://github.com/IRS-Public/direct-file)
+
+The IRS's own free filing service, open-sourced. Its core is a **declarative fact graph** — XML-based fact dictionaries define writable facts (user input), derived facts (computed from dependency chains), and collections. The Scala runtime (`fact-graph-scala/`) resolves the graph, and the result exports to IRS MeF XML for e-filing.
+
+**Architecture:** Fact dictionaries organized by tax topic (`elderlyAndDisabled.xml`, `filers.xml`, etc.). Each fact is writable or derived, with explicit dependencies. Computational nodes (`compnodes/`) evaluate derived facts. The graph handles incomplete information (partially completed returns) natively — facts are `unknown` until their dependencies resolve.
+
+**What's useful for VITAPrep:**
+- The XML fact dictionaries document which tax outcomes depend on which inputs — exactly the dependency chain `compute_ground_truth()` must encode. Even if we don't use the Scala runtime, the dictionaries are a **reference source** for correct fact-to-form-line mappings.
+- The `definitions/` and `compnodes/` source code shows how the IRS itself models derived tax computations. This is an authoritative implementation, not a third-party interpretation.
+- The approach of declaring facts and deriving outcomes is architecturally similar to what `tax_core` predicates do — VITAPrep's predicates are imperative Python functions, but they encode the same dependency relationships.
+
+**What doesn't fit:**
+- Scala/JVM stack — not Python. Integration would require a JVM sidecar or porting the fact dictionaries to a Python evaluation engine.
+- Designed for *filing* (user → IRS), not *training* (generate scenario → grade student). The data flows in opposite directions.
+- Scoped to Direct File's supported return types (currently W-2 income, limited deductions). VITAPrep's VITA scope is broader in some areas (e.g., self-employment) and narrower in others.
+
+**Recommendation:** Use as a **reference**, not a runtime dependency. When implementing `compute_ground_truth()`, consult the fact dictionary XMLs to verify that our dependency chains match the IRS's own encoding. If VITAPrep ever needs to produce actual MeF-compatible XML (e.g., for integration with a real filing workflow), Direct File's export layer is the reference implementation.
+
+### OpenTaxEngine
+
+**Repository:** [github.com/cameronehrlich/opentaxengine](https://github.com/cameronehrlich/opentaxengine)
+
+A Python rule-based tax engine using YAML-defined form specifications. Supports Form 1040, 1120-S, 1065. CLI with compute, fill, explain, inspect commands.
+
+**What's useful for VITAPrep:**
+- Python-native — no language bridge needed.
+- YAML form specs are readable and auditable.
+- The `explain` command traces how a line value was computed — useful for grading feedback.
+
+**What doesn't fit:**
+- Very early stage (as of 2026): limited to 2025 tax year, minimal test coverage.
+- Must support the tax year matching our PUMS data (currently 2022) before we can use it.
+- Uncertain long-term maintenance.
+
+**Recommendation:** Monitor for maturity. If it stabilizes and adds multi-year support, it could replace hand-rolled `compute_ground_truth()` logic. Evaluate during Restructure B scoping.
+
+### When to decide
+
+The tax engine decision belongs in **Restructure B's planning phase**, not A. Restructure A's predicates are individual rule checks that are better hand-written. Restructure B's `compute_ground_truth()` is a return-level computation where an engine adds value. Before starting B, evaluate:
+
+1. Does Direct File's fact graph cover the VITA Basic/Advanced scope we need?
+2. Has OpenTaxEngine added 2022 tax year support?
+3. Is hand-rolling `compute_ground_truth()` with our existing predicates simpler than integrating either engine?
+
+The answer determines whether B wraps an external engine or extends `tax_core` with line-level computation functions.
 
 ---
 
