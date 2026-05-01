@@ -1,4 +1,4 @@
-"""Ground truth data models — the canonical answer key for a scenario.
+"""Ground truth data models and orchestrator.
 
 GroundTruth is computed once at generation time and stored with the scenario.
 The grader consumes it directly with zero domain logic. Three layers:
@@ -8,8 +8,8 @@ The grader consumes it directly with zero domain logic. Three layers:
 3. Predicate detail snapshots (structured results from rich-result predicates)
 
 This module lives in tax_core because it is a pure data structure with no
-upper-layer dependencies. The computation that *fills* GroundTruth will live
-in tax_core/computation.py (Restructure B Phase 2).
+upper-layer dependencies. compute_ground_truth() orchestrates calls to
+tax_core/computation.py functions to fill the data structure.
 """
 
 import json
@@ -135,3 +135,104 @@ class GroundTruth:
             person_classifications=classifications,
             predicate_results=data.get("predicate_results", {}),
         )
+
+
+def compute_ground_truth(household: Any, year: int = 2022) -> GroundTruth:
+    """Compute the canonical answer key for a household.
+
+    Orchestrates calls to tax_core/computation.py functions in the
+    correct dependency order:
+    1. Filing status
+    2. Person classifications (dependency tests)
+    3. AGI (gross income - above-the-line deductions)
+    4. Deduction choice (standard vs itemized)
+    5. Taxable income
+    6. Tax before credits (federal brackets)
+    7. Credits (CTC, ACTC, EITC)
+    8. Total tax and refund/balance due
+    9. Predicate detail snapshots
+
+    Args:
+        household: Household object with members and expense fields.
+        year: Tax year.
+
+    Returns:
+        Fully populated GroundTruth.
+    """
+    from tax_core.computation import (
+        classify_persons,
+        choose_deduction,
+        compute_agi,
+        compute_credits,
+        compute_federal_tax,
+        compute_se_tax,
+        total_payments,
+    )
+    from tax_core.predicates.dependency import qualifying_child_residency_test
+    from tax_core.predicates.filing_status import derive_filing_status
+    from tax_core.predicates.income import compute_taxable_ss
+
+    filing_status = derive_filing_status(household)
+    classifications = classify_persons(household, filing_status, year)
+
+    agi = compute_agi(household, year)
+    deduction = choose_deduction(household, filing_status, agi, year)
+    taxable_income = max(0, agi - deduction.amount)
+    tax_before_credits = compute_federal_tax(taxable_income, filing_status, year)
+
+    credits = compute_credits(
+        household, classifications, filing_status, agi, tax_before_credits, year,
+    )
+    total_tax = max(0, tax_before_credits - credits.nonrefundable_total)
+
+    se_tax_total = sum(compute_se_tax(p, year) for p in household.members)
+    total_tax += se_tax_total
+
+    payments = total_payments(household)
+    refund_or_owed = payments + credits.refundable_total - total_tax
+
+    predicate_results: Dict[str, Any] = {}
+    for person in household.members:
+        rel = person.relationship
+        if hasattr(rel, "value"):
+            rel = rel.value
+        if rel not in ("householder", "spouse"):
+            if person.age < 19 or (
+                person.age < 24
+                and getattr(person, "is_full_time_student", False)
+            ):
+                res = qualifying_child_residency_test(person, year)
+                predicate_results[
+                    f"qualifying_child_residency_test_{person.person_id}"
+                ] = {
+                    "passed": res.passed,
+                    "months_in_home": res.months_in_home,
+                    "required_months": res.required_months,
+                    "temporary_absence_applied": res.temporary_absence_applied,
+                    "reason": res.reason,
+                }
+
+        if person.social_security_income > 0:
+            taxable_ss = compute_taxable_ss(person, filing_status, year)
+            predicate_results[
+                f"ss_taxability_{person.person_id}"
+            ] = {
+                "social_security_income": person.social_security_income,
+                "taxable_amount": taxable_ss,
+            }
+
+    return GroundTruth(
+        schema_version=SCHEMA_VERSION,
+        tax_year=year,
+        filing_status=filing_status,
+        agi=agi,
+        taxable_income=taxable_income,
+        total_tax=total_tax,
+        refund_or_owed=refund_or_owed,
+        deduction_type=deduction.deduction_type,
+        standard_deduction=deduction.standard_deduction,
+        itemized_deduction_total=deduction.itemized_total,
+        credits_claimed=credits.details,
+        person_classifications=classifications,
+        predicate_results=predicate_results,
+    )
