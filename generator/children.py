@@ -148,7 +148,7 @@ class ChildGenerator:
             target = children[random.randrange(len(children))]
             target.months_in_home = random.randint(lo, hi)
 
-        self._assign_student_status(children, hints)
+        self._assign_student_status(children, household, hints)
 
         logger.debug(
             "Generated %d children for pattern '%s'", len(children), pattern,
@@ -419,15 +419,23 @@ class ChildGenerator:
     def _assign_student_status(
         self,
         children: List[Person],
+        household: Household,
         hints: Optional[GenerationHints] = None,
     ) -> None:
         """Set ``is_full_time_student`` on dependents aged 18–23.
 
         Uses the ``student_enrollment`` distribution table when available,
         falling back to national ACS averages.  If ``force_full_time_student``
-        is set in hints, the first eligible child is forced to be a student.
+        is set in hints and no child is already 18+, the oldest child is
+        aged up to 19–21 (respecting parent age gap) and flagged.
         """
         enrollment = self.distributions.get("student_enrollment")
+
+        if hints and hints.force_full_time_student:
+            eligible = [c for c in children if 18 <= c.age <= 23]
+            if not eligible and children:
+                self._promote_oldest_to_student(children, household)
+                return
 
         eligible = [c for c in children if 18 <= c.age <= 23]
         if not eligible:
@@ -442,6 +450,30 @@ class ChildGenerator:
 
         if hints and hints.force_full_time_student and not forced_one and eligible:
             eligible[0].is_full_time_student = True
+
+    def _promote_oldest_to_student(
+        self,
+        children: List[Person],
+        household: Household,
+    ) -> None:
+        """Age up the oldest child to 19–21 and flag as full-time student.
+
+        Only promotes if the youngest adult is old enough to maintain a
+        realistic parent–child age gap (≥14 years).
+        """
+        adults = household.get_adults()
+        if not adults:
+            return
+        youngest_adult_age = min(a.age for a in adults)
+        max_child_age = youngest_adult_age - 14
+        if max_child_age < 19:
+            return
+
+        target_age = random.randint(19, min(21, max_child_age))
+        oldest = max(children, key=lambda c: c.age)
+        oldest.age = target_age
+        oldest.is_full_time_student = True
+        oldest.education = "some_college"
 
     def _enrollment_probability(
         self,
