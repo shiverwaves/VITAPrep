@@ -307,6 +307,29 @@ class TestSaveAndGet:
         assert got is not None
         assert got.interview_notes is None
 
+    def test_concept_tags_round_trip(
+        self, store: ScenarioStore, sample_scenario: Scenario,
+    ) -> None:
+        sample_scenario.concept_tags = [
+            "hoh_qualifying_person",
+            "self_employment_threshold",
+        ]
+        store.save_scenario(sample_scenario)
+        got = store.get_scenario("sc-001")
+        assert got is not None
+        assert got.concept_tags == [
+            "hoh_qualifying_person",
+            "self_employment_threshold",
+        ]
+
+    def test_concept_tags_none_for_legacy(
+        self, store: ScenarioStore, sample_scenario: Scenario,
+    ) -> None:
+        store.save_scenario(sample_scenario)
+        got = store.get_scenario("sc-001")
+        assert got is not None
+        assert got.concept_tags is None
+
     def test_document_paths_round_trip(
         self, store: ScenarioStore, sample_scenario: Scenario,
     ) -> None:

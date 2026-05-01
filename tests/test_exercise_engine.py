@@ -123,6 +123,26 @@ def engine():
         eng.analyzer = ScenarioAnalyzer()
         # Make error_injector.inject return a realistic result
         eng.error_injector.inject.side_effect = _mock_inject
+
+        from learn.concept_catalog import ConceptCatalog
+        from learn.concepts.deductions import StandardVsItemizedConcept
+        from learn.concepts.dependency import QualifyingChildResidencyConcept
+        from learn.concepts.filing_status import (
+            HoHQualifyingPersonConcept,
+            RefundableCreditOnlyFilerConcept,
+        )
+        from learn.concepts.income import (
+            SelfEmploymentThresholdConcept,
+            SocialSecurityTaxabilityConcept,
+        )
+        eng.concept_catalog = ConceptCatalog()
+        eng.concept_catalog.register(QualifyingChildResidencyConcept())
+        eng.concept_catalog.register(HoHQualifyingPersonConcept())
+        eng.concept_catalog.register(RefundableCreditOnlyFilerConcept())
+        eng.concept_catalog.register(SelfEmploymentThresholdConcept())
+        eng.concept_catalog.register(SocialSecurityTaxabilityConcept())
+        eng.concept_catalog.register(StandardVsItemizedConcept())
+
         yield eng
 
 
@@ -358,3 +378,37 @@ class TestGroundTruth:
         wrong = [f for f in grade.field_feedback
                  if f["field"] == "you.first_name"]
         assert wrong[0]["status"] == "incorrect"
+
+
+# =========================================================================
+# Concept tags
+# =========================================================================
+
+class TestConceptTags:
+
+    def test_concept_tags_present(self, engine: ExerciseEngine) -> None:
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        assert result.concept_tags is None or isinstance(result.concept_tags, list)
+
+    def test_concept_tags_are_sorted_strings(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        if result.concept_tags:
+            assert all(isinstance(t, str) for t in result.concept_tags)
+            assert result.concept_tags == sorted(result.concept_tags)
+
+    def test_concept_catalog_registered(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        assert len(engine.concept_catalog.concepts) == 6
+
+    def test_concept_tags_none_when_empty(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        result = engine.generate_scenario(
+            mode="intake", difficulty="easy",
+            pattern="single_adult", seed=42,
+        )
+        if result.concept_tags is not None:
+            assert len(result.concept_tags) > 0

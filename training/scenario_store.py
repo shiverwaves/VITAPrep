@@ -69,12 +69,17 @@ CREATE TABLE IF NOT EXISTS scenarios (
     document_paths TEXT NOT NULL DEFAULT '{}',   -- JSON object
     ground_truth  TEXT,                          -- JSON blob (NULL for pre-B scenarios)
     interview_notes TEXT,                        -- JSON array (NULL for pre-C2 scenarios)
+    concept_tags  TEXT,                          -- JSON array (NULL for pre-D scenarios)
     created_at    TEXT NOT NULL
 );
 """
 
 _MIGRATE_ADD_INTERVIEW_NOTES = """\
 ALTER TABLE scenarios ADD COLUMN interview_notes TEXT;
+"""
+
+_MIGRATE_ADD_CONCEPT_TAGS = """\
+ALTER TABLE scenarios ADD COLUMN concept_tags TEXT;
 """
 
 _CREATE_GRADES = """\
@@ -331,6 +336,7 @@ class ScenarioStore:
         self._migrate_grades_section()
         self._migrate_ground_truth()
         self._migrate_interview_notes()
+        self._migrate_concept_tags()
         self._conn.commit()
 
     def _migrate_grades_section(self) -> None:
@@ -368,6 +374,17 @@ class ScenarioStore:
         if "interview_notes" not in cols:
             self._conn.execute(_MIGRATE_ADD_INTERVIEW_NOTES)
 
+    def _migrate_concept_tags(self) -> None:
+        """Add 'concept_tags' column to scenarios if it doesn't exist yet."""
+        cols = [
+            row[1]
+            for row in self._conn.execute(
+                "PRAGMA table_info(scenarios)"
+            ).fetchall()
+        ]
+        if "concept_tags" not in cols:
+            self._conn.execute(_MIGRATE_ADD_CONCEPT_TAGS)
+
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
@@ -397,14 +414,19 @@ class ScenarioStore:
             if scenario.interview_notes is not None
             else None
         )
+        tags_json = (
+            json.dumps(scenario.concept_tags)
+            if scenario.concept_tags is not None
+            else None
+        )
         self._conn.execute(
             """\
             INSERT INTO scenarios
                 (scenario_id, mode, difficulty, state, pattern,
                  household, injected_errors, client_facts,
                  document_paths, ground_truth, interview_notes,
-                 created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 concept_tags, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scenario.scenario_id,
@@ -418,6 +440,7 @@ class ScenarioStore:
                 _serialize_doc_paths(scenario.document_paths),
                 gt_json,
                 notes_json,
+                tags_json,
                 now,
             ),
         )
@@ -710,6 +733,9 @@ class ScenarioStore:
         notes_blob = row["interview_notes"]
         interview_notes = json.loads(notes_blob) if notes_blob else None
 
+        tags_blob = row["concept_tags"]
+        concept_tags = json.loads(tags_blob) if tags_blob else None
+
         return Scenario(
             scenario_id=row["scenario_id"],
             mode=row["mode"],
@@ -721,4 +747,5 @@ class ScenarioStore:
             created_at=row["created_at"],
             ground_truth=ground_truth,
             interview_notes=interview_notes,
+            concept_tags=concept_tags,
         )
