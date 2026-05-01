@@ -1,7 +1,8 @@
 """
 Grader — compares student submissions to ground truth.
 
-Mode 1 (intake): Field-by-field comparison of student-filled form vs ground truth.
+Mode 1 (intake): Field-by-field comparison of submitted form values against
+    the pre-computed form_answers stored in GroundTruth.
 Mode 2 (verify): Compare flagged errors vs injected error manifest.
 """
 
@@ -15,6 +16,7 @@ from generator.models import (
     Person,
     RelationshipType,
 )
+from tax_core.ground_truth import GroundTruth
 from training.form_fields import (
     ADDR_CITY,
     ADDR_STATE,
@@ -109,8 +111,12 @@ def _middle_initial(person: Person) -> str:
     return ""
 
 
-def _build_answer_key(household: Household) -> Dict[str, str]:
-    """Build the expected form field values from ground truth.
+def build_form_answers(household: Household) -> Dict[str, str]:
+    """Build expected form field values from a Household.
+
+    Called once at scenario generation time; the result is stored in
+    GroundTruth.form_answers. The grader reads from the stored dict
+    and never recomputes.
 
     Args:
         household: The original (unmodified) Household.
@@ -286,25 +292,33 @@ class Grader:
     def grade_intake(
         self,
         submission: Dict[str, str],
-        ground_truth: Household,
+        ground_truth: dict,
         fields: Optional[List[str]] = None,
     ) -> GradingResult:
         """Grade a student's intake form fill (Mode 1).
 
-        Compares each submitted field against the answer key derived
-        from the ground-truth Household.
+        Compares each submitted field against the pre-computed
+        form_answers from GroundTruth.
 
         Args:
             submission: Dict of {field_name: student_value}.
-            ground_truth: The original Household (before any error
-                injection).
+            ground_truth: The GroundTruth dict (scenario.ground_truth).
+                Must contain 'form_answers' key.
             fields: If provided, only grade these field names.
                 Useful for section-scoped grading (e.g. Part I only).
 
         Returns:
             GradingResult with per-field feedback.
+
+        Raises:
+            ValueError: If ground_truth is missing or has no form_answers.
         """
-        answer_key = _build_answer_key(ground_truth)
+        if ground_truth is None:
+            raise ValueError(
+                "Cannot grade: scenario has no ground_truth. "
+                "Regenerate the scenario."
+            )
+        answer_key = dict(ground_truth.get("form_answers", {}))
         if fields is not None:
             allowed = set(fields)
             answer_key = {k: v for k, v in answer_key.items() if k in allowed}

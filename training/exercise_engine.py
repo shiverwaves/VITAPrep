@@ -1,7 +1,7 @@
 """
 Exercise engine — orchestrates full scenario creation.
 
-Pipeline: generate household → overlay PII → inject errors → package
+Pipeline: generate household → compute ground truth → inject errors → package
 
 Documents are rendered on-demand by the API layer (HTML served directly
 to the browser), not pre-generated at scenario creation time.
@@ -19,8 +19,10 @@ from typing import Optional
 
 from generator.models import Scenario
 from generator.pipeline import HouseholdGenerator
+from tax_core.ground_truth import compute_ground_truth
 from .client_profile import filter_by_difficulty, generate_client_profile
 from .error_injector import ErrorInjector
+from .grader import build_form_answers
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +54,7 @@ class ExerciseEngine:
             seed: Random seed for reproducibility.
 
         Returns:
-            Scenario with household, errors, and client facts
-            packaged together.
+            Scenario with household, ground truth, errors, and client facts.
         """
         scenario_id = f"sc-{uuid.uuid4().hex[:12]}"
 
@@ -62,7 +63,13 @@ class ExerciseEngine:
             pattern=pattern, seed=seed,
         )
 
-        # Stage 2: Inject errors (verify mode only)
+        # Stage 2: Compute ground truth from the clean household
+        # (before error injection so it reflects correct answers)
+        gt = compute_ground_truth(household, year=self.generator.year)
+        gt.form_answers = build_form_answers(household)
+        gt_dict = gt.to_dict()
+
+        # Stage 3: Inject errors (verify mode only)
         injected_errors = []
         if mode == "verify":
             household, injected_errors = self.error_injector.inject(
@@ -71,7 +78,7 @@ class ExerciseEngine:
                 error_count=error_count,
             )
 
-        # Stage 3: Generate client profile (verbal facts)
+        # Stage 4: Generate client profile (verbal facts)
         all_facts = generate_client_profile(household)
         client_facts = filter_by_difficulty(all_facts, difficulty)
 
@@ -85,6 +92,7 @@ class ExerciseEngine:
             client_facts=client_facts,
             document_paths={},
             created_at=datetime.utcnow().isoformat(),
+            ground_truth=gt_dict,
         )
 
         logger.info(

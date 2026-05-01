@@ -39,6 +39,12 @@ from training.form_fields import (
     PART3_FIELDS,
     ALL_FIELDS,
 )
+from training.grader import build_form_answers
+
+
+def _gt_dict(hh: Household) -> dict:
+    """Build a minimal ground_truth dict from a Household for testing."""
+    return {"form_answers": build_form_answers(hh), "schema_version": 1}
 
 
 # =========================================================================
@@ -590,8 +596,8 @@ class TestGraderFieldsFilter:
         hh = _make_household()
         grader = Grader()
 
-        full_result = grader.grade_intake({}, hh)
-        part1_result = grader.grade_intake({}, hh, fields=PART1_FIELDS)
+        full_result = grader.grade_intake({}, _gt_dict(hh))
+        part1_result = grader.grade_intake({}, _gt_dict(hh), fields=PART1_FIELDS)
 
         # Part 1 result should have fewer fields than full
         assert part1_result.max_score < full_result.max_score
@@ -604,7 +610,7 @@ class TestGraderFieldsFilter:
         hh = _make_household()
         grader = Grader()
 
-        part2_result = grader.grade_intake({}, hh, fields=PART2_FIELDS)
+        part2_result = grader.grade_intake({}, _gt_dict(hh), fields=PART2_FIELDS)
         p2_fields = {fb["field"] for fb in part2_result.field_feedback}
         assert all(f.startswith("income.") for f in p2_fields)
 
@@ -620,7 +626,7 @@ class TestGraderFieldsFilter:
             INCOME_INTEREST_AMOUNT: "350",
             INCOME_TOTAL: "45350",
         }
-        result = grader.grade_intake(submission, hh, fields=PART2_FIELDS)
+        result = grader.grade_intake(submission, _gt_dict(hh), fields=PART2_FIELDS)
         assert result.accuracy == 1.0
 
     def test_grade_part3_only(self):
@@ -633,7 +639,7 @@ class TestGraderFieldsFilter:
         hh.uses_standard_deduction = True
         grader = Grader()
 
-        part3_result = grader.grade_intake({}, hh, fields=PART3_FIELDS)
+        part3_result = grader.grade_intake({}, _gt_dict(hh), fields=PART3_FIELDS)
         p3_fields = {fb["field"] for fb in part3_result.field_feedback}
         assert all(f.startswith("expense.") for f in p3_fields)
         # Should not have personal or income fields
@@ -647,7 +653,7 @@ class TestGraderFieldsFilter:
         hh.uses_standard_deduction = True
         grader = Grader()
 
-        part1_result = grader.grade_intake({}, hh, fields=PART1_FIELDS)
+        part1_result = grader.grade_intake({}, _gt_dict(hh), fields=PART1_FIELDS)
         p1_fields = {fb["field"] for fb in part1_result.field_feedback}
         assert not any(f.startswith("expense.") for f in p1_fields)
 
@@ -658,7 +664,7 @@ class TestGraderFieldsFilter:
         grader = Grader()
 
         submission = {EXPENSE_DEDUCTION_TYPE: "standard"}
-        result = grader.grade_intake(submission, hh, fields=PART3_FIELDS)
+        result = grader.grade_intake(submission, _gt_dict(hh), fields=PART3_FIELDS)
         deduction_fb = [
             fb for fb in result.field_feedback
             if fb["field"] == EXPENSE_DEDUCTION_TYPE

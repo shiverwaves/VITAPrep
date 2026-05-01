@@ -115,6 +115,7 @@ def engine():
     with patch("training.exercise_engine.HouseholdGenerator") as MockGen:
         mock_gen_instance = MockGen.return_value
         mock_gen_instance.generate_with_pii.return_value = _make_household()
+        mock_gen_instance.year = 2022
 
         eng = ExerciseEngine.__new__(ExerciseEngine)
         eng.generator = mock_gen_instance
@@ -282,3 +283,74 @@ class TestDifficultyPropagation:
         easy = engine.generate_scenario(mode="intake", difficulty="easy")
         hard = engine.generate_scenario(mode="intake", difficulty="hard")
         assert len(easy.client_facts) >= len(hard.client_facts)
+
+
+# =========================================================================
+# 7. Ground truth integration (B Phase 3)
+# =========================================================================
+
+class TestGroundTruth:
+
+    def test_ground_truth_present(self, engine: ExerciseEngine) -> None:
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        assert result.ground_truth is not None
+
+    def test_ground_truth_has_schema_version(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        assert result.ground_truth["schema_version"] == 1
+
+    def test_ground_truth_has_form_answers(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        fa = result.ground_truth.get("form_answers", {})
+        assert len(fa) > 0
+        assert "you.first_name" in fa
+
+    def test_ground_truth_computed_before_errors(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        result = engine.generate_scenario(
+            mode="verify", difficulty="easy", error_count=2,
+        )
+        fa = result.ground_truth.get("form_answers", {})
+        assert fa.get("you.first_name") == "Jane"
+
+    def test_ground_truth_has_filing_status(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        assert result.ground_truth["filing_status"] != ""
+
+    def test_ground_truth_roundtrip_dict(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        from tax_core.ground_truth import GroundTruth
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        gt = GroundTruth.from_dict(result.ground_truth)
+        assert gt.schema_version == 1
+        assert len(gt.form_answers) > 0
+
+    def test_grader_uses_ground_truth(
+        self, engine: ExerciseEngine,
+    ) -> None:
+        from training.grader import Grader
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        grader = Grader()
+        sub = {"you.first_name": "Jane"}
+        grade = grader.grade_intake(sub, result.ground_truth)
+        correct = [f for f in grade.field_feedback
+                   if f["field"] == "you.first_name"]
+        assert correct[0]["status"] == "correct"
+
+    def test_grader_wrong_answer(self, engine: ExerciseEngine) -> None:
+        from training.grader import Grader
+        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        grader = Grader()
+        sub = {"you.first_name": "WRONG"}
+        grade = grader.grade_intake(sub, result.ground_truth)
+        wrong = [f for f in grade.field_feedback
+                 if f["field"] == "you.first_name"]
+        assert wrong[0]["status"] == "incorrect"
