@@ -69,6 +69,7 @@ Quick-scan view. Detailed entries follow.
 | `refundable_credit_only_filer` | filing | mvp | fact |
 | `self_employment_threshold` | income | mvp | fact |
 | `social_security_taxability` | income | mvp | fact |
+| `standard_vs_itemized` | deductions | mvp | fact |
 | `qualifying_surviving_spouse` | filing status | p2 | fact |
 | `mfj_vs_mfs` | filing status | p2 | computed |
 | `qualifying_child_age` | dependency | p2 | fact |
@@ -84,7 +85,7 @@ Quick-scan view. Detailed entries follow.
 
 ---
 
-## MVP concepts (5)
+## MVP concepts (6)
 
 ### `hoh_qualifying_person`
 
@@ -206,6 +207,38 @@ Quick-scan view. Detailed entries follow.
 
 ---
 
+### `standard_vs_itemized`
+
+- **Category:** deductions
+- **Phase:** mvp
+- **Lifecycle:** fact
+
+**Rule tested.** A taxpayer chooses between the standard deduction (a fixed amount by filing status, indexed annually) and itemizing deductions on Schedule A. The itemized total is the sum of: state and local taxes paid (SALT — state income tax + property taxes, capped at $10,000), mortgage interest (Form 1098), medical and dental expenses exceeding 7.5% of AGI, and charitable contributions. The taxpayer should choose whichever is larger. Most taxpayers take the standard deduction; the SALT cap ($10K since TCJA 2017) pushed many former itemizers below the threshold.
+
+**Source.** IRC §63 (standard deduction); IRC §164 (state and local taxes); IRC §163(h) (mortgage interest); IRC §213 (medical expenses); IRC §170 (charitable contributions); IRC §164(b)(6) (SALT cap).
+
+**Predicates required.**
+- `standard_deduction_for(status, year)` — returns the standard deduction amount.
+- `compute_salt(state_tax, property_tax, year)` — applies the $10K SALT cap.
+- `compute_medical_deduction(medical_expenses, agi)` — applies the 7.5% AGI floor.
+- `compute_itemized_total(household, year)` — aggregates SALT + mortgage + medical + charitable.
+- `should_itemize(household, year)` — compares itemized total against standard deduction for filing status.
+
+**Why it matters.** This is already implemented in the codebase (`expenses.py: _calculate_totals()`). It's a core VITA competency — the volunteer must evaluate whether itemizing benefits the client. The most common mistake is not checking: defaulting to standard deduction without computing the alternative, or conversely, itemizing when the standard deduction is higher. The SALT cap is the wrinkle that catches experienced filers who haven't updated their intuition since TCJA.
+
+**Subtlety dial.**
+- *Obvious:* large mortgage interest and property taxes clearly exceed the standard deduction.
+- *Moderate:* itemized total is within a few hundred dollars of the standard deduction; player must compute carefully.
+- *Subtle:* medical expenses appear large but fall below the 7.5% AGI floor; SALT appears large but is capped at $10K. The headline numbers look like itemizing wins, but after applying the floor and cap, standard deduction is better.
+
+**Existing code (Restructure A extraction target).**
+- `STANDARD_DEDUCTION` dict → `tax_core/thresholds.py`
+- `SALT_CAP` constant → `tax_core/thresholds.py`
+- Medical 7.5% AGI floor logic → `tax_core/predicates/deductions.py`
+- Standard vs itemized comparison in `_calculate_totals()` → `tax_core/predicates/deductions.py`
+
+---
+
 ## P2 concepts (7)
 
 These ship after MVP is stable. Each entry is briefer; expand as you implement.
@@ -311,7 +344,7 @@ Derived from the MVP and P2 concepts above. This is the work order for Restructu
 
 ### MVP predicates (Restructure A first pass)
 
-These are required for the five MVP concepts.
+These are required for the six MVP concepts.
 
 **Filing status family**
 - `is_unmarried(filer, year)`
@@ -337,7 +370,36 @@ These are required for the five MVP concepts.
 - `qualifies_for_eitc(filer, year)` — can stub as "any qualifying child + earned income > 0" for MVP, expand later.
 - `qualifies_for_actc(filer, year)` — similar.
 
-Total: **13 predicates** for the MVP.
+**Deduction family** *(new — from `standard_vs_itemized`)*
+- `standard_deduction_for(status, year)` — lookup by filing status.
+- `compute_salt(state_tax, property_tax, year)` — applies SALT cap.
+- `compute_medical_deduction(medical_expenses, agi)` — applies 7.5% AGI floor.
+- `compute_itemized_total(household, year)` — aggregates Schedule A categories.
+- `should_itemize(household, year)` — compares itemized vs standard.
+
+Total: **18 predicates** for the MVP.
+
+### Infrastructure predicates (Restructure A — existing code extraction)
+
+These are not concepts (not drilled as learning objectives) but are tax-law functions that belong in `tax_core`. They exist today in `generator/expenses.py` and `generator/models.py` and must move during Restructure A. Concepts and the grader consume them.
+
+**Filing status derivation** *(currently `Household.derive_filing_status()` in `generator/models.py`)*
+- `derive_filing_status(household)` — determines Single / MFJ / MFS / HoH / QSS from household composition. Currently a simplified version (married → MFJ, has children → HoH, else single). Will be refined as concepts like `hoh_qualifying_person` and `mfj_vs_mfs` are implemented. The `Household` method becomes a thin wrapper that delegates to `tax_core`.
+
+**State income tax computation** *(currently in `generator/expenses.py`)*
+- `compute_state_income_tax(income, filing_status, state, year)` — progressive bracket calculation. Currently hardcoded to Hawaii (`HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`). Moves to `tax_core/state_tax/hawaii.py` with a dispatch function that selects the correct state module. State-specific tax law is still tax law.
+
+**Threshold constants** *(currently module-level constants in `generator/expenses.py`)*
+- `STANDARD_DEDUCTION` by filing status and year
+- `SALT_CAP` by year (currently $10,000)
+- `IRA_CONTRIBUTION_LIMIT` / `IRA_CONTRIBUTION_LIMIT_50_PLUS` by year
+- `STUDENT_LOAN_INTEREST_LIMIT` by year (currently $2,500)
+- `EDUCATOR_EXPENSE_LIMIT` by year (currently $300)
+
+All move to `tax_core/thresholds.py` as year-indexed lookups. The expense generator imports them from `tax_core` instead of defining them locally. One module, one source of truth.
+
+**Above-the-line deduction caps** *(logic currently in `generator/expenses.py`)*
+- Student loan interest, educator expense, and IRA contribution caps are applied during generation but are tax-law limits. The cap-checking logic moves to `tax_core`; the random-amount generation stays in `intake`.
 
 ### P2 predicates (Restructure D second pass)
 
