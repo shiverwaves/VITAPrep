@@ -37,16 +37,16 @@ async def get_difficulty_levels() -> JSONResponse:
     return JSONResponse(content={
         "levels": {
             "easy": {
-                "description": "All client facts provided upfront",
-                "client_facts": "all",
+                "description": "All interview notes provided upfront",
+                "interview_notes": "all",
             },
             "medium": {
-                "description": "Required facts only — student must notice gaps",
-                "client_facts": "required_only",
+                "description": "Required notes only — student must notice gaps",
+                "interview_notes": "required_only",
             },
             "hard": {
-                "description": "Minimal facts — student must identify what to ask",
-                "client_facts": "minimal",
+                "description": "Minimal notes — student must identify what to ask",
+                "interview_notes": "minimal",
             },
         },
     })

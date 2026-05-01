@@ -278,17 +278,34 @@ class TestSaveAndGet:
         assert err.correct_value == "Mary"
         assert err.erroneous_value == "Marie"
 
-    def test_client_facts_round_trip(
+    def test_interview_notes_round_trip(
+        self, store: ScenarioStore, sample_scenario: Scenario,
+    ) -> None:
+        sample_scenario.interview_notes = [
+            {
+                "category": "citizenship",
+                "question": "Are you a U.S. citizen?",
+                "answer": "Yes",
+                "source_slot": None,
+            },
+        ]
+        store.save_scenario(sample_scenario)
+        got = store.get_scenario("sc-001")
+        assert got is not None
+        assert got.interview_notes is not None
+        assert len(got.interview_notes) == 1
+        note = got.interview_notes[0]
+        assert note["category"] == "citizenship"
+        assert note["answer"] == "Yes"
+        assert note["source_slot"] is None
+
+    def test_interview_notes_none_for_legacy(
         self, store: ScenarioStore, sample_scenario: Scenario,
     ) -> None:
         store.save_scenario(sample_scenario)
         got = store.get_scenario("sc-001")
         assert got is not None
-        assert len(got.client_facts) == 1
-        fact = got.client_facts[0]
-        assert fact.category == "citizenship"
-        assert fact.answer == "Yes"
-        assert fact.required is True
+        assert got.interview_notes is None
 
     def test_document_paths_round_trip(
         self, store: ScenarioStore, sample_scenario: Scenario,

@@ -65,11 +65,16 @@ CREATE TABLE IF NOT EXISTS scenarios (
     pattern       TEXT NOT NULL DEFAULT '',
     household     TEXT NOT NULL,          -- JSON blob
     injected_errors TEXT NOT NULL DEFAULT '[]',  -- JSON array
-    client_facts  TEXT NOT NULL DEFAULT '[]',    -- JSON array
+    client_facts  TEXT NOT NULL DEFAULT '[]',    -- JSON array (legacy, pre-C2)
     document_paths TEXT NOT NULL DEFAULT '{}',   -- JSON object
     ground_truth  TEXT,                          -- JSON blob (NULL for pre-B scenarios)
+    interview_notes TEXT,                        -- JSON array (NULL for pre-C2 scenarios)
     created_at    TEXT NOT NULL
 );
+"""
+
+_MIGRATE_ADD_INTERVIEW_NOTES = """\
+ALTER TABLE scenarios ADD COLUMN interview_notes TEXT;
 """
 
 _CREATE_GRADES = """\
@@ -325,6 +330,7 @@ class ScenarioStore:
         self._conn.execute(_CREATE_GRADES)
         self._migrate_grades_section()
         self._migrate_ground_truth()
+        self._migrate_interview_notes()
         self._conn.commit()
 
     def _migrate_grades_section(self) -> None:
@@ -351,6 +357,17 @@ class ScenarioStore:
                 "ALTER TABLE scenarios ADD COLUMN ground_truth TEXT"
             )
 
+    def _migrate_interview_notes(self) -> None:
+        """Add 'interview_notes' column to scenarios if it doesn't exist yet."""
+        cols = [
+            row[1]
+            for row in self._conn.execute(
+                "PRAGMA table_info(scenarios)"
+            ).fetchall()
+        ]
+        if "interview_notes" not in cols:
+            self._conn.execute(_MIGRATE_ADD_INTERVIEW_NOTES)
+
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
@@ -375,13 +392,19 @@ class ScenarioStore:
             if scenario.ground_truth is not None
             else None
         )
+        notes_json = (
+            json.dumps(scenario.interview_notes, cls=_DateEncoder)
+            if scenario.interview_notes is not None
+            else None
+        )
         self._conn.execute(
             """\
             INSERT INTO scenarios
                 (scenario_id, mode, difficulty, state, pattern,
                  household, injected_errors, client_facts,
-                 document_paths, ground_truth, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 document_paths, ground_truth, interview_notes,
+                 created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scenario.scenario_id,
@@ -394,6 +417,7 @@ class ScenarioStore:
                 _serialize_facts(scenario.client_facts),
                 _serialize_doc_paths(scenario.document_paths),
                 gt_json,
+                notes_json,
                 now,
             ),
         )
@@ -683,6 +707,9 @@ class ScenarioStore:
                 )
             ground_truth = gt_data
 
+        notes_blob = row["interview_notes"]
+        interview_notes = json.loads(notes_blob) if notes_blob else None
+
         return Scenario(
             scenario_id=row["scenario_id"],
             mode=row["mode"],
@@ -693,4 +720,5 @@ class ScenarioStore:
             document_paths=json.loads(row["document_paths"]),
             created_at=row["created_at"],
             ground_truth=ground_truth,
+            interview_notes=interview_notes,
         )

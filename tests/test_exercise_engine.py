@@ -16,10 +16,10 @@ Requirements:
 2. Household is fully populated (demographics + PII).
 3. Mode "intake":
    - injected_errors is empty (student fills from clean docs).
-   - client_facts populated and filtered by difficulty.
+   - interview_notes populated and filtered by difficulty.
 4. Mode "verify":
    - injected_errors populated with error_count errors.
-   - client_facts populated.
+   - interview_notes populated.
 5. difficulty propagates to error injection and client fact filtering.
 6. pattern is forwarded to the household generator.
 7. seed is forwarded for reproducibility.
@@ -33,7 +33,6 @@ import pytest
 
 from generator.models import (
     Address,
-    ClientFact,
     Household,
     InjectedError,
     Person,
@@ -214,15 +213,17 @@ class TestIntakeMode:
         result = engine.generate_scenario(mode="intake", difficulty="easy")
         assert result.injected_errors == []
 
-    def test_client_facts_populated(self, engine: ExerciseEngine) -> None:
+    def test_interview_notes_populated(self, engine: ExerciseEngine) -> None:
         result = engine.generate_scenario(mode="intake", difficulty="easy")
-        assert len(result.client_facts) > 0
+        assert result.interview_notes is not None
+        assert len(result.interview_notes) > 0
 
-    def test_client_facts_are_client_fact_objects(
+    def test_interview_notes_are_dicts(
         self, engine: ExerciseEngine,
     ) -> None:
         result = engine.generate_scenario(mode="intake", difficulty="easy")
-        assert all(isinstance(f, ClientFact) for f in result.client_facts)
+        assert all(isinstance(n, dict) for n in result.interview_notes)
+        assert all("category" in n for n in result.interview_notes)
 
 
 # =========================================================================
@@ -251,11 +252,12 @@ class TestVerifyMode:
         )
         assert all(isinstance(e, InjectedError) for e in result.injected_errors)
 
-    def test_client_facts_present(self, engine: ExerciseEngine) -> None:
+    def test_interview_notes_present(self, engine: ExerciseEngine) -> None:
         result = engine.generate_scenario(
             mode="verify", difficulty="medium", error_count=2,
         )
-        assert len(result.client_facts) > 0
+        assert result.interview_notes is not None
+        assert len(result.interview_notes) > 0
 
     def test_zero_errors_verify(self, engine: ExerciseEngine) -> None:
         result = engine.generate_scenario(
@@ -279,12 +281,12 @@ class TestDifficultyPropagation:
         if result.injected_errors:
             assert result.injected_errors[0].difficulty == "hard"
 
-    def test_easy_has_more_client_facts_than_hard(
+    def test_easy_has_more_notes_than_hard(
         self, engine: ExerciseEngine,
     ) -> None:
         easy = engine.generate_scenario(mode="intake", difficulty="easy")
         hard = engine.generate_scenario(mode="intake", difficulty="hard")
-        assert len(easy.client_facts) >= len(hard.client_facts)
+        assert len(easy.interview_notes) >= len(hard.interview_notes)
 
 
 # =========================================================================

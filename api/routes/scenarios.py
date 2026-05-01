@@ -274,10 +274,7 @@ async def api_get_scenario(
         "pattern": hh.pattern if hh else "",
         "members": members_info,
         "document_urls": doc_urls,
-        "client_facts": [
-            {"question": f.question, "answer": f.answer, "category": f.category}
-            for f in scenario.client_facts
-        ],
+        "interview_notes": scenario.interview_notes or [],
         "form_url": f"/scenarios/{scenario_id}/form",
         "exercise_url": f"/scenarios/{scenario_id}",
         "created_at": scenario.created_at,
@@ -463,12 +460,13 @@ async def page_exercise(
                     f'target="_blank">Form 1098-T — {name}</a></li>'
                 )
 
-    # Client facts
+    # Interview notes
     facts_html = ""
-    if scenario.client_facts:
+    notes = scenario.interview_notes or []
+    if notes:
         facts_rows = "\n".join(
-            f"<tr><td>{f.category}</td><td>{f.question}</td><td><strong>{f.answer}</strong></td></tr>"
-            for f in scenario.client_facts
+            f"<tr><td>{n['category']}</td><td>{n['question']}</td><td><strong>{n['answer']}</strong></td></tr>"
+            for n in notes
         )
         facts_html = f"""\
 <h2>Client Interview Notes</h2>
