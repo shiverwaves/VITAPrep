@@ -519,13 +519,14 @@ class Household:
         return sum(p.total_income() for p in self.members)
 
     def derive_filing_status(self) -> FilingStatus:
-        """Derive filing status from household composition."""
-        if self.is_married():
-            return FilingStatus.MARRIED_FILING_JOINTLY
-        children = self.get_children()
-        if children:
-            return FilingStatus.HEAD_OF_HOUSEHOLD
-        return FilingStatus.SINGLE
+        """Derive filing status from household composition.
+
+        Delegates to tax_core.predicates.filing_status.derive_filing_status().
+        """
+        from tax_core.predicates.filing_status import (
+            derive_filing_status as _derive,
+        )
+        return FilingStatus(_derive(self))
 
     def to_dict(self) -> dict:
         return {

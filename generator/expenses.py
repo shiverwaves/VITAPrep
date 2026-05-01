@@ -32,60 +32,22 @@ from .models import (
     Person,
 )
 
+from tax_core.thresholds import (
+    educator_expense_limit,
+    ira_contribution_limit,
+    student_loan_interest_limit,
+)
+from tax_core.state_tax import compute_state_income_tax
+from tax_core.predicates.deductions import (
+    compute_itemized_total,
+    compute_medical_deduction,
+    compute_salt,
+    should_itemize,
+)
+
 _fake = Faker()
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# HAWAII STATE TAX BRACKETS (2022)
-# =============================================================================
-
-HAWAII_TAX_BRACKETS_SINGLE: List[Tuple[int, float]] = [
-    (2400, 0.014),
-    (4800, 0.032),
-    (9600, 0.055),
-    (14400, 0.064),
-    (19200, 0.068),
-    (24000, 0.072),
-    (36000, 0.076),
-    (48000, 0.079),
-    (150000, 0.0825),
-    (175000, 0.09),
-    (200000, 0.10),
-    (float("inf"), 0.11),
-]
-
-HAWAII_TAX_BRACKETS_MFJ: List[Tuple[int, float]] = [
-    (4800, 0.014),
-    (9600, 0.032),
-    (19200, 0.055),
-    (28800, 0.064),
-    (38400, 0.068),
-    (48000, 0.072),
-    (72000, 0.076),
-    (96000, 0.079),
-    (300000, 0.0825),
-    (350000, 0.09),
-    (400000, 0.10),
-    (float("inf"), 0.11),
-]
-
-# 2022 standard deductions
-STANDARD_DEDUCTION = {
-    "single": 12950,
-    "married_filing_jointly": 25900,
-    "married_filing_separately": 12950,
-    "head_of_household": 19400,
-    "qualifying_surviving_spouse": 25900,
-}
-
-# Expense caps (2022 values)
-IRA_CONTRIBUTION_LIMIT = 6000
-IRA_CONTRIBUTION_LIMIT_50_PLUS = 7000
-STUDENT_LOAN_INTEREST_LIMIT = 2500
-EDUCATOR_EXPENSE_LIMIT = 300
-SALT_CAP = 10000
 
 # Mortgage interest fraction by age bracket — estimates the share of
 # monthly payment going to interest vs principal based on typical loan
@@ -348,31 +310,11 @@ class ExpenseGenerator:
 
     def _assign_state_income_tax(self, household: Household) -> None:
         income = household.total_household_income()
-
-        if household.pattern in (
-            "married_couple_with_children",
-            "married_couple_no_children",
-        ):
-            brackets = HAWAII_TAX_BRACKETS_MFJ
-        else:
-            brackets = HAWAII_TAX_BRACKETS_SINGLE
-
-        household.state_income_tax = self._progressive_tax(income, brackets)
+        filing_status = household.derive_filing_status().value
+        household.state_income_tax = compute_state_income_tax(
+            income, filing_status, self.state, household.year,
+        )
         logger.debug("  State tax: $%d", household.state_income_tax)
-
-    @staticmethod
-    def _progressive_tax(
-        income: int, brackets: List[Tuple[int, float]],
-    ) -> int:
-        tax = 0.0
-        prev = 0
-        for bracket_max, rate in brackets:
-            if income <= prev:
-                break
-            taxable = min(income, bracket_max) - prev
-            tax += taxable * rate
-            prev = bracket_max
-        return int(tax)
 
     # =========================================================================
     # 3. MEDICAL EXPENSES
@@ -469,7 +411,7 @@ class ExpenseGenerator:
             return 0
 
         interest = int(np.random.normal(avg, avg * 0.3))
-        return min(max(0, interest), STUDENT_LOAN_INTEREST_LIMIT)
+        return min(max(0, interest), student_loan_interest_limit(2022))
 
     def _educator_expenses(self, person: Person) -> int:
         if not person.occupation_code:
@@ -482,7 +424,7 @@ class ExpenseGenerator:
         if np.random.random() >= 0.70:
             return 0
 
-        return int(np.random.uniform(150, EDUCATOR_EXPENSE_LIMIT))
+        return int(np.random.uniform(150, educator_expense_limit(2022)))
 
     def _ira_contributions(self, person: Person) -> int:
         if person.employment_status != EmploymentStatus.EMPLOYED.value:
@@ -505,11 +447,7 @@ class ExpenseGenerator:
         if np.random.random() >= prob:
             return 0
 
-        limit = (
-            IRA_CONTRIBUTION_LIMIT_50_PLUS
-            if person.age >= 50
-            else IRA_CONTRIBUTION_LIMIT
-        )
+        limit = ira_contribution_limit(person.age, 2022)
 
         if np.random.random() < 0.30:
             return limit
@@ -586,23 +524,18 @@ class ExpenseGenerator:
 
     def _calculate_totals(self, household: Household) -> None:
         income = household.total_household_income()
+        year = household.year or 2022
 
-        # SALT: state income tax + property taxes, capped at $10K
-        salt = min(
-            household.state_income_tax + household.property_taxes,
-            SALT_CAP,
+        salt = compute_salt(household.state_income_tax, household.property_taxes, year)
+        medical_deductible = compute_medical_deduction(
+            household.medical_expenses, income,
         )
 
-        # Medical: only the amount exceeding 7.5% of AGI is deductible
-        medical_deductible = max(
-            0, household.medical_expenses - int(income * 0.075),
-        )
-
-        household.total_itemized_deductions = (
-            salt
-            + household.mortgage_interest
-            + medical_deductible
-            + household.charitable_contributions
+        household.total_itemized_deductions = compute_itemized_total(
+            salt,
+            household.mortgage_interest,
+            medical_deductible,
+            household.charitable_contributions,
         )
 
         household.total_above_line_deductions = sum(
@@ -611,15 +544,13 @@ class ExpenseGenerator:
         )
 
         filing_status = household.derive_filing_status().value
-        standard = STANDARD_DEDUCTION.get(filing_status, 12950)
-        household.uses_standard_deduction = (
-            household.total_itemized_deductions <= standard
+        household.uses_standard_deduction = not should_itemize(
+            household.total_itemized_deductions, filing_status, year,
         )
 
         logger.debug(
-            "  Totals: itemized=$%d, standard=$%d → %s",
+            "  Totals: itemized=$%d → %s",
             household.total_itemized_deductions,
-            standard,
             "standard" if household.uses_standard_deduction else "itemized",
         )
 
