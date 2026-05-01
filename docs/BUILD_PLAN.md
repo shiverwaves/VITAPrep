@@ -158,38 +158,152 @@ Implement the 18 MVP predicates listed in [`CONCEPT_CATALOG.md` § "MVP predicat
 
 ---
 
-### Restructure B: Add ground truth computation
+### Restructure B: Ground truth computation + Scenario envelope
 
-**Goal:** Every generated scenario carries a canonical answer key from the moment of creation.
+**Goal:** Every generated scenario carries a canonical answer key from the moment of creation. The grader consumes it directly with zero domain logic of its own.
 
-**Prerequisites:** Restructure A complete.
+**Prerequisites:** Restructure A complete (predicates and thresholds exist in `tax_core`).
 
-**Serialization contract (bake in from day one):**
+#### Design decisions
 
-The scenario store (Fix 12.I) already demonstrated the cost of relying on `dataclasses.asdict()` for serialization without matching deserialization. `GroundTruth` must not repeat that pattern:
+**GroundTruth shape — three layers.**
 
-1. `GroundTruth` gets explicit `to_dict()` and `from_dict()` methods (or a trusted serialization library). Never rely on `__dict__`, `asdict()` alone, or pickle.
-2. Include a `schema_version: int` field from the first commit. Future predicate changes will produce different ground-truth shapes; the store must refuse mismatched versions cleanly rather than silently loading stale truth against a newer grader.
+`GroundTruth` contains three layers of content, each with a different rationale:
+
+1. **Return-level answers** — the values a grader needs to score a submission. Filing status, AGI, taxable income, total tax, refund or balance due, deduction type (standard vs itemized), standard deduction amount, itemized total, credits claimed. These are the things the player ultimately enters.
+2. **Per-person classifications** — for each person, their role on the return. Primary filer, spouse, or dependent? If dependent, qualifying child or qualifying relative? What credits do they generate (CTC, ODC, EITC qualifying child)? This is what dependency-related grading consumes.
+3. **Predicate detail snapshots** — the structured results returned by rich-result predicates. `qualifying_child_residency_test` returns months and exception flags; that whole result object is stored, not just the boolean. Any predicate where the *why* matters for grading feedback or concept evaluation stores its full result.
+
+Two fields that aren't strictly tax answers but earn their place because they're cheap to capture and expensive to recompute: `tax_year` (so the grader knows which thresholds applied) and `schema_version` (so future predicate changes don't silently grade against stale truth — the store refuses mismatched versions).
+
+What `GroundTruth` deliberately does **not** contain: narrative content, concept tags, document references. Those live elsewhere on `Scenario`. `GroundTruth` is the answer key, nothing more.
+
+```python
+@dataclass
+class GroundTruth:
+    schema_version: int
+    tax_year: int
+
+    # Return-level
+    filing_status: FilingStatus
+    agi: int
+    taxable_income: int
+    total_tax: int
+    refund_or_owed: int
+    deduction_type: Literal["standard", "itemized"]
+    standard_deduction: int
+    itemized_deduction_total: int
+    credits_claimed: dict[str, int]   # "ctc": 2000, "eitc": 0, etc.
+
+    # Per-person
+    person_classifications: dict[str, PersonClassification]  # keyed by person_id
+
+    # Predicate detail
+    predicate_results: dict[str, Any]   # keyed by predicate name
+```
+
+The dict-keyed-by-name pattern for `predicate_results` is intentional. It keeps `GroundTruth` extensible — adding a new rich-result predicate doesn't require schema changes — at the cost of being slightly less type-safe. Worth it for MVP.
+
+**Grader consumption — direct, no fallback.**
+
+The fallback pattern ("use `ground_truth` if present, else recompute") is tempting but is a trap. Two code paths with different bug surfaces silently drift apart. The only reason to need a fallback is if you don't trust ground truth — which means the actual problem (persistence or computation) needs fixing at the source, not papering over.
+
+Implications:
+- Every `Scenario` must have `ground_truth` populated before grading. This is a precondition, asserted early. Scenarios without ground truth are bugs.
+- Scenarios persisted before B ships won't have `ground_truth`. Invalidate them — generated scenarios are cheap. Add a check at scenario-load time that refuses scenarios without `ground_truth` or with mismatched `schema_version`.
+- The grader's job simplifies dramatically: "compare submission to `ground_truth`" with zero domain logic. Any tax-rule reasoning previously in the grader migrates to `tax_core` during A or B.
+
+**Computation approach — hand-roll the orchestration.**
+
+Hand-roll `compute_ground_truth()`, not by reimplementing bracket math inline, but by orchestrating calls to `tax_core` functions. Each individual computation (AGI, deduction choice, taxable income, bracket tax, credits, refund) is a small function in `tax_core/computation.py`. The orchestrator walks the scenario, calls them in order, and assembles `GroundTruth`.
+
+Why not a tax engine library:
+- Existing engines are either incomplete for VITA scope, written for production prep, or commercial.
+- A tax engine is a dependency you can't easily debug. When the grader says "expected $X, got $Y," walking into `tax_core/computation.py` line by line is more valuable than tracing a third-party engine.
+- VITA Basic scope is small: maybe a dozen return computations, a few hundred lines of code.
+- VITALearn will need introspectable explanations ("your AGI was wrong because you missed the educator expense adjustment"). That requires computation logic VITAPrep can walk, not a black box.
+
+IRS Direct File's fact graph remains useful as a **reference source** for verifying dependency chains. Consult the fact dictionary XMLs to confirm our AGI/taxable income/credit computations consider the same inputs the IRS system does. See "Future: Tax Engine References."
+
+```python
+def compute_ground_truth(scenario: Scenario) -> GroundTruth:
+    filing_status = determine_filing_status(scenario.household)
+    classifications = classify_persons(scenario.household, filing_status)
+
+    agi = compute_agi(scenario.household, classifications)
+    deduction = choose_deduction(scenario.household, filing_status, agi)
+    taxable = max(0, agi - deduction.amount)
+    tax_before_credits = compute_tax(taxable, filing_status, scenario.tax_year)
+    credits = compute_credits(scenario.household, classifications, agi, tax_before_credits)
+    total_tax = max(0, tax_before_credits - credits.nonrefundable_total)
+    refund_or_owed = credits.refundable_total + total_payments(scenario) - total_tax
+
+    return GroundTruth(...)
+```
+
+Each function called above is a few dozen lines in `tax_core/computation.py`.
+
+**Scenario envelope — wrapper, not subclass, not replacement.**
+
+`Scenario` wraps `Household` and accumulates lifecycle metadata stage by stage. `Household` is a stable model with downstream consumers (generators, document renderers) — subclassing or replacing it would force every consumer to update. Wrapping leaves `Household` untouched.
+
+```python
+@dataclass
+class Scenario:
+    seed: int
+    request: ScenarioRequest
+    tax_year: int
+
+    household: Household                                     # existing model, unchanged
+    documents: list[Document]                                # existing
+    pattern: str                                             # existing
+
+    # Lifecycle additions, populated by their respective stages:
+    narrative_slots: dict[str, FiredTemplate] | None = None
+    ground_truth: GroundTruth | None = None
+    concept_tags: set[str] | None = None
+    interview_notes: list[InterviewNote] | None = None
+
+    pre_filled_form: dict | None = None                      # Review mode only
+    corruption_manifest: list[Corruption] | None = None      # Review mode only
+
+    generation_log: list[Event] = field(default_factory=list)
+```
+
+Design principles:
+- **Append-only across the lifecycle.** Each stage adds fields; no stage mutates fields written by an earlier stage. This makes the pipeline debuggable — at any point you can inspect `Scenario` and see which stages have run.
+- **`Optional` fields document preconditions.** A consumer that asserts `scenario.ground_truth is not None` documents what it requires.
+- **Migration is incremental.** Introduce `Scenario`, route new code (ground truth, analyzer, obfuscator) through it. Leave existing generator/renderer code reading `scenario.household` until there's a reason to change. No big-bang rename.
+
+#### Serialization contract
+
+The scenario store (Fix 12.I) demonstrated the cost of relying on `dataclasses.asdict()` without matching deserialization. `GroundTruth` and `Scenario` must not repeat that pattern:
+
+1. Both get explicit `to_dict()` and `from_dict()` methods. Never rely on `__dict__`, `asdict()` alone, or pickle.
+2. `schema_version` on `GroundTruth` from the first commit. The store refuses mismatched versions on load.
 3. Round-trip serialization tests (`to_dict → JSON → from_dict → assert equal`) are part of B's checkpoint, not a follow-up.
 
-**Operation:**
+#### Operation
 
-1. Add `tax_core/ground_truth.py` with a function `compute_ground_truth(scenario) -> GroundTruth`.
-2. The function runs `tax_core` predicates and computations over a generated scenario's facts and produces a structured object containing: `filing_status`, per-person `dependent_status`, `agi`, `taxable_income`, `total_tax`, `refund_or_owed`, `credits_claimed`, `deductions_claimed`, plus per-predicate detail objects where the predicate returns rich results.
-3. Wire `compute_ground_truth` into the generation pipeline immediately after generation completes.
-4. Add a `ground_truth` field to the `Scenario` envelope (introduce the envelope here if it doesn't exist yet — it wraps the existing `Household` plus lifecycle metadata).
-5. Migrate the grader to compare submissions against `scenario.ground_truth` instead of recomputing answers ad-hoc.
-6. Update `scenario_store.py` to serialize/deserialize `GroundTruth` using the explicit `to_dict()`/`from_dict()` methods, checking `schema_version` on load.
+1. **Define `GroundTruth` and `PersonClassification`** in `tax_core/ground_truth.py`. Schema version 1. Include `to_dict()` / `from_dict()` from the start.
+2. **Define `Scenario`** wrapper in `intake/scenario.py`. Migrate the scenario store to serialize/deserialize `Scenario` (not `Household` directly). Round-trip serialization tests.
+3. **Implement `tax_core/computation.py`** with the return-level computation functions: `compute_agi()`, `choose_deduction()`, `compute_tax()` (bracket application), `compute_credits()`, `total_payments()`. Each is a small function calling existing `tax_core` predicates and thresholds.
+4. **Implement `compute_ground_truth(scenario) -> GroundTruth`** orchestration in `tax_core/ground_truth.py`. Calls the computation functions from step 3, assembles all three layers.
+5. **Wire `compute_ground_truth`** into the generation pipeline immediately after generation completes. Every scenario gets `ground_truth` populated before being served.
+6. **Migrate the grader** to consume `scenario.ground_truth` exclusively. Delete the ad-hoc on-the-fly key building (the `_build_*_key()` functions that recompute answers). The grader becomes a pure comparison function.
+7. **Invalidate existing scenarios.** Add a check at scenario-load time that refuses scenarios without `ground_truth` or with mismatched `schema_version`. Pre-B scenarios are cheap to regenerate.
+8. **Round-trip serialization tests** for both `GroundTruth` and `Scenario` — `to_dict → JSON → from_dict → assert equal`. Part of the checkpoint.
 
 **Output:**
 
+- `Scenario` envelope wraps `Household` with lifecycle metadata.
 - Every scenario has `ground_truth` populated before being served.
-- The grader has exactly one source of truth.
-- `GroundTruth` round-trips cleanly through the scenario store.
+- The grader has exactly one source of truth, zero domain logic.
+- `GroundTruth` and `Scenario` round-trip cleanly through the scenario store.
 
-**Checkpoint:** Generate a scenario, inspect `ground_truth`, hand-verify the values are correct against the household's facts. Run a submission through the grader and confirm it scores against `ground_truth`. Serialize the scenario to SQLite, reload it, and confirm `ground_truth` survives intact with correct `schema_version`.
+**Checkpoint:** Generate a scenario, inspect `ground_truth`, hand-verify return-level values and per-person classifications against the household's facts. Run a submission through the grader and confirm it scores against `ground_truth`. Serialize to SQLite, reload, confirm `ground_truth` survives intact with correct `schema_version`. Load a pre-B scenario and confirm it is refused cleanly.
 
-**Failure mode to watch for:** Ground truth drifting from what the grader actually compares to. If you find yourself adding logic to the grader that should be in `compute_ground_truth`, move it.
+**Failure mode to watch for:** Ground truth drifting from what the grader compares to. If you find yourself adding logic to the grader that should be in `compute_ground_truth`, move it. Also: the temptation to add a fallback recomputation path in the grader "just in case." Don't — fix the source instead.
 
 ---
 
