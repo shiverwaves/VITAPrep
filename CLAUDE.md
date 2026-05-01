@@ -155,6 +155,15 @@ See `docs/BUILD_PLAN.md` for the full step-by-step. The short version:
 11. `training/grader.py` — score submissions
 12. `api/main.py` + routes — serve it all
 
+## Restructure Merge Protocol
+
+Conventions for the A–E restructuring sprints. See `docs/BUILD_PLAN.md` for what to build; this section covers how to merge it.
+
+- **Branch per restructure:** `restructure/A-tax-core`, `restructure/B-ground-truth`, etc.
+- **Preserve individual commits** (no squash merge) so `git bisect` stays useful. Restructures produce many small mechanical commits; squashing turns the whole thing into one opaque commit.
+- **Tag main after each restructure merges:** `v0.2-tax-core` (A), `v0.3-ground-truth` (B), `v0.4-analyzer` (C), `v0.5-concepts` (D), `v0.6-targeted-gen` (E).
+- **Land doc updates before the restructure they describe.** Docs are the contract; code implements against them.
+
 ## Prior Work
 
 This project builds on learnings from the HouseholdRNG repository
