@@ -344,19 +344,24 @@ Wire ground truth into the live pipeline and migrate the grader. This is the hig
 
 **Goal:** Build the slot-based analyzer that produces narrative cover for generated facts. Wire it into the pipeline alongside the existing interview-notes path. The old path continues to work; nothing changes for the player.
 
-**Prerequisites:** Restructure B complete. Read the Stage 3 and Stage 6 sections of `SCENARIO_LIFECYCLE.md` before starting.
+**Prerequisites:** Restructure B complete. Read the Type Definitions, Worked Example, and Stage 3/Stage 6 sections of `SCENARIO_LIFECYCLE.md` before starting — the base classes, data models, and constraint rules are specified there.
 
 **Operation:**
 
-1. Create `intake/analyzer/` with `analyzer.py` (orchestrator) and `slots/` (one module per slot family).
-2. Define the `Slot` and `NarrativeTemplate` base classes per the worked example in `SCENARIO_LIFECYCLE.md`.
-3. Implement three starter slots covering the highest-frequency cases:
+0. **Insert analyzer call site into the pipeline orchestrator.** The pipeline currently runs: generate → ground truth → serve. After this step: generate → **analyze** → ground truth → serve. This is a wiring change only — the analyzer is a no-op stub that returns an empty `narrative_slots` dict until step 3 populates it. The ordering matters: ground truth runs *after* analysis so that scenarios destined for reroll (unrescuable) never pay the cost of ground-truth computation.
+1. **Create `intake/analyzer/`** with `types.py`, `analyzer.py` (orchestrator), and `slots/` (one module per slot family).
+2. **Define the type system in `intake/analyzer/types.py`.** Four types, specified in `SCENARIO_LIFECYCLE.md` § Type Definitions:
+   - `Slot` (ABC) — `name`, `fires_for(scenario)`, `templates()`. The docstring enforces the **slot evaluation constraint**: slots access `scenario.household` and `scenario.documents` only. Other lifecycle fields (`ground_truth`, `concept_tags`, `interview_notes`) are `None` at Stage 3 and must not be read. This is enforced by ordering, documented in the base class, and verified by test (see checkpoint).
+   - `NarrativeTemplate` (ABC) — `requirements(scenario, instance)`, `render(scenario, instance, subtlety)`.
+   - `InterviewNote` (dataclass) — `category: str`, `question: str`, `answer: str`, `source_slot: str | None`. `source_slot` is a debug field (hidden from the player) that traces each note back to the slot that produced it. `None` for boilerplate notes not produced by a slot.
+   - `FiredTemplate` (dataclass) — `slot_name: str`, `instance: Any`, `template: NarrativeTemplate`. `scenario.narrative_slots` is `dict[slot_name, list[FiredTemplate]]`.
+3. **Implement three starter slots** covering the highest-frequency cases. Follow the `dependent_residency` worked example in `SCENARIO_LIFECYCLE.md`:
    - `zero_income_reason` — fires when a person has zero total income.
    - `dependent_residency` — fires when a child's `months_in_home < 12`.
    - `address_mismatch` — fires when an ID address differs from the household address.
 4. For each slot, implement at least three narrative templates with distinct `requirements()` predicates. Each template produces `InterviewNote` objects at three subtlety levels (`obvious`, `moderate`, `subtle`).
-5. Add the analyzer to the pipeline. It runs after generation, before ground truth. Populate `scenario.narrative_slots` on every scenario. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
-6. Build the obfuscator (`intake/obfuscator.py`) that calls each fired template's `render()` method at the chosen subtlety and assembles `scenario.interview_notes`. Store the result on the scenario but **do not yet wire it to the UI**.
+5. Wire the analyzer into the pipeline at the call site from step 0. Populate `scenario.narrative_slots` on every scenario. If a fired slot has zero matching templates, raise `Unrescuable` and let the orchestrator reroll.
+6. Build the obfuscator (`intake/obfuscator.py`) that calls each fired template's `render()` method at the scenario-level subtlety (derived from `request.difficulty`: easy → obvious, medium → moderate, hard → subtle) and assembles `scenario.interview_notes`. Store the result on the scenario but **do not yet wire it to the UI**.
 
 **Output:**
 
@@ -364,11 +369,37 @@ Wire ground truth into the live pipeline and migrate the grader. This is the hig
 - The player UI still reads the old hardcoded interview structure (unchanged).
 - Unrescuable scenarios trigger reroll instead of being served.
 
-**Checkpoint:** Generate ten scenarios. Confirm `narrative_slots` and new-path `interview_notes` are populated, vary across scenarios, make narrative sense, and never contradict the generated facts. At least one should trigger a reroll due to slot failure (induce this with a constrained generation if needed). All existing tests still pass — the old UI path is untouched.
+**Checkpoint:** Generate ten scenarios. Confirm `narrative_slots` and new-path `interview_notes` are populated, vary across scenarios, make narrative sense, and never contradict the generated facts. At least one should trigger a reroll due to slot failure (induce this with a constrained generation if needed). All existing tests still pass — the old UI path is untouched. **Additionally:** run a constraint test that executes all slots against a scenario with `ground_truth=None`, `concept_tags=None`, `interview_notes=None` to confirm no slot or template attempts to read those fields.
 
 **Failure mode to watch for:** Templates that lie about ground truth. The obfuscation layer must preserve truth — it can introduce ambiguity, not contradictions.
 
-**Ships as:** Separate PR from C2. At the end of C1, the new pipeline is running and testable but invisible to the player.
+**Ships as:** Separate PR from C1.5 and C2. At the end of C1, the new pipeline is running and testable but invisible to the player.
+
+---
+
+### Restructure C1.5: Coverage parity audit
+
+**Goal:** Before swapping the player UI to analyzer-driven interview notes (C2), inventory every interview-note-shaped fact the existing path produces and confirm the new path covers them — or deliberately defers them.
+
+**Prerequisites:** C1 merged and stable. The new analyzer pipeline is running and populating `narrative_slots` + `interview_notes` alongside the old path.
+
+**Operation:**
+
+1. Walk `training/exercise_engine.py` (and any other code that currently assembles the player-facing interview or intake view). For each fact surfaced to the player, record: the fact, where it comes from (household field, document, hardcoded), and what it looks like in the UI.
+2. Classify each fact into one of three buckets:
+   - **Slot-rendered** — covered by a C1 slot, or requires a new slot to be written before C2 ships. If a new slot is needed, note it and add it to C2's scope.
+   - **Boilerplate** — read directly from household fields (name, SSN, address, filing status claim, citizenship, contact info). These are rendered by the boilerplate renderer in Stage 6, not by slots.
+   - **Deferred** — acceptable to drop in C2 with a logged decision and a tracking item. Example: expense-related interview notes that depend on Restructure D concepts.
+3. Produce the coverage checklist. Every fact is accounted for. No fact is silently dropped.
+
+**Output:**
+
+- A checklist (can live in a tracking issue or in this doc as a table) mapping every old-path fact to its new-path equivalent or its deferral justification.
+- Any new slots identified as required are added to C2's scope before C2 starts.
+
+**Checkpoint:** The checklist is complete and reviewed. Every fact from the old path has an explicit disposition. C2 can proceed with confidence that the swap won't silently lose player-visible information.
+
+**Ships as:** A document / checklist, not code. No separate PR needed — the output gates C2.
 
 ---
 
@@ -376,24 +407,26 @@ Wire ground truth into the live pipeline and migrate the grader. This is the hig
 
 **Goal:** Replace the old hardcoded interview-notes path with the analyzer-driven path from C1. Delete the old code.
 
-**Prerequisites:** C1 merged and stable.
+**Prerequisites:** C1 merged and stable. **C1.5 coverage audit complete** — every old-path fact has an explicit disposition (slot-rendered, boilerplate, or deferred). Any new slots identified in C1.5 are implemented as part of this sprint before the swap.
 
 **Operation:**
 
-1. Update the player UI to read from `scenario.interview_notes` (the analyzer-driven field) instead of the old hardcoded interview structure.
-2. Delete the old interview-notes generation code.
-3. Verify all exercise modes (intake and verify) work against the new path.
+1. Implement any new slots identified by the C1.5 coverage audit.
+2. Implement the boilerplate renderer for structured factual notes (`intake/boilerplate_notes.py`) — renders household fields (name, SSN, address, citizenship, contact info, filing status claim) as `InterviewNote` objects with `source_slot=None`.
+3. Update the player UI to read from `scenario.interview_notes` (the analyzer-driven field) instead of the old hardcoded interview structure.
+4. Delete the old interview-notes generation code.
+5. Verify all exercise modes (intake and review) work against the new path.
 
 **Output:**
 
 - The player UI is reading the new analyzer-driven path.
 - The old hardcoded interview-notes path is gone.
 
-**Checkpoint:** Full player flow works: generate scenario → review documents → read interview notes → fill form → submit → grade. Interview notes vary by scenario and subtlety level. No references to the old interview path remain in the codebase.
+**Checkpoint:** Full player flow works: generate scenario → review documents → read interview notes → fill form → submit → grade. Interview notes vary by scenario and subtlety level. No references to the old interview path remain in the codebase. Every fact from the C1.5 checklist that was classified as slot-rendered or boilerplate appears in the new output.
 
-**Failure mode to watch for:** Edge cases where the old path produced notes that the new analyzer doesn't cover yet (e.g., expense-related interview facts — see Future: Scenario Validation). Audit the old path's output before deleting to ensure coverage parity or document known gaps.
+**Failure mode to watch for:** Facts that the C1.5 audit classified as "boilerplate" but that actually need slot-level narrative treatment. If a boilerplate note looks wrong in context (e.g., a filing status claim that should vary by subtlety), promote it to a slot.
 
-**Ships as:** Separate PR from C1. Independently revertible if the swap reveals issues in production.
+**Ships as:** Separate PR from C1 and C1.5. Independently revertible if the swap reveals issues in production.
 
 ---
 
@@ -621,5 +654,8 @@ These are not decided here. Resolve in code, then update this document.
 - Whether `tax_core` predicates return rich result objects or simple booleans (the worked example used rich; revisit per predicate).
 - How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).
 - Where document corruption manifests live for Review mode (in `Scenario` or sidecar table).
-- Subtlety dial: global per scenario, per slot, or per concept? Pick one when implementing Restructure C.
 - Concept catalog registration: explicit list vs decorator-based vs autodiscovery. Recommend explicit list for MVP.
+
+**Resolved:**
+
+- ~~Subtlety dial: global per scenario, per slot, or per concept?~~ **Global per scenario for MVP**, derived from `request.difficulty` (`easy → obvious`, `medium → moderate`, `hard → subtle`). Per-slot or per-concept overrides deferred to Restructure D. See `SCENARIO_LIFECYCLE.md` § Stage 6.
