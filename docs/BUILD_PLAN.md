@@ -88,7 +88,7 @@ Restructure A is both a **move** (extracting existing tax logic) and a **build**
 
 1. Create `tax_core/` at the repo root with `__init__.py`, `thresholds.py`, `predicates/`, and `state_tax/`.
 2. **`tax_core/thresholds.py`** — Move all year-indexed constants from `generator/expenses.py`: `STANDARD_DEDUCTION`, `SALT_CAP`, `IRA_CONTRIBUTION_LIMIT`, `IRA_CONTRIBUTION_LIMIT_50_PLUS`, `STUDENT_LOAN_INTEREST_LIMIT`, `EDUCATOR_EXPENSE_LIMIT`. Structure as year-keyed lookups, not bare constants.
-3. **`tax_core/state_tax/hawaii.py`** — Move `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and the progressive tax calculation from `ExpenseGenerator._assign_state_income_tax()`. Add a dispatch function (`compute_state_income_tax(income, filing_status, state, year)`) so other state modules can be added later.
+3. **`tax_core/state_tax/hawaii.py`** — Move `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and the progressive tax calculation from `ExpenseGenerator._assign_state_income_tax()`. Add a dispatch function (`compute_state_income_tax(income, filing_status, state, year)`) so other state modules can be added later. **Multi-state support is deferred** — Hawaii moves as-is. See "Future: State Tax Generalization" for the expansion plan.
 4. **`tax_core/predicates/filing_status.py`** — Move `Household.derive_filing_status()` logic. The `Household` method becomes a thin wrapper that delegates to `tax_core`.
 5. **`tax_core/predicates/deductions.py`** — Move the SALT cap application, medical 7.5% AGI floor, itemized total aggregation, and standard-vs-itemized comparison from `ExpenseGenerator._calculate_totals()`. The expense generator calls these functions instead of doing the math inline.
 6. Replace all original call sites with imports from `tax_core`. Behavior must not change.
@@ -297,6 +297,66 @@ Once A–E are complete, new work follows the layered structure naturally:
 - New form sections (Part IV, Part V, etc.) → cross-layer additions, but each layer's contribution is local.
 
 Each future VITA section follows the existing pattern: extract distributions → generate facts → render documents → analyze and obfuscate → tag concepts → grade.
+
+---
+
+## Future: State Tax Generalization
+
+The expense generator currently uses hardcoded Hawaii state income tax brackets (`HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ` in `generator/expenses.py`). Restructure A moves these to `tax_core/state_tax/hawaii.py` but does not add other states. This section documents the expansion plan.
+
+### Why this isn't in PUMS
+
+State tax brackets are **statutory data** — published by each state's department of taxation and indexed annually. They are not in PUMS or any Census product. They cannot be extracted the way demographics, housing costs, or income distributions are. This is a separate data source with a separate maintenance cycle.
+
+### Recommended approach: YAML config files
+
+Store brackets as YAML (or JSON) files under `tax_core/state_tax/brackets/`, one per state:
+
+```
+tax_core/state_tax/
+├── __init__.py
+├── compute.py          # dispatch + progressive_tax() shared logic
+└── brackets/
+    ├── HI.yaml         # Hawaii brackets by year + filing status
+    ├── CA.yaml         # California (when added)
+    └── ...
+```
+
+Each file contains bracket tables keyed by year and filing status:
+
+```yaml
+# HI.yaml
+2022:
+  single:
+    - [2400, 0.014]
+    - [4800, 0.032]
+    # ...
+  married_filing_jointly:
+    - [4800, 0.014]
+    # ...
+```
+
+**Why YAML over SQLite:** Bracket data is small (< 50 lines per state per year), changes once per legislative session, and benefits from being version-controlled and diff-readable. It doesn't need query semantics. A YAML file is auditable by reading it; a SQLite row requires a query tool.
+
+**Why not a third-party package:** Adds a dependency for a narrow need. The bracket data itself is public and small. If a reliable open-source tax bracket library emerges, revisit.
+
+### Maintenance burden
+
+Adding a state is a 15-minute task: copy a YAML template, fill in brackets from Tax Foundation or the state's published rate schedule, add a test. When brackets change for a new tax year, update the YAML file and add the new year key. The `compute_state_income_tax()` dispatch function already selects the right file by state code.
+
+### Data sources for bracket compilation
+
+- **Tax Foundation** — publishes annual state income tax rate tables in structured format (taxfoundation.org). Best single source.
+- **State revenue department websites** — authoritative but harder to parse. Use for verification.
+- **IRS Publication 4012** (VITA Resource Guide) — includes state supplement pages for VITA-active states.
+
+### Prerequisite for multi-state scenarios
+
+Before adding a new state's brackets, that state must also have PUMS extraction data (`data/distributions_{state}_{year}.sqlite`). Property tax and housing cost distributions are state-specific and come from PUMS. Without both bracket data and distribution data, scenarios for that state will be incomplete.
+
+### When to implement
+
+Not during Restructure A. Implement when VITAPrep expands beyond Hawaii — likely triggered by a request to support a second VITA site's state. The `tax_core/state_tax/` directory structure established in Restructure A is designed to accommodate this without refactoring.
 
 ---
 
