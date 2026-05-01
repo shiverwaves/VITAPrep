@@ -538,22 +538,61 @@ Wire concept labeling into the live pipeline and make tags minimally visible to 
 
 **Prerequisites:** Restructure D complete. This is the most fragile sprint and should not be attempted until A–D are stable in production.
 
-**Operation:**
+#### Design decisions
 
-1. Add a `concepts` parameter to the `ScenarioRequest` model.
-2. In the orchestrator, when concepts are requested, query their `generation_hints()` and merge into the generator's hint object.
-3. After generation, verify all requested concepts actually fired (in Stage 5). If not, reroll with a new seed up to `MAX_GEN_ATTEMPTS`.
-4. Surface the concept selector in the scenario-generation UI — replace the old "Difficulty: easy/medium/hard" dropdown with a concept picker plus a subtlety slider.
-5. Document the failure path: if `MAX_GEN_ATTEMPTS` is exhausted, surface a clear error to the player ("This concept combination is too rare or contradictory; try fewer concepts").
+**GenerationHints: flat and extensible (Option A).** Keep `GenerationHints` as a flat dataclass and extend it field-by-field as each concept's hints are implemented. Coordination between fields (e.g., `force_hsa = True` implies HDHP-compatible insurance and no Medicare) is the generator's concern, not the hint structure's. This works as long as the generator's existing pipelines can handle the implication chains.
+
+The alternative — named trait bundles like `force_scenario_traits: list[str]` (Option B) — is cleaner conceptually but introduces a layer before you know the right primitives. Implement A, watch for field count to balloon or coordination to get tangled, refactor to B if it does. The decision is reversible.
+
+Practical impact: don't lock the `GenerationHints` shape. The first concept's hints (`qualifying_child_residency` — needs `dependent_months_in_home_range: tuple[int, int]` or similar) set the pattern. Subsequent concepts add fields as needed. By the time all six are done, you'll know whether A is holding up.
+
+**Multi-field constraints.** Some concepts require coordinated hints across multiple fields. Example: `social_security_taxability` needs a person with SS income *plus* enough other income to cross the provisional income threshold. That's two fields (`force_ss_recipient`, `min_other_income_floor`), but the floor only makes sense relative to filing status, which the generator determines downstream. The hint either forces filing status too (constraining further) or accepts the floor as a soft target the generator approximates. Work this out per concept during implementation.
+
+**Reroll rate targets.** The reroll rate is the quality signal for hint effectiveness. Too few rerolls means hints are over-constraining (variety suffers). Too many means hints are too weak (generation is grinding). Both are fixable but the failure modes differ, which is why both bounds matter.
+
+Per-concept thresholds, not global:
+
+| Concept | Expected rarity | Avg attempts target | Max attempts |
+|---|---|---|---|
+| `qualifying_child_residency` | common | ≤ 2 | 5 |
+| `hoh_qualifying_person` | common | ≤ 2 | 5 |
+| `refundable_credit_only_filer` | moderate | ≤ 3 | 5 |
+| `self_employment_threshold` | common | ≤ 2 | 5 |
+| `social_security_taxability` | moderate | ≤ 3 | 5 |
+| `standard_vs_itemized` | common | ≤ 2 | 5 |
+
+These are starting values. Adjust per concept if implementation reveals the natural rarity is different than expected. P2 concepts like `qualifying_surviving_spouse` (genuinely rare trigger condition) may warrant higher thresholds (max 10).
+
+**Failure UX.** When `MAX_GEN_ATTEMPTS` is exhausted, fail with a clear message: "Couldn't generate a scenario matching all selected concepts. Try fewer concepts or different combinations." Do not silently fall back to random generation — silent fallback teaches the player that their selection didn't matter. A richer dialog (offering to drop one concept) is a nice-to-have for after MVP.
+
+#### Operation
+
+No phase structure — E's steps can't ship independently (hints without wiring are dead code, wiring without hints does nothing, UI without either is decorative). Numbered steps with clear checkpoints are sufficient.
+
+1. **Implement `generation_hints()` for `qualifying_child_residency`.** This is the simplest concept — needs a child with `months_in_home` in a specific range. Extend `GenerationHints` with the field(s) required. Confirm the generator respects the hint and produces a matching scenario. This sets the pattern for subsequent concepts.
+2. **Implement `generation_hints()` for the remaining five MVP concepts.** Each may extend `GenerationHints` with new fields. For each, confirm the generator can satisfy the hint. Note where coordination is needed (e.g., `social_security_taxability` — SS income plus sufficient other income) and how the generator handles it.
+3. **Add `concepts` parameter to `ScenarioRequest`.** Accept an optional set of concept names. Validate against the registered catalog.
+4. **Wire hint merging into the orchestrator.** When concepts are requested, query each concept's `generation_hints()`, merge into a single `GenerationHints` object (last-write-wins for conflicting fields), and pass to the generator. Log the merged hints for diagnostics.
+5. **Add the reroll-on-concept-missed path.** After generation, run Stage 5 concept labeling. If any requested concept is not in `concept_tags`, reroll with a new seed up to `MAX_GEN_ATTEMPTS`. Log each reroll with the missing concepts.
+6. **Surface the concept selector in the UI.** Replace or augment the scenario-generation controls with a concept picker (checkboxes or multi-select for the six MVP concepts) plus the existing subtlety/difficulty control. The failure message from the design decisions section is surfaced here when `MAX_GEN_ATTEMPTS` is exhausted.
+7. **Add the reroll-rate integration test.** For each of the six MVP concepts: generate 50 scenarios targeting only that concept, count rerolls, assert average attempts ≤ threshold and no single run exceeds max attempts. Run as a slow test (tagged, not in the default suite) that gates merge. Concepts that fail the threshold have buggy hints, not "good enough" hints.
 
 **Output:**
 
 - Concept-driven generation works end to end.
-- The UI exposes it cleanly.
+- The UI exposes concept selection cleanly.
+- Reroll rates are measured and enforced per concept.
+- `GenerationHints` is extended with fields for all six MVP concepts.
 
-**Checkpoint:** For each of the six MVP concepts, request a scenario targeting only that concept and verify the resulting scenario fires it. Then request two concepts simultaneously and verify both fire. Then request a deliberately incompatible pair and confirm graceful failure.
+**Checkpoint:** For each of the six MVP concepts, request a scenario targeting only that concept and verify the resulting scenario fires it. Then request two concepts simultaneously and verify both fire. Then request a deliberately incompatible pair and confirm graceful failure with the specified error message. The reroll-rate integration test passes for all six concepts.
 
-**Failure mode to watch for:** Generation hints from different concepts conflicting silently. Add hint-conflict detection (or document that last-write-wins is the policy) before this sprint ships.
+**Failure mode to watch for:** Generation hints from different concepts conflicting silently. Last-write-wins is the merge policy for MVP; if conflicts prove common (identifiable from reroll logs), revisit with explicit conflict detection or soft-preference merging.
+
+**What E deliberately defers:**
+- Option B trait bundles (refactor to B if flat hints become unwieldy).
+- Per-concept subtlety overrides (concepts could specify a preferred subtlety that trumps the global setting — deferred until there's a reason).
+- Multi-concept difficulty scaling (requesting 3 concepts simultaneously could auto-increase subtlety — a curriculum concern, not a generation concern).
+- Rich failure dialog (offering to drop a concept) — MVP uses a static error message.
 
 ---
 
