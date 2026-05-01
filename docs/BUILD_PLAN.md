@@ -68,7 +68,7 @@ Where old terms map to new ones. Use this when reading old code or comments.
 
 ## Restructuring sprints
 
-These sprints carve out the layered architecture without rewriting the engine. Each produces a working system. Do not skip ahead.
+These sprints carve out the layered architecture without rewriting the engine. Each produces a working system. Do not skip ahead. Operational conventions for restructure branches (naming, merge policy, tagging) live in `CLAUDE.md`.
 
 ### Restructure A: Carve out `tax_core`
 
