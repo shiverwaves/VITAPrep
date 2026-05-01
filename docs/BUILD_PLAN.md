@@ -283,27 +283,60 @@ The scenario store (Fix 12.I) demonstrated the cost of relying on `dataclasses.a
 2. `schema_version` on `GroundTruth` from the first commit. The store refuses mismatched versions on load.
 3. Round-trip serialization tests (`to_dict → JSON → from_dict → assert equal`) are part of B's checkpoint, not a follow-up.
 
-#### Operation
+#### Phase 1: Data models + serialization (containers)
 
-1. **Define `GroundTruth` and `PersonClassification`** in `tax_core/ground_truth.py`. Schema version 1. Include `to_dict()` / `from_dict()` from the start.
-2. **Define `Scenario`** wrapper in `intake/scenario.py`. Migrate the scenario store to serialize/deserialize `Scenario` (not `Household` directly). Round-trip serialization tests.
-3. **Implement `tax_core/computation.py`** with the return-level computation functions: `compute_agi()`, `choose_deduction()`, `compute_tax()` (bracket application), `compute_credits()`, `total_payments()`. Each is a small function calling existing `tax_core` predicates and thresholds.
-4. **Implement `compute_ground_truth(scenario) -> GroundTruth`** orchestration in `tax_core/ground_truth.py`. Calls the computation functions from step 3, assembles all three layers.
-5. **Wire `compute_ground_truth`** into the generation pipeline immediately after generation completes. Every scenario gets `ground_truth` populated before being served.
-6. **Migrate the grader** to consume `scenario.ground_truth` exclusively. Delete the ad-hoc on-the-fly key building (the `_build_*_key()` functions that recompute answers). The grader becomes a pure comparison function.
-7. **Invalidate existing scenarios.** Add a check at scenario-load time that refuses scenarios without `ground_truth` or with mismatched `schema_version`. Pre-B scenarios are cheap to regenerate.
-8. **Round-trip serialization tests** for both `GroundTruth` and `Scenario` — `to_dict → JSON → from_dict → assert equal`. Part of the checkpoint.
+Build the data structures and prove they round-trip through the store. Nothing computes yet.
 
-**Output:**
+1. **Define `GroundTruth` and `PersonClassification`** in `tax_core/ground_truth.py`. Schema version 1. Include `to_dict()` / `from_dict()` from the start. `PersonClassification` holds role (primary/spouse/dependent), dependency type (qualifying child/qualifying relative/none), and credit eligibility flags (CTC, ACTC, EITC qualifying child).
+2. **Define `Scenario`** wrapper in `intake/scenario.py`. All lifecycle fields start as `None`. `Scenario` delegates to `scenario.household` for generator/renderer compatibility — existing code doesn't change.
+3. **Migrate the scenario store** to serialize/deserialize `Scenario` (not `Household` directly). The store writes `Scenario.to_dict()` and reads via `Scenario.from_dict()`. `GroundTruth` is serialized as a nested dict within the scenario JSON; `schema_version` is checked on load.
+4. **Round-trip serialization tests** for both `GroundTruth` and `Scenario` — `to_dict → JSON → from_dict → assert equal`. Cover: empty `GroundTruth` (all fields populated), `Scenario` with `ground_truth=None` (pre-computation state), `Scenario` with populated `ground_truth`, `PersonClassification` with various roles. Also test that loading a scenario with wrong `schema_version` raises cleanly.
+
+**Phase 1 checkpoint:** `GroundTruth`, `PersonClassification`, and `Scenario` can be instantiated, serialized to JSON, deserialized, and compared for equality. The scenario store reads and writes `Scenario` objects. All existing tests still pass (generators and renderers work through `scenario.household`).
+
+**Failure mode to watch for:** Trying to migrate every consumer of `Household` to `Scenario` at once. Don't — Phase 1 introduces the wrapper; existing code keeps passing `Household` through `scenario.household`. Migration is incremental.
+
+#### Phase 2: Computation functions (fill the containers)
+
+Implement the individual tax computation functions and the orchestrator that assembles `GroundTruth`. Each function is small, tested, and lives in `tax_core`.
+
+5. **Implement `tax_core/computation.py`** with return-level computation functions. Each calls existing `tax_core` predicates and thresholds from Restructure A:
+   - `compute_agi(household, classifications)` — gross income minus above-the-line deductions (student loan interest, educator expenses, IRA contributions, half of SE tax).
+   - `choose_deduction(household, filing_status, agi)` — calls `should_itemize()` from A, returns the chosen amount and type.
+   - `compute_tax(taxable_income, filing_status, year)` — applies federal tax brackets for the filing status. Bracket tables in `tax_core/thresholds.py` (add federal brackets alongside the existing standard deduction table).
+   - `compute_credits(household, classifications, agi, tax_before_credits)` — CTC/ACTC, EITC (stub from A), other applicable credits. Returns a structured object splitting refundable vs nonrefundable.
+   - `total_payments(scenario)` — sum of federal withholding from all W-2s and 1099s (reads Box 2 / Box 4 values from the generated documents).
+   - `classify_persons(household, filing_status)` — runs dependency predicates from A against each member, returns `dict[person_id, PersonClassification]`.
+6. **Unit tests for each computation function** in `tests/tax_core/test_computation.py`. Hand-built `Household` fixtures with known expected values. Test at least: single filer with one W-2, married couple with children (CTC), senior with SS income (taxability tiers), self-employed above SE threshold, itemizer vs standard deduction boundary case.
+7. **Implement `compute_ground_truth(scenario) -> GroundTruth`** orchestration in `tax_core/ground_truth.py`. Calls `classify_persons`, then computation functions in order, collects predicate detail snapshots, assembles all three layers. Integration test: generate a full scenario from the pipeline, run `compute_ground_truth`, hand-verify every field.
+
+**Phase 2 checkpoint:** `compute_ground_truth` produces correct `GroundTruth` for at least five distinct household patterns. Each computation function has boundary-case unit tests. Federal bracket tables are in `tax_core/thresholds.py`.
+
+**Failure mode to watch for:** Duplicating logic that already exists in Restructure A predicates. If `compute_agi` needs the SE threshold check, it calls `requires_schedule_se()` — it doesn't reimplement the $400 check. The computation layer orchestrates; the predicate layer decides.
+
+#### Phase 3: Integration + migration (swap the wiring)
+
+Wire ground truth into the live pipeline and migrate the grader. This is the highest-risk phase — it changes runtime behavior.
+
+8. **Wire `compute_ground_truth`** into the generation pipeline immediately after generation completes. Every scenario gets `ground_truth` populated before being served. The pipeline now produces `Scenario` objects (wrapping `Household`) instead of bare `Household` objects.
+9. **Migrate the grader** to consume `scenario.ground_truth` exclusively. Delete the ad-hoc on-the-fly key building (`_build_personal_key()`, `_build_income_key()`, `_build_expense_key()` in `training/grader.py`). The grader becomes a pure comparison function: read expected value from `ground_truth`, compare to submitted value, produce feedback.
+10. **Invalidate existing scenarios.** Add a check at scenario-load time that refuses scenarios without `ground_truth` or with mismatched `schema_version`. Pre-B scenarios are cheap to regenerate. Log a clear message explaining why the scenario was refused.
+11. **End-to-end test**: generate scenario → verify `ground_truth` populated → submit a known-correct answer → confirm grader scores 100% from `ground_truth` → submit a known-wrong answer → confirm grader catches the error and feedback references the correct value from `ground_truth`. Serialize → reload → re-grade → same result.
+
+**Phase 3 checkpoint:** Full player flow works: generate scenario → `ground_truth` is present → review documents → fill form → submit → grader scores against `ground_truth` → feedback is correct. No ad-hoc key building remains in the grader. Pre-B scenarios are refused on load. Round-trip through SQLite preserves `ground_truth` exactly.
+
+**Failure mode to watch for:** The temptation to add a fallback recomputation path in the grader "just in case." Don't — if `ground_truth` is missing or wrong, fix the source. Also: ground truth drifting from what the grader compares to. If you find yourself adding logic to the grader that should be in `compute_ground_truth`, move it.
+
+#### Output
 
 - `Scenario` envelope wraps `Household` with lifecycle metadata.
 - Every scenario has `ground_truth` populated before being served.
 - The grader has exactly one source of truth, zero domain logic.
 - `GroundTruth` and `Scenario` round-trip cleanly through the scenario store.
+- Federal tax bracket tables added to `tax_core/thresholds.py`.
+- Pre-B scenarios are refused cleanly on load.
 
-**Checkpoint:** Generate a scenario, inspect `ground_truth`, hand-verify return-level values and per-person classifications against the household's facts. Run a submission through the grader and confirm it scores against `ground_truth`. Serialize to SQLite, reload, confirm `ground_truth` survives intact with correct `schema_version`. Load a pre-B scenario and confirm it is refused cleanly.
-
-**Failure mode to watch for:** Ground truth drifting from what the grader compares to. If you find yourself adding logic to the grader that should be in `compute_ground_truth`, move it. Also: the temptation to add a fallback recomputation path in the grader "just in case." Don't — fix the source instead.
+**Final checkpoint:** All existing tests pass. All new computation and serialization tests pass. The grader contains no tax-rule logic — it's a pure comparison function. `compute_ground_truth` is the single source of truth for every graded field.
 
 ---
 
