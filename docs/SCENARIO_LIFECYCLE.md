@@ -71,14 +71,181 @@ Scenario
 │   ├── members           # list[Person]
 │   └── address           # Address
 ├── documents             # list[Document]
-├── narrative_slots       # dict[slot_name, fired_template]   (Stage 3)
-├── ground_truth          # GroundTruth                       (Stage 4)
-├── concept_tags          # set[str]                          (Stage 5)
-├── interview_notes       # list[InterviewNote]               (Stage 6)
-├── pre_filled_form       # optional, Review mode only        (Stage 8)
-├── corruption_manifest   # optional, Review mode only        (Stage 8)
+├── narrative_slots       # dict[slot_name, list[FiredTemplate]]  (Stage 3)
+├── ground_truth          # GroundTruth                           (Stage 4)
+├── concept_tags          # set[str]                              (Stage 5)
+├── interview_notes       # list[InterviewNote]                   (Stage 6)
+├── pre_filled_form       # optional, Review mode only            (Stage 8)
+├── corruption_manifest   # optional, Review mode only            (Stage 8)
 └── generation_log        # list[Event] for diagnostics
 ```
+
+---
+
+## Type definitions
+
+Core types referenced by the lifecycle stages. Slots, templates, and notes live in `intake/analyzer/types.py`. Ground truth lives in `tax_core/ground_truth.py`. Generation hints live in `intake/generator/types.py`.
+
+### Slot
+
+```python
+class Slot(ABC):
+    """Detects situations in a generated scenario that need narrative cover.
+
+    Slots run at Stage 3 (analysis). They have access to `scenario.household`
+    and `scenario.documents` only. Slots MUST NOT read `ground_truth`,
+    `concept_tags`, or any other lifecycle-added field — those don't exist
+    yet at Stage 3.
+    """
+    name: str
+
+    @abstractmethod
+    def fires_for(self, scenario: Scenario) -> list:
+        """Return triggering instances (people, documents, etc.) or [] if no fire."""
+
+    @abstractmethod
+    def templates(self) -> list[NarrativeTemplate]:
+        """Candidate templates, evaluated in order at analysis time."""
+```
+
+### NarrativeTemplate
+
+```python
+class NarrativeTemplate(ABC):
+    """A possible narrative explanation for a fired slot instance."""
+
+    @abstractmethod
+    def requirements(self, scenario: Scenario, instance) -> bool:
+        """Whether this template can plausibly apply to this instance."""
+
+    @abstractmethod
+    def render(self, scenario: Scenario, instance, subtlety: str) -> InterviewNote:
+        """Produce the InterviewNote for the player.
+        subtlety is one of: 'obvious', 'moderate', 'subtle'.
+        """
+```
+
+### InterviewNote
+
+```python
+@dataclass
+class InterviewNote:
+    category: str            # "filing", "dependent", "income", etc.
+    question: str            # what the volunteer would ask
+    answer: str              # what the client said
+    source_slot: str | None  # debug field; None for boilerplate notes
+```
+
+`source_slot` is a debug field, hidden from the player. When an interview note renders strangely, the field tells you which slot produced it without grepping templates.
+
+### FiredTemplate
+
+```python
+@dataclass
+class FiredTemplate:
+    slot_name: str
+    instance: Any            # the triggering object (person, document, etc.)
+    template: NarrativeTemplate
+```
+
+`scenario.narrative_slots` is `dict[slot_name, list[FiredTemplate]]`. A slot may fire for multiple instances (e.g., one `dependent_residency` instance per child with partial-year residence), each carrying its own selected template.
+
+### GenerationHints
+
+```python
+@dataclass
+class GenerationHints:
+    """Best-effort biases passed to the generator. Set during Stage 1 (Request)
+    when concept targeting is requested. If hints from multiple concepts
+    conflict, last-write-wins and reroll handles the residual.
+    """
+    pattern: str | None = None
+    household_size: tuple[int, int] | None = None
+    dependent_age_range: tuple[int, int] | None = None
+    force_self_employment: bool = False
+    force_hsa: bool = False
+    # Extend as concepts add new hint types.
+```
+
+---
+
+## Worked example: `dependent_residency` slot
+
+Reference implementation. New slots follow this pattern.
+
+### The slot
+
+```python
+class DependentResidencySlot(Slot):
+    name = "dependent_residency"
+
+    def fires_for(self, scenario: Scenario) -> list[Person]:
+        return [
+            child for child in scenario.household.dependents()
+            if 0 < child.months_in_home < 12
+        ]
+
+    def templates(self) -> list[NarrativeTemplate]:
+        return [
+            DivorcedSharedCustodyTemplate(),
+            JoinedHouseholdMidYearTemplate(),
+            TemporaryAbsenceTemplate(),
+        ]
+```
+
+### Templates
+
+```python
+class DivorcedSharedCustodyTemplate(NarrativeTemplate):
+    def requirements(self, scenario, child) -> bool:
+        return (
+            scenario.household.householder.marital_status in {SINGLE, DIVORCED}
+            and child.has_other_parent
+            and 4 <= child.months_in_home <= 8
+        )
+
+    def render(self, scenario, child, subtlety) -> InterviewNote:
+        if subtlety == "obvious":
+            question = f"How many months did {child.first_name} live with you in {scenario.tax_year}?"
+            answer = f"About {child.months_in_home} months — she's with her dad the rest of the year."
+        elif subtlety == "moderate":
+            question = f"Tell me about your living situation with {child.first_name}."
+            answer = "We share custody with my ex. She's with me during the school year mostly."
+        else:  # subtle
+            question = f"Did {child.first_name} live with you all year?"
+            answer = "On and off. Her dad and I trade off."
+
+        return InterviewNote(
+            category="dependent",
+            question=question,
+            answer=answer,
+            source_slot="dependent_residency",
+        )
+
+
+class JoinedHouseholdMidYearTemplate(NarrativeTemplate):
+    def requirements(self, scenario, child) -> bool:
+        return child.months_in_home >= 6 and child.entered_household_during_year
+
+    def render(self, scenario, child, subtlety) -> InterviewNote:
+        ...  # similar pattern, three subtlety branches
+
+
+class TemporaryAbsenceTemplate(NarrativeTemplate):
+    def requirements(self, scenario, child) -> bool:
+        return child.temporary_absence_reason is not None
+
+    def render(self, scenario, child, subtlety) -> InterviewNote:
+        ...  # similar pattern, three subtlety branches
+```
+
+### Coherence guarantee
+
+At every subtlety level, a competent reader can reconstruct ground truth (`child.months_in_home`) from the interview notes plus documents. `obvious` states the months explicitly; `moderate` requires the player to translate "school year mostly" into a count; `subtle` requires inference from "on and off." None of these *contradict* the truth — they only vary how directly it surfaces.
+
+### Failure path
+
+If `fires_for` returns a child but no template's `requirements` matches (e.g., a child with 6 months in the home but no other-parent flag, no mid-year entry, no temporary absence), the analyzer raises `Unrescuable` and the orchestrator rerolls with a new seed. Silently dropping the fire would leave the partial-year residence un-explained in the interview notes — that's the bug the gatekeeper prevents.
 
 ---
 
@@ -90,7 +257,7 @@ Scenario
 
 **Inputs:**
 - `mode` — `intake` or `review`
-- `difficulty` — abstract level (easy/medium/hard) OR explicit subtlety knob
+- `difficulty` — `easy`, `medium`, or `hard`
 - `state`, `tax_year` — bounds
 - `pattern` — optional household pattern constraint
 - `concepts` — optional set of concept names to target
@@ -127,12 +294,14 @@ Scenario
 
 **Inputs:** `Scenario` from Stage 2
 
+**Constraint:** Slots evaluate against `scenario.household` and `scenario.documents` only. Other lifecycle fields (`ground_truth`, `concept_tags`, `interview_notes`) do not exist yet at Stage 3 — they are still `None` — and slot or template code MUST NOT attempt to read them. The constraint is enforced by ordering, reinforced by the `Slot` base-class docstring, and verified by an analyzer-level test that runs slots against a stripped scenario (lifecycle fields zeroed) to confirm none access them.
+
 **Operation:**
 
-1. Walk the slot catalog. For each slot, evaluate `fires_for(scenario)` to find triggering instances (e.g., each child whose months-in-home is < 12).
-2. For each fired instance, evaluate templates in priority order. Pick the first template whose `requirements()` predicate matches, or sample weighted-randomly among matching templates.
-3. If a fired slot has zero matching templates, the scenario is **unrescuable** — abort and signal reroll to the orchestrator.
-4. Record fired templates in `scenario.narrative_slots`. Templates are not yet rendered into text; that is Stage 6.
+1. Walk the slot catalog. For each slot, evaluate `fires_for(scenario)` to find triggering instances.
+2. For each fired instance, evaluate templates in priority order. Pick the first template whose `requirements()` predicate matches, or sample weighted-randomly (seeded) among matching templates.
+3. If any fired instance has zero matching templates, the scenario is **unrescuable** — abort and signal reroll to the orchestrator.
+4. Record fired templates in `scenario.narrative_slots` as `dict[slot_name, list[FiredTemplate]]`. Templates are not yet rendered into text; that is Stage 6.
 
 **Output:** `Scenario` with `narrative_slots` populated. May raise `Unrescuable` to trigger reroll.
 
@@ -144,7 +313,7 @@ Scenario
 
 **Module:** `tax_core.ground_truth`
 
-**Inputs:** `Scenario` after analysis
+**Inputs:** `Scenario` after analysis (slots resolved, no reroll signaled)
 
 **Operation:**
 
@@ -154,7 +323,7 @@ Scenario
 
 **Output:** `Scenario` with `ground_truth` populated.
 
-**Notes:** Ground truth is computed exactly once, immediately after generation, before any obfuscation occurs. The grader at Stage 10 reads this value verbatim. The obfuscation layer at Stage 6 cannot modify it.
+**Notes:** Ground truth is computed exactly once, **after analysis** but before concept tagging or obfuscation. Computing it post-analysis ensures scenarios destined for reroll never run the (potentially expensive) ground-truth computation. The grader at Stage 10 reads this value verbatim. The obfuscation layer at Stage 6 cannot modify it.
 
 ---
 
@@ -184,14 +353,15 @@ Scenario
 
 **Operation:**
 
-1. For each fired slot in `scenario.narrative_slots`, call the template's `render()` method with the chosen subtlety level.
-2. Subtlety is determined per slot from request difficulty, with per-concept overrides if a target concept specifies a subtlety in its definition.
-3. Each render produces an `InterviewNote` (category, question, answer triple).
-4. Concatenate all rendered notes plus the structured factual notes (citizenship, contact info, filing status the client claimed) into `scenario.interview_notes`.
+1. Resolve subtlety level for the scenario. **For MVP, subtlety is a single global value derived from `request.difficulty`:** `easy → obvious`, `medium → moderate`, `hard → subtle`. Every slot in the scenario uses the same level. Per-slot or per-concept overrides are deferred until Restructure D — see open questions.
+2. For each fired slot in `scenario.narrative_slots`, call the template's `render(scenario, instance, subtlety)` method.
+3. Each render produces an `InterviewNote`. The note carries `source_slot` set to the slot's name.
+4. Render the structured factual notes (citizenship, contact info, filing status the client claimed, etc.) via a separate boilerplate renderer that reads household fields directly. These notes have `source_slot=None`.
+5. Concatenate slot-rendered and boilerplate notes into `scenario.interview_notes`. Order is stable across regeneration with the same seed.
 
 **Output:** `Scenario` with `interview_notes` populated.
 
-**Constraint:** The obfuscation layer can introduce ambiguity but cannot lie about ground truth. If the ground truth is "child lived with taxpayer 7 months," the obfuscation can say "she stayed with her dad over the summer" (forces inference) but cannot say "she lived with me all year" (contradicts truth). A competent reader must in principle be able to reconstruct ground truth from the interview notes plus documents.
+**Constraint:** The obfuscation layer can introduce ambiguity but cannot lie about ground truth. If ground truth is "child lived with taxpayer 7 months," the obfuscation can say "she stayed with her dad over the summer" (forces inference) but cannot say "she lived with me all year" (contradicts truth). A competent reader must in principle be able to reconstruct ground truth from the interview notes plus documents.
 
 ---
 
@@ -284,13 +454,16 @@ vitaprep/
 │   │   └── deductions.py
 │   ├── thresholds.py              # filing_threshold_for, hsa_limits, etc.
 │   ├── computation.py             # AGI, taxable income, tax calculation
-│   └── ground_truth.py            # compose ground truth from a scenario
+│   └── ground_truth.py            # GroundTruth dataclass + compute_ground_truth
 ├── intake/
 │   ├── generator/                 # existing demographic/income/document logic
+│   │   └── types.py               # GenerationHints
 │   ├── analyzer/
+│   │   ├── types.py               # Slot, NarrativeTemplate, InterviewNote, FiredTemplate
 │   │   ├── slots/                 # one file per slot family
 │   │   └── analyzer.py            # walks slots, attaches templates
 │   ├── obfuscator.py              # renders templates to interview notes
+│   ├── boilerplate_notes.py       # renders structured factual notes
 │   ├── document_renderer.py
 │   └── modes/
 │       ├── intake.py
@@ -336,7 +509,7 @@ The scenario pipeline must be deterministic given a seed. Same seed + same code 
 
 - All RNG draws derive from the seed (no `random.random()` outside seeded contexts).
 - Slot template selection is seeded.
-- Subtlety randomization is seeded.
+- Subtlety randomization is seeded (relevant only when subtlety becomes per-slot in Restructure D; in MVP it's deterministic from request difficulty).
 - Review-mode corruption choices are seeded.
 
 **Why it matters:**
@@ -355,7 +528,7 @@ Each layer should have its own tests:
 
 - `tax_core`: unit tests of predicates against hand-built scenarios.
 - `intake.generator`: existing tests; no change.
-- `intake.analyzer`: tests that confirm slot firing logic and template requirement matching.
+- `intake.analyzer`: tests that confirm slot firing logic and template requirement matching. **Plus** a constraint test that runs slots against a scenario with `ground_truth=None`, `concept_tags=None`, `interview_notes=None` to confirm slots never read those fields.
 - `intake.obfuscator`: snapshot tests on rendered interview notes per subtlety level.
 - `learn.concepts`: each concept tested against scenarios that should and should not match.
 - End-to-end: full lifecycle smoke test producing a scenario from a fixed seed and asserting all expected fields populated.
@@ -368,9 +541,12 @@ These are intentionally not specified here. Resolve in code, then update this do
 
 - Whether to use Python `random.Random` instances or NumPy generators throughout.
 - Whether `tax_core` predicates return rich result objects or simple booleans (worked example used rich; revisit per predicate).
-- How concept hints merge when multiple target concepts conflict (last-wins, error, soft preference).
+- How concept hints merge when multiple target concepts conflict (current spec says last-write-wins; revisit if conflicts prove common).
 - Where document corruption manifests live for Review mode (in `Scenario` or sidecar table).
-- Subtlety dial: global per scenario, per slot, or per concept? Spec hedges; pick one in code.
+
+**Resolved during C1 audit:**
+
+- ~~Subtlety dial: global per scenario, per slot, or per concept?~~ **Global per scenario for MVP**, derived from `request.difficulty`. Per-slot or per-concept overrides revisit during Restructure D when concepts exist and have a reason to override.
 
 ---
 
@@ -380,10 +556,11 @@ The lifecycle described here is the target. To get there from where the codebase
 
 1. **Carve out `tax_core`.** Move existing predicates, thresholds, and any tax-rule logic into `tax_core/` as pure functions. Don't add features yet — just establish the boundary.
 2. **Add `ground_truth.py` to `tax_core`.** Implement the Stage 4 computation as a function over the existing Scenario shape. Wire it into the existing pipeline so every generated scenario has ground truth attached.
-3. **Build the analyzer and slot catalog (Stage 3).** Start with three high-frequency slots: `zero_income_reason`, `dependent_residency`, `address_mismatch`. Get the unrescuable-reroll path working.
-4. **Build the obfuscator (Stage 6).** Render those three slots to interview notes. Verify the interview-notes table in the player UI is now populated by templates instead of hardcoded values.
-5. **Add `learn.concept_catalog`.** Implement Stage 5 with three concepts: `qualifying_child_residency`, `hoh_qualifying_person`, `refundable_credit_only_filer`. Generate-then-tag only — no targeting yet.
-6. **Add Review mode (Stage 8).** Corruption injection on top of ground truth.
-7. **Wire targeted generation (concept hints into Stage 2).** This is the last step because it's the most fragile; everything else should work without it.
+3. **C1: Build the analyzer and slot framework (Stage 3).** Define the type system (`Slot`, `NarrativeTemplate`, `InterviewNote`, `FiredTemplate`). Insert the analyzer call site between generation and ground truth in the pipeline orchestrator. Implement three high-frequency slots: `zero_income_reason`, `dependent_residency`, `address_mismatch`. Get the unrescuable-reroll path working. After C1: `narrative_slots` is populated on every scenario but nothing reads it yet — this is intentional dead data during the transition.
+4. **C1.5: Coverage audit.** Before C2 ships, inventory every interview-note-shaped fact the existing `exercise_engine.py` produces. Classify each as slot-rendered (covered by a C1 slot or a new one), boilerplate (read directly from household fields), or deferred (acceptable to drop in C2 with a logged decision). The audit's output is the gating checklist for C2.
+5. **C2: Build the obfuscator (Stage 6).** Render fired slots to interview notes. Implement the boilerplate renderer for structured factual notes. Swap the player UI from the old hardcoded path to `scenario.interview_notes`. Delete the old path.
+6. **D: Add `learn.concept_catalog`.** Implement Stage 5 with the MVP concept set (see CONCEPT_CATALOG.md). Generate-then-tag only — no targeting yet.
+7. **Add Review mode (Stage 8).** Corruption injection on top of ground truth.
+8. **E: Wire targeted generation (concept hints into Stage 2).** This is the last step because it's the most fragile; everything else should work without it.
 
 Each step produces a working system. Skip ahead at your peril.
