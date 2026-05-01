@@ -76,31 +76,48 @@ These sprints carve out the layered architecture without rewriting the engine. E
 
 **Prerequisites:** Sprints 1–3 complete (existing code has tax-rule logic worth extracting).
 
+**Reference:** [`CONCEPT_CATALOG.md`](./CONCEPT_CATALOG.md) — the "Predicate inventory for `tax_core`" section is the authoritative work order. The MVP predicates list (18 predicates) and infrastructure predicates list define what goes into `tax_core`. This sprint section summarizes the tasks; the catalog has the details.
+
 **Line-drawing principle:** Would this function be called during preparation of an actual return against real client data? If yes → `tax_core`. If it exists only to fabricate plausible documents or scenarios → `intake`. When ambiguous, ask: is this a fact about the return we'd compute, or about a document we'd fabricate?
 
-**Operation:**
+**Operation — two phases, same sprint:**
 
-1. Create `tax_core/` at the repo root.
-2. Identify all tax-rule logic currently embedded in generators, the grader, the error injector, or anywhere else, applying the line-drawing principle above. The extraction targets below are specific to the current codebase as of Sprint 12.
-3. Move that logic into `tax_core/` modules:
-   - `tax_core/predicates/filing_status.py` — filing status derivation (currently `Household.derive_filing_status()` in `generator/models.py`)
-   - `tax_core/predicates/dependency.py` — dependency tests (qualifying child/relative)
-   - `tax_core/predicates/income.py` — income classification predicates
-   - `tax_core/predicates/deductions.py` — standard vs itemized comparison logic (currently in `ExpenseGenerator._calculate_totals()` in `generator/expenses.py`)
-   - `tax_core/thresholds.py` — SALT cap ($10K), standard deduction amounts by filing status, IRA contribution limits, student loan interest limit, educator expense limit (currently module-level constants in `generator/expenses.py`)
-   - `tax_core/state_tax/hawaii.py` — Hawaii state tax brackets and progressive tax calculation (currently `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and `_assign_state_income_tax()` in `generator/expenses.py`). State-specific tax law is still tax law; the fact that it varies by state doesn't change its category. This structure (`tax_core/state_tax/<state>.py`) supports adding other states later.
-4. Replace the original call sites with imports from `tax_core`. The behavior must not change — this is a reorganization, not a rewrite.
-5. **Stays in `intake`:** Income withholding calculation (`generator/income.py`). On a real return, withholding is *read* from a W-2, not computed. The calculation exists only to make the W-2 document look realistic — that's a generation concern.
-6. Add unit tests in `tests/tax_core/` that exercise predicates against hand-built `Household` fixtures. These tests are the regression suite for every future change.
+Restructure A is both a **move** (extracting existing tax logic) and a **build** (implementing new predicates the concept catalog requires). The move is low-risk mechanical work. The build involves encoding tax law and needs careful testing. Both phases ship together because the new predicates depend on the infrastructure the move establishes.
+
+#### Phase 1: Move existing tax logic (mechanical)
+
+1. Create `tax_core/` at the repo root with `__init__.py`, `thresholds.py`, `predicates/`, and `state_tax/`.
+2. **`tax_core/thresholds.py`** — Move all year-indexed constants from `generator/expenses.py`: `STANDARD_DEDUCTION`, `SALT_CAP`, `IRA_CONTRIBUTION_LIMIT`, `IRA_CONTRIBUTION_LIMIT_50_PLUS`, `STUDENT_LOAN_INTEREST_LIMIT`, `EDUCATOR_EXPENSE_LIMIT`. Structure as year-keyed lookups, not bare constants.
+3. **`tax_core/state_tax/hawaii.py`** — Move `HAWAII_TAX_BRACKETS_SINGLE`, `HAWAII_TAX_BRACKETS_MFJ`, and the progressive tax calculation from `ExpenseGenerator._assign_state_income_tax()`. Add a dispatch function (`compute_state_income_tax(income, filing_status, state, year)`) so other state modules can be added later.
+4. **`tax_core/predicates/filing_status.py`** — Move `Household.derive_filing_status()` logic. The `Household` method becomes a thin wrapper that delegates to `tax_core`.
+5. **`tax_core/predicates/deductions.py`** — Move the SALT cap application, medical 7.5% AGI floor, itemized total aggregation, and standard-vs-itemized comparison from `ExpenseGenerator._calculate_totals()`. The expense generator calls these functions instead of doing the math inline.
+6. Replace all original call sites with imports from `tax_core`. Behavior must not change.
+7. **Stays in `intake`:** Income withholding calculation (`generator/income.py`). On a real return, withholding is *read* from a W-2, not computed. The calculation exists only to make documents look realistic.
+
+**Phase 1 checkpoint:** All existing tests pass. `tax_core/` is independently importable. The import graph is clean: nothing under `tax_core/` imports from `generator/`, `training/`, `api/`, or any future `intake/`/`learn/` path.
+
+#### Phase 2: Implement MVP predicates (new code)
+
+Implement the 18 MVP predicates listed in [`CONCEPT_CATALOG.md` § "MVP predicates"](./CONCEPT_CATALOG.md#mvp-predicates-restructure-a-first-pass). These are net-new `tax_core` functions that don't exist in the codebase today.
+
+8. **`tax_core/predicates/filing_status.py`** — Add `is_unmarried(filer, year)`, `paid_more_than_half_household_costs(filer, household)`, `has_qualifying_person_for_hoh(filer)`. These encode HoH eligibility logic per IRC §2(b).
+9. **`tax_core/predicates/dependency.py`** — Add `qualifying_child_residency_test(child, year)`, `qualifying_relative_test(person, household)`. Return structured results (pass/fail + detail) so grader and slots can inspect *why*.
+10. **`tax_core/predicates/income.py`** — Add `total_income(person)`, `total_self_employment_income(person)`, `requires_schedule_se(person)`, `compute_provisional_income(filer)`, `ss_taxability_thresholds(filing_status, year)`, `compute_taxable_ss(filer, year)`, `filing_threshold_for(status, year)`.
+11. **`tax_core/predicates/deductions.py`** — Add `standard_deduction_for(status, year)`, `compute_salt(state_tax, property_tax, year)`, `compute_medical_deduction(medical_expenses, agi)`, `compute_itemized_total(household, year)`, `should_itemize(household, year)`.
+12. **Refundable credit stubs** — Add `qualifies_for_eitc(filer, year)` and `qualifies_for_actc(filer, year)` as stubs (qualifying child + earned income > 0). Full implementation in P2.
+13. Add unit tests in `tests/tax_core/` for every predicate, using hand-built `Household` fixtures. Test boundary cases explicitly (6 months exactly fails residency, $399 SE income below threshold, provisional income at each SS tier). These tests are the regression suite for every future change.
+
+**Phase 2 checkpoint:** All 18 predicates pass their unit tests. Import graph constraint still holds.
 
 **Output:**
 
 - `tax_core/` exists with predicates, thresholds, state tax modules, and tests.
-- The import graph is clean: nothing under `tax_core/` imports from `intake/`, `learn/`, or `api/`. Enforce this in CI if practical (e.g., via `grep` in a pre-commit check).
+- Existing generators and grader import from `tax_core` instead of defining tax logic locally.
+- The import graph is clean: nothing under `tax_core/` imports from `intake/`, `learn/`, or `api/`. Enforce this in CI (e.g., `grep` in a pre-commit check or a dedicated test).
 
-**Checkpoint:** All existing tests pass. The import graph constraint holds. `tax_core` is independently importable.
+**Final checkpoint:** All existing tests pass. All new predicate tests pass. `tax_core` is independently importable. The concept catalog's MVP predicate inventory is fully implemented.
 
-**Failure mode to watch for:** The temptation to "improve" predicates while moving them. Resist. Move first, refactor in a follow-up sprint if warranted.
+**Failure mode to watch for:** The temptation to "improve" predicates while moving them in Phase 1. Resist. Move first, build new in Phase 2. Refactor in a follow-up if warranted.
 
 ---
 
