@@ -40,6 +40,7 @@ from generator.models import (
     RelationshipType,
     Scenario,
 )
+from intake.analyzer.analyzer import ScenarioAnalyzer
 from training.exercise_engine import ExerciseEngine
 
 
@@ -120,6 +121,7 @@ def engine():
         eng = ExerciseEngine.__new__(ExerciseEngine)
         eng.generator = mock_gen_instance
         eng.error_injector = MagicMock()
+        eng.analyzer = ScenarioAnalyzer()
         # Make error_injector.inject return a realistic result
         eng.error_injector.inject.side_effect = _mock_inject
         yield eng
