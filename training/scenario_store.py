@@ -48,6 +48,7 @@ from generator.models import (
     Scenario,
     W2,
 )
+from tax_core.ground_truth import SCHEMA_VERSION, GroundTruth
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS scenarios (
     injected_errors TEXT NOT NULL DEFAULT '[]',  -- JSON array
     client_facts  TEXT NOT NULL DEFAULT '[]',    -- JSON array
     document_paths TEXT NOT NULL DEFAULT '{}',   -- JSON object
+    ground_truth  TEXT,                          -- JSON blob (NULL for pre-B scenarios)
     created_at    TEXT NOT NULL
 );
 """
@@ -322,6 +324,7 @@ class ScenarioStore:
         self._conn.execute(_CREATE_SCENARIOS)
         self._conn.execute(_CREATE_GRADES)
         self._migrate_grades_section()
+        self._migrate_ground_truth()
         self._conn.commit()
 
     def _migrate_grades_section(self) -> None:
@@ -333,6 +336,19 @@ class ScenarioStore:
         if "section" not in cols:
             self._conn.execute(
                 "ALTER TABLE grades ADD COLUMN section TEXT NOT NULL DEFAULT ''"
+            )
+
+    def _migrate_ground_truth(self) -> None:
+        """Add 'ground_truth' column to scenarios if it doesn't exist yet."""
+        cols = [
+            row[1]
+            for row in self._conn.execute(
+                "PRAGMA table_info(scenarios)"
+            ).fetchall()
+        ]
+        if "ground_truth" not in cols:
+            self._conn.execute(
+                "ALTER TABLE scenarios ADD COLUMN ground_truth TEXT"
             )
 
     # ------------------------------------------------------------------
@@ -354,13 +370,18 @@ class ScenarioStore:
         """
         now = scenario.created_at or datetime.utcnow().isoformat()
         hh = scenario.household
+        gt_json = (
+            json.dumps(scenario.ground_truth, cls=_DateEncoder)
+            if scenario.ground_truth is not None
+            else None
+        )
         self._conn.execute(
             """\
             INSERT INTO scenarios
                 (scenario_id, mode, difficulty, state, pattern,
                  household, injected_errors, client_facts,
-                 document_paths, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 document_paths, ground_truth, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scenario.scenario_id,
@@ -372,6 +393,7 @@ class ScenarioStore:
                 _serialize_errors(scenario.injected_errors),
                 _serialize_facts(scenario.client_facts),
                 _serialize_doc_paths(scenario.document_paths),
+                gt_json,
                 now,
             ),
         )
@@ -647,6 +669,20 @@ class ScenarioStore:
     def _row_to_scenario(row: sqlite3.Row) -> Scenario:
         hh_blob = row["household"]
         household = _deserialize_household(hh_blob) if hh_blob != "{}" else None
+
+        gt_blob = row["ground_truth"]
+        ground_truth = None
+        if gt_blob is not None:
+            gt_data = json.loads(gt_blob)
+            gt_version = gt_data.get("schema_version", 0)
+            if gt_version != SCHEMA_VERSION:
+                raise ValueError(
+                    f"Scenario {row['scenario_id']}: ground_truth schema "
+                    f"version mismatch (expected {SCHEMA_VERSION}, "
+                    f"got {gt_version}). Regenerate this scenario."
+                )
+            ground_truth = gt_data
+
         return Scenario(
             scenario_id=row["scenario_id"],
             mode=row["mode"],
@@ -656,4 +692,5 @@ class ScenarioStore:
             client_facts=_deserialize_facts(row["client_facts"]),
             document_paths=json.loads(row["document_paths"]),
             created_at=row["created_at"],
+            ground_truth=ground_truth,
         )
