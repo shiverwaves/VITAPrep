@@ -341,6 +341,17 @@ class Person:
     entered_household_during_year: bool = False  # joined mid-year
     temporary_absence_reason: Optional[str] = None  # "school", "illness", etc.
 
+    # === Filing Status Attributes (Form 13614-C Section 6) ===
+    # Defaults preserve existing scenario generation; populator/UI defaults
+    # are surfaced through these fields rather than hardcoded.
+    us_citizen: bool = True
+    on_visa: bool = False
+    legally_blind: bool = False
+    has_ippin: bool = False
+    # One of: "" (derive from is_married), "never", "divorced",
+    # "separated", "widowed", "married".
+    marital_history: str = ""
+
     # === Employment (populated by employment.py — Sprint 9) ===
     employment_status: str = ""
     education: str = ""
@@ -439,6 +450,11 @@ class Person:
             "can_be_claimed": self.can_be_claimed,
             "months_in_home": self.months_in_home,
             "is_full_time_student": self.is_full_time_student,
+            "us_citizen": self.us_citizen,
+            "on_visa": self.on_visa,
+            "legally_blind": self.legally_blind,
+            "has_ippin": self.has_ippin,
+            "marital_history": self.marital_history,
             "employment_status": self.employment_status,
             "education": self.education,
             "occupation_code": self.occupation_code,
@@ -483,6 +499,16 @@ class Household:
     expected_adults: Optional[int] = None
     expected_children_range: Optional[Tuple[int, int]] = None
     expected_complexity: Optional[str] = None
+
+    # === Filing Status Attributes (Form 13614-C) ===
+    # Defaults preserve existing scenario generation. Populator emits
+    # checkbox state from these; the generator can diversify them later.
+    lived_in_two_states: bool = False
+    spouses_lived_apart_h2: bool = False  # last 6 months of the year
+    divorce_date: Optional[date] = None
+    separation_date: Optional[date] = None
+    spouse_death_year: Optional[int] = None
+    has_digital_assets: bool = False
 
     # Household-level expenses (populated by expenses.py — Sprint 12)
     is_homeowner: bool = False
@@ -549,6 +575,12 @@ class Household:
             "total_household_income": self.total_household_income(),
             "is_married": self.is_married(),
             "filing_status": self.derive_filing_status().value,
+            "lived_in_two_states": self.lived_in_two_states,
+            "spouses_lived_apart_h2": self.spouses_lived_apart_h2,
+            "divorce_date": self.divorce_date.isoformat() if self.divorce_date else None,
+            "separation_date": self.separation_date.isoformat() if self.separation_date else None,
+            "spouse_death_year": self.spouse_death_year,
+            "has_digital_assets": self.has_digital_assets,
             "is_homeowner": self.is_homeowner,
             "property_taxes": self.property_taxes,
             "mortgage_interest": self.mortgage_interest,
