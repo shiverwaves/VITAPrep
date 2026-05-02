@@ -72,6 +72,7 @@ from pydantic import BaseModel
 from generator.models import PATTERN_METADATA
 from training.exercise_engine import ConceptMissed
 from training.form_fields import (
+    CLAIMED_AS_DEPENDENT,
     FILING_STATUS,
     FILING_STATUS_CHOICES,
     TEXT_FIELDS,
@@ -115,6 +116,11 @@ from training.form_fields import (
     EXPENSE_EDUCATION_AMOUNT,
     DEDUCTION_TYPE_STANDARD,
     DEDUCTION_TYPE_ITEMIZED,
+    YOU_PHONE,
+    YOU_EMAIL,
+    YOU_JOB_TITLE,
+    YOU_US_CITIZEN,
+    SPOUSE_JOB_TITLE,
     MAX_DEPENDENTS,
     dep_field,
     DEP_FIRST_NAME,
@@ -122,6 +128,9 @@ from training.form_fields import (
     DEP_DOB,
     DEP_RELATIONSHIP,
     DEP_MONTHS,
+    DEP_US_CITIZEN,
+    DEP_STUDENT,
+    DEP_DISABLED,
 )
 
 logger = logging.getLogger(__name__)
@@ -449,6 +458,97 @@ def _group_notes_by_page(
     return by_page
 
 
+# -- Note → form-field mapping (volunteer column) -------------------------
+
+_DETAIL_FIELD_MAP: List[tuple] = [
+    ("daytime phone", YOU_PHONE),
+    ("email address", YOU_EMAIL),
+    ("filing status", FILING_STATUS),
+    ("your job title or occupation", YOU_JOB_TITLE),
+    ("spouse's job title", SPOUSE_JOB_TITLE),
+    ("retirement income, roughly", INCOME_RETIREMENT_AMOUNT),
+    ("Social Security benefits, roughly", INCOME_SOCIAL_SECURITY_AMOUNT),
+    ("interest and dividends, roughly", INCOME_INTEREST_AMOUNT),
+    ("mortgage interest, roughly", EXPENSE_MORTGAGE_INTEREST_AMOUNT),
+    ("charitable contributions, roughly", EXPENSE_CHARITABLE_AMOUNT),
+    ("student loan interest, roughly", EXPENSE_STUDENT_LOAN_AMOUNT),
+    ("educator expenses, roughly", EXPENSE_EDUCATOR_AMOUNT),
+    ("child care expenses, roughly", EXPENSE_CHILD_CARE_AMOUNT),
+]
+
+_YESNO_FIELD_MAP: List[tuple] = [
+    ("Are you a U.S. citizen", YOU_US_CITIZEN),
+    ("claim you as a dependent", CLAIMED_AS_DEPENDENT),
+    ("receive wages as an employee", INCOME_WAGES),
+    ("self-employment income", INCOME_SELF_EMPLOYMENT),
+    ("retirement account, pension", INCOME_RETIREMENT),
+    ("Social Security or Railroad", INCOME_SOCIAL_SECURITY),
+    ("interest or dividend", INCOME_INTEREST),
+    ("mortgage interest on your home", EXPENSE_MORTGAGE_INTEREST),
+    ("state, local, or property taxes", EXPENSE_PROPERTY_TAXES),
+    ("medical, dental", EXPENSE_MEDICAL),
+    ("charitable contributions", EXPENSE_CHARITABLE),
+    ("student loan interest", EXPENSE_STUDENT_LOAN),
+    ("retirement account (IRA)", EXPENSE_IRA),
+    ("school supplies as an educator", EXPENSE_EDUCATOR),
+    ("educational classes", EXPENSE_EDUCATION),
+    ("child or dependent care", EXPENSE_CHILD_CARE),
+]
+
+_DOC_HINTS: List[tuple] = [
+    ("wages", "W-2"),
+    ("self-employment", "1099-NEC"),
+    ("retirement account, pension", "1099-R"),
+    ("Social Security", "SSA-1099"),
+    ("interest or dividend", "1099-INT / DIV"),
+    ("mortgage interest", "Form 1098"),
+    ("student loan interest", "Form 1098-E"),
+    ("educational classes", "Form 1098-T"),
+]
+
+
+def _enrich_notes(notes_by_page: Dict[int, List[dict]]) -> None:
+    """Add ``field`` and ``hint`` keys to each note dict in place."""
+    dep_idx = 0
+    for page_notes in notes_by_page.values():
+        for note in page_notes:
+            q = note.get("question", "")
+            answer = note.get("answer", "")
+            is_yesno = answer in ("Yes", "No")
+            cat = note.get("category", "")
+
+            field: Optional[str] = None
+
+            # Dependent fields — tracked by index
+            if cat == "dependent":
+                if "months did" in q and "live" in q:
+                    field = dep_field(dep_idx, DEP_MONTHS)
+                elif "full-time student" in q:
+                    field = dep_field(dep_idx, DEP_STUDENT)
+                elif "permanent disability" in q:
+                    field = dep_field(dep_idx, DEP_DISABLED)
+                elif "U.S. citizen" in q:
+                    field = dep_field(dep_idx, DEP_US_CITIZEN)
+                    dep_idx += 1
+            else:
+                # General field map
+                source = _DETAIL_FIELD_MAP if not is_yesno else _YESNO_FIELD_MAP
+                for keyword, fld in source:
+                    if keyword in q:
+                        field = fld
+                        break
+
+            # Document-type hint
+            hint = ""
+            for keyword, label in _DOC_HINTS:
+                if keyword in q:
+                    hint = label
+                    break
+
+            note["field"] = field
+            note["hint"] = hint
+
+
 @router.get("/scenarios/{scenario_id}", response_class=HTMLResponse)
 async def page_exercise(
     request: Request,
@@ -475,6 +575,12 @@ async def page_exercise(
 
     notes = scenario.interview_notes or []
     notes_by_page = _group_notes_by_page(notes)
+    _enrich_notes(notes_by_page)
+
+    prefill: Dict[str, str] = {}
+    if scenario.mode == "verify" and scenario.household:
+        from training.form_populator import build_field_values
+        prefill = build_field_values(scenario.household)
 
     return templates.TemplateResponse(request, "encounter.html", {
         "scenario_id": scenario_id,
@@ -484,6 +590,7 @@ async def page_exercise(
         "section_grades": section_grades,
         "notes_by_page": notes_by_page,
         "category_labels": _CATEGORY_LABELS,
+        "prefill": prefill,
     })
 
 

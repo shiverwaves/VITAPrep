@@ -108,8 +108,17 @@ html, body { height: 100%; overflow: hidden; }
                                         </span>
                                     {% endif %}
                                 </div>
-                                <div class="sheet__volunteer-cell">
-                                    {# Volunteer input column — Phase 3B #}
+                                <div class="sheet__volunteer-cell{% if mode == 'verify' and note.field %} sheet__volunteer-cell--prefilled{% endif %}">
+                                    {% if note.hint %}
+                                        <span class="sheet__hint">{{ note.hint }}</span>
+                                    {% endif %}
+                                    {% if note.field %}
+                                        <input class="sheet__input{% if mode == 'verify' %} sheet__input--readonly{% endif %}"
+                                               type="text"
+                                               data-field="{{ note.field }}"
+                                               value="{{ prefill.get(note.field, '') }}"
+                                               {% if mode == 'verify' %}readonly{% endif %}>
+                                    {% endif %}
                                 </div>
                             </div>
                         {% endfor %}
