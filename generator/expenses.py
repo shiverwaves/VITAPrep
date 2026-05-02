@@ -338,26 +338,34 @@ class ExpenseGenerator:
         has_disabled = any(m.has_disability for m in household.members)
         member_count = len(household.members)
 
-        prob = 0.10
+        # High-expense probability (above 7.5% AGI floor, potentially deductible)
+        high_prob = 0.10
         if has_elderly:
-            prob += 0.25
+            high_prob += 0.25
         if has_disabled:
-            prob += 0.20
+            high_prob += 0.20
         if member_count >= 4:
-            prob += 0.10
-
-        if np.random.random() >= prob:
-            household.medical_expenses = 0
-            return
+            high_prob += 0.10
 
         agi = household.total_household_income()
-        floor = agi * 0.075
-        excess = np.random.exponential(5000)
-        household.medical_expenses = int(floor + excess)
+
+        if np.random.random() < high_prob:
+            # High path: above the 7.5% AGI floor, may be deductible
+            floor = agi * 0.075
+            excess = np.random.exponential(5000)
+            household.medical_expenses = int(floor + excess)
+        else:
+            # Low path: routine copays/prescriptions, well below deductibility
+            household.medical_expenses = int(np.random.uniform(100, 800))
+
         logger.debug("  Medical: $%d", household.medical_expenses)
 
     # =========================================================================
     # 4. CHARITABLE CONTRIBUTIONS
+    # When schedule_a_substantiation concept is implemented (P2), split into
+    # charitable_cash and charitable_noncash on Household, add has_receipt flag.
+    # Predicates fire on cash >= $250 without receipt, non-cash >= $500 without
+    # Form 8283.
     # =========================================================================
 
     def _assign_charitable_contributions(self, household: Household) -> None:
@@ -460,11 +468,28 @@ class ExpenseGenerator:
         if np.random.random() >= prob:
             return 0
 
+        person.ira_type = self._sample_ira_type(person.wage_income)
+
         limit = ira_contribution_limit(person.age, 2022)
 
         if np.random.random() < 0.30:
             return limit
         return int(np.random.uniform(500, limit * 0.8))
+
+    @staticmethod
+    def _sample_ira_type(wage_income: int) -> str:
+        """Sample IRA type weighted by income.
+
+        Traditional favored at lower incomes (deduction matters).
+        Roth favored at higher incomes (phase-outs kill Traditional deduction).
+        """
+        if wage_income < 50000:
+            weights = [0.65, 0.25, 0.10]  # traditional, roth, both
+        elif wage_income < 100000:
+            weights = [0.40, 0.45, 0.15]
+        else:
+            weights = [0.20, 0.60, 0.20]
+        return str(np.random.choice(["traditional", "roth", "both"], p=weights))
 
     # =========================================================================
     # 6. CREDIT-RELATED EXPENSES

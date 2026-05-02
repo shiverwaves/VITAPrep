@@ -93,6 +93,8 @@ def _make_distributions() -> dict:
     ])
 
     retirement = pd.DataFrame([
+        {"age_bracket": "55-64", "income_bracket": "$5K-$10K", "weight": 100,
+         "has_ret_proportion": 0.20},
         {"age_bracket": "65+", "income_bracket": "$5K-$10K", "weight": 200,
          "has_ret_proportion": 0.40},
         {"age_bracket": "65+", "income_bracket": "$10K-$15K", "weight": 300,
@@ -378,3 +380,74 @@ class TestFallbacks:
         if wages:
             avg = sum(wages) / len(wages)
             assert avg > 30_000  # Doctorate should average well above minimum
+
+
+class TestDisabilityIncome:
+    def test_disability_w2_assigned_to_disabled_non_employed(
+        self, gen: IncomeGenerator,
+    ) -> None:
+        """Disabled non-employed adults can receive disability W-2 income."""
+        random.seed(1)
+        np.random.seed(1)
+        found = False
+        for _ in range(100):
+            p = _make_person(
+                45, employment_status="not_in_labor_force", education="high_school",
+            )
+            p.has_disability = True
+            p.occupation_code = None
+            hh = _make_household("HI", p)
+            gen.overlay(hh)
+            if p.disability_income_source == "w2":
+                found = True
+                assert p.wage_income > 0
+                assert 12_000 <= p.wage_income <= 35_000
+                assert len(p.w2s) == 1
+                break
+        assert found, "Disability W-2 never fired in 100 attempts"
+
+    def test_disability_w2_not_assigned_to_employed(
+        self, gen: IncomeGenerator,
+    ) -> None:
+        """Employed disabled adults don't get the disability W-2 path."""
+        random.seed(42)
+        np.random.seed(42)
+        p = _make_person(40)
+        p.has_disability = True
+        hh = _make_household("HI", p)
+        gen.overlay(hh)
+        # Employed people get regular W-2s, not disability-flagged
+        assert p.disability_income_source is None
+
+    def test_disability_1099r_flag_set(self, gen: IncomeGenerator) -> None:
+        """1099-R with distribution_code '3' sets disability_income_source."""
+        random.seed(5)
+        np.random.seed(5)
+        found = False
+        # Age 67 with disability: eligible for retirement (65+ bracket in test data,
+        # 40% proportion), but age < 59 gives code "3". Age 67 gives code "7" though,
+        # so we use age 57 with high iteration count to hit the 15% fallback.
+        for _ in range(500):
+            p = _make_person(
+                57, employment_status="not_in_labor_force", education="high_school",
+            )
+            p.has_disability = True
+            p.occupation_code = None
+            hh = _make_household("HI", p)
+            gen.overlay(hh)
+            if p.form_1099_rs and p.form_1099_rs[0].distribution_code == "3":
+                assert p.disability_income_source in ("1099r", "w2")
+                found = True
+                break
+        assert found, "Disability 1099-R never fired in 500 attempts"
+
+    def test_non_disabled_no_flag(self, gen: IncomeGenerator) -> None:
+        """Non-disabled people never get disability_income_source set."""
+        random.seed(42)
+        np.random.seed(42)
+        p = _make_person(45, employment_status="not_in_labor_force")
+        p.has_disability = False
+        p.occupation_code = None
+        hh = _make_household("HI", p)
+        gen.overlay(hh)
+        assert p.disability_income_source is None

@@ -347,6 +347,7 @@ class Person:
     occupation_code: Optional[str] = None
     occupation_title: Optional[str] = None
     has_disability: bool = False
+    disability_income_source: Optional[str] = None  # "w2" or "1099r"
 
     # === Income (populated by income.py — Sprint 9) ===
     wage_income: int = 0
@@ -370,6 +371,7 @@ class Person:
     student_loan_interest: int = 0
     educator_expenses: int = 0
     ira_contributions: int = 0
+    ira_type: Optional[str] = None  # "traditional", "roth", or "both"
 
     # === Expense Documents (populated by expenses.py — Sprint 12) ===
     form_1098s: List[Form1098] = field(default_factory=list)
@@ -441,6 +443,7 @@ class Person:
             "education": self.education,
             "occupation_code": self.occupation_code,
             "occupation_title": self.occupation_title,
+            "disability_income_source": self.disability_income_source,
             "w2s": [w.to_dict() for w in self.w2s],
             "form_1099_ints": [f.to_dict() for f in self.form_1099_ints],
             "form_1099_divs": [f.to_dict() for f in self.form_1099_divs],
@@ -450,6 +453,7 @@ class Person:
             "student_loan_interest": self.student_loan_interest,
             "educator_expenses": self.educator_expenses,
             "ira_contributions": self.ira_contributions,
+            "ira_type": self.ira_type,
             "form_1098s": [f.to_dict() for f in self.form_1098s],
             "form_1098_es": [f.to_dict() for f in self.form_1098_es],
             "form_1098_ts": [f.to_dict() for f in self.form_1098_ts],
