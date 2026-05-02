@@ -362,6 +362,10 @@ class ExpenseGenerator:
 
     # =========================================================================
     # 4. CHARITABLE CONTRIBUTIONS
+    # When schedule_a_substantiation concept is implemented (P2), split into
+    # charitable_cash and charitable_noncash on Household, add has_receipt flag.
+    # Predicates fire on cash >= $250 without receipt, non-cash >= $500 without
+    # Form 8283.
     # =========================================================================
 
     def _assign_charitable_contributions(self, household: Household) -> None:
