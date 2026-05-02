@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Scenario {{ scenario_id[:12] }} — VITAPrep{% endblock %}
+
+{% block head %}
+<style>
+/* Full-viewport app shell */
+html, body { height: 100%; overflow: hidden; }
+
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.app-main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+</style>
+{% endblock %}
+
+{% block body %}
+{# --- Titlebar (2.2) --- #}
+{% set titlebar_center_html %}
+<button class="titlebar__scenario-trigger" id="scenario-btn">
+    <span>{{ scenario_id[:12] }}</span>
+    <span class="tag tag--{{ mode }}">{{ mode }}</span>
+    <span class="tag tag--practice">practice</span>
+    <span>&#9662;</span>
+</button>
+{% endset %}
+
+{% set titlebar_right_html %}
+<button class="iconbtn" id="sidebar-toggle-btn" aria-label="Toggle sidebar">&#9881;</button>
+<button class="btn-primary" id="submit-btn">Submit</button>
+{% endset %}
+
+<div class="app-shell">
+    {% include "components/titlebar.html" %}
+    {% include "components/scenario_menu.html" %}
+
+    {# --- Main area: workspace + sidebar (2.1) --- #}
+    <div class="app-main">
+        <div class="workspace" id="workspace">
+            {# Workspace content (form sheet + document panes) injected by later phases #}
+            {% block workspace %}
+            <div class="workspace__form" id="form-area">
+                {% block form_content %}{% endblock %}
+            </div>
+            <div class="workspace__doc-left" id="doc-pane-left">
+                {% block doc_left %}{% endblock %}
+            </div>
+            <div class="workspace__doc-right" id="doc-pane-right">
+                {% block doc_right %}{% endblock %}
+            </div>
+            {% endblock %}
+        </div>
+
+        {# --- Right sidebar (collapsed by default) --- #}
+        <aside class="sidebar sidebar--collapsed" id="sidebar">
+            <div class="sidebar__tabs">
+                <button class="sidebar__tab sidebar__tab--active" data-panel="probes">Probes</button>
+                <button class="sidebar__tab" data-panel="flags">Flags</button>
+                <button class="sidebar__tab" data-panel="notes">Notes</button>
+            </div>
+            <div class="sidebar__panel sidebar__panel--active" id="panel-probes">
+                <div class="sidebar__empty">Select a field and right-click to see available probes.</div>
+            </div>
+            <div class="sidebar__panel" id="panel-flags">
+                <div class="sidebar__empty">No flags yet.</div>
+            </div>
+            <div class="sidebar__panel" id="panel-notes">
+                <textarea class="sidebar__notes-area" placeholder="Scratchpad — your notes here..."></textarea>
+            </div>
+        </aside>
+    </div>
+
+    {# --- Status bar (2.4) --- #}
+    {% include "components/statusbar.html" %}
+</div>
+
+<script src="/app-static/js/menus.js"></script>
+<script src="/app-static/js/sidebar.js"></script>
+{% endblock %}
