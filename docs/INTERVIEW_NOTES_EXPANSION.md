@@ -74,11 +74,14 @@ Bundles with any Sprint 9 generator refinements still pending.
 |---|---|---|
 | Wages as part-time or full-time employee | `wage_income`, `len(w2s)` | "How many jobs?" -> count of W-2s |
 | Self-employment payments | `self_employment_income`, count of 1099-NECs | "What kind of work?" -> occupation_title |
-| Disability benefits (insurance, worker's comp) | TBD — generator gap, see below | "From what source?" |
+| Disability benefits (insurance, worker's comp) | `disability_income_source` on Person | "W-2 or 1099-R?" -> document type |
 
 **Generator work in this subset:**
-- Confirm `disability_benefits` is a distinct field from `social_security_income`. If not, decide whether to: (a) extend the generator to produce it as a small probability when `disability == True`, or (b) document it as a permanent "No" until the generator extends. Either resolution is acceptable; document the choice.
-- Decide the data shape for occupation in the SE follow-up. The generator already produces `occupation_title`; the question is whether the boilerplate uses it verbatim or paraphrases.
+- **Disability (resolved):** The 13614-C asks about "disability benefits (payments from insurance and worker's compensation)" with the volunteer column specifying "on W-2 or 1099-R." SSDI is covered by the separate Social Security row (SSA-1099/RRB-1099). These are two distinct questions, two distinct reporting paths.
+  - **MVP scope: employer-paid short/long-term disability on W-2 only.** Model a person with `has_disability is True` who isn't currently working but has a W-2 from employer-paid disability insurance. Worker's comp adds complexity (separate document, usually nontaxable, poorly categorized) — defer. Disability pensions on 1099-R are a less common VITA scenario — defer.
+  - **Implementation:** Add `disability_income_source: Optional[str]` to Person (value `"w2"` for MVP). Set at low frequency when `has_disability is True` and the person has wage income but `employment_status != EMPLOYED`. The boilerplate renders "Yes" and the follow-up is just the dollar amount — the form doesn't ask the volunteer to decompose disability vs regular wages. The W-2 itself carries whatever breakdown the employer provides.
+  - **No grader change needed.** The disability flag affects the interview note; the income amount is already on the W-2 and already graded.
+- The SE follow-up ("What kind of work?") uses `occupation_title` verbatim — it's already client-voice phrasing from Faker.
 
 ---
 
@@ -99,18 +102,16 @@ Mostly mechanical against existing generator output.
 
 ### Subset 3: Schedule A items (4 notes)
 
-Bundles with any medical-expense generator extensions if you choose to do them.
-
 | 13614-C Question | Generator field | Detail follow-up |
 |---|---|---|
 | Mortgage interest | `mortgage_interest`, Form 1098 | "Roughly how much?" -> rounded amount |
 | Taxes (state, local, real estate, sales) | `state_income_tax`, `property_taxes` | "What kinds?" -> enumerate |
-| Medical, dental, prescription expenses | `medical_expenses` | "Roughly how much?" -> rounded amount |
-| Charitable contributions | `charitable_contributions` | "Cash or items?" -> "Cash" or "Items" or "Both" |
+| Medical, dental, prescription expenses | `medical_expenses` | "Roughly how much?" -> coarse bin label |
+| Charitable contributions | `charitable_contributions` | "Roughly how much?" -> rounded amount |
 
 **Generator work in this subset:**
-- `medical_expenses` may not currently be generated for non-itemizers (since it doesn't affect the return below the 7.5% AGI floor). Decide whether to generate it always (so the boilerplate can render "Yes") or only when itemizing matters. The pedagogical case for always-generate: the player should see medical expenses on intake even when they don't end up deductible, because that's the realistic case.
-- For charitable contributions, the cash/items split may not currently be tracked. If the generator only produces a single amount, the follow-up is "Roughly how much?" instead of "Cash or items?"
+- **Medical expenses (resolved):** Always-generate. Most households produce small amounts ($100–$800 range) that don't clear the 7.5% AGI floor. The existing high-amount logic (exponential draw above floor) stays for elderly/disabled cases. This teaches the player to recognize "yes there are medical expenses, no they don't deduct" — a pattern they'll see constantly at real VITA sites. The boilerplate follow-up renders coarsely using bin labels ("a few hundred dollars", "a couple thousand", "around ten thousand") rather than exact amounts. This signals magnitude without forcing mental math on whether to itemize.
+- **Charitable split (resolved — deferred):** Skip the cash/items split. Follow-up is "Roughly how much?" The split becomes load-bearing when `schedule_a_substantiation` concept is implemented (P2 in catalog) — the predicate fires on cash ≥ $250 without receipt, or non-cash ≥ $500 without Form 8283. At that point, add `charitable_cash` and `charitable_noncash` to Household plus a `has_receipt` flag. Until then, a single amount with no type distinction is correct.
 
 ---
 
@@ -121,11 +122,11 @@ Mostly mechanical.
 | 13614-C Question | Generator field | Detail follow-up |
 |---|---|---|
 | Student loan interest | `student_loan_interest`, Form 1098-E | "Roughly how much?" -> amount |
-| Contributions to a retirement account | `ira_contributions` | "Traditional or Roth?" — TBD generator field |
+| Contributions to a retirement account | `ira_contributions`, `ira_type` | "Traditional or Roth?" -> type |
 | School supplies (educator expense) | `educator_expenses` | "Roughly how much?" -> amount |
 
 **Generator work in this subset:**
-- IRA contributions: confirm whether the generator distinguishes Traditional from Roth. The question matters for the deduction (Traditional is deductible, Roth is not). If the generator doesn't distinguish, either extend it or render the follow-up as "Roughly how much?" without the type.
+- **IRA type (resolved):** Add `ira_type: str` to Person with values `"traditional"`, `"roth"`, or `"both"`. The 13614-C asks the question because the answer changes the return — Traditional adjusts AGI, Roth doesn't. A player who sees IRA contributions without the type distinction has been taught the wrong lesson. Weight by income tier: Traditional at lower incomes (where the deduction matters), Roth at higher incomes (where phase-outs kill the Traditional deduction anyway). The full phase-out logic is a `tax_core` predicate concern (`traditional_ira_deduction_phaseout`) and doesn't need to exist for the boilerplate to be correct — the boilerplate just states what the client contributed and what type. The form populator routes Traditional → Schedule 1, Roth → not deducted.
 
 ---
 
@@ -137,8 +138,8 @@ Mostly mechanical.
 | Child and dependent care | `child_care_expenses` | "Roughly how much?" -> amount |
 
 **Generator work in this subset:**
-- Education question's "who took the classes" follow-up requires the generator to attach education status to a specific person. Verify whether `Person.education` or a similar field captures whether the person is currently enrolled.
-- Child and dependent care: confirm `child_care_expenses` is generated for households with qualifying dependents. If the field exists but is rarely populated, the boilerplate renders it as a negative when zero.
+- **Education (resolved):** The `is_full_time_student` flag now works correctly on Person (set via PUMS enrollment rates in `children.py`). The "who took the classes" follow-up reads from the Person who has the 1098-T — already tracked by `_create_expense_documents` which issues the 1098-T to the actual enrolled student. No generator gap remains.
+- **Child care (resolved):** `child_care_expenses` is generated on Household for households with children under 13 and working adults, firing ~65% of the time for qualifying households. Renders as "No" when zero (household doesn't qualify or probability didn't fire). No generator gap.
 
 ---
 
@@ -152,12 +153,12 @@ These questions exist on the 13614-C and matter pedagogically but cannot be answ
 |---|---|
 | Tips | Tip income not generated. |
 | Unemployment benefits | 1099-G not generated. |
-| Refund of state/local income tax | No prior-year state refund tracking; the "itemized last year" follow-up also requires prior-year data. |
-| Sale of stocks, bonds, real estate | No 1099-B, no Schedule D generation. |
+| Refund of state/local income tax | No prior-year state refund tracking. The "itemized last year" follow-up is a prior-year dependency — state refund taxability depends on whether state tax was deducted on Schedule A last year (tax-benefit rule). Requires prior-year infrastructure, not just a generator extension. |
+| Sale of stocks, bonds, real estate | No 1099-B, no Schedule D generation. Note: the "did you report a loss last year" follow-up is an audit-trigger question — it gates whether carryover Schedules apply. Same pattern as SE loss below. |
 | Alimony received | Not generated. |
-| Rental income (real or personal property) | Not generated. |
+| Rental income (real or personal property) | Not generated. Note: the "personal use / rented fewer than 15 days" follow-up is an audit trigger for material participation and Schedule E applicability. |
 | Gambling winnings | Not generated. |
-| Did you report a loss last year (SE) | Requires prior-year return data. |
+| Did you report a loss last year (SE) | Requires prior-year return data. This is an audit-trigger follow-up — it gates whether prior-year carryovers affect the current return. Same pattern appears under Sale of stocks and Rental. When these generators come online, the follow-up pattern is consistent: the question gates whether a more-complex Schedule applies. |
 
 ### Page 3 — Adjustments and credits
 
@@ -189,6 +190,8 @@ These don't depend on generator state but also don't currently fit boilerplate.
 | Brought last year's return | Same — procedural, not data-driven. |
 
 When generators eventually cover these (HSA likely first, given its concept-catalog connection), the corresponding boilerplate note becomes a follow-on subset using the same Yes/No + detail pattern.
+
+**Note on prior-year dependencies:** Several deferred questions share a common infrastructure requirement — prior-year return data. State refund taxability (tax-benefit rule), SE/capital loss carryovers, and "did you itemize last year" follow-ups all need the system to know what happened on last year's return. This is its own infrastructure concern (a prior-year context model), not just a set of generator extensions. When prior-year tracking is eventually designed, multiple deferred questions become unblocked simultaneously.
 
 ---
 
