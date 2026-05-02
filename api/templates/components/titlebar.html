@@ -1,0 +1,14 @@
+<!-- Titlebar — shared across Home and Encounter screens -->
+<header class="titlebar">
+    <div class="titlebar__left">
+        <button class="iconbtn" id="hamburger-btn" aria-label="Menu">&#9776;</button>
+        <span class="titlebar__wordmark">VITAPrep</span>
+    </div>
+    <div class="titlebar__center">
+        {% block titlebar_center %}{% endblock %}
+    </div>
+    <div class="titlebar__right">
+        {% block titlebar_right %}{% endblock %}
+    </div>
+</header>
+{% include "components/hamburger.html" %}
