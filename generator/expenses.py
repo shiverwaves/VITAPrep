@@ -338,22 +338,26 @@ class ExpenseGenerator:
         has_disabled = any(m.has_disability for m in household.members)
         member_count = len(household.members)
 
-        prob = 0.10
+        # High-expense probability (above 7.5% AGI floor, potentially deductible)
+        high_prob = 0.10
         if has_elderly:
-            prob += 0.25
+            high_prob += 0.25
         if has_disabled:
-            prob += 0.20
+            high_prob += 0.20
         if member_count >= 4:
-            prob += 0.10
-
-        if np.random.random() >= prob:
-            household.medical_expenses = 0
-            return
+            high_prob += 0.10
 
         agi = household.total_household_income()
-        floor = agi * 0.075
-        excess = np.random.exponential(5000)
-        household.medical_expenses = int(floor + excess)
+
+        if np.random.random() < high_prob:
+            # High path: above the 7.5% AGI floor, may be deductible
+            floor = agi * 0.075
+            excess = np.random.exponential(5000)
+            household.medical_expenses = int(floor + excess)
+        else:
+            # Low path: routine copays/prescriptions, well below deductibility
+            household.medical_expenses = int(np.random.uniform(100, 800))
+
         logger.debug("  Medical: $%d", household.medical_expenses)
 
     # =========================================================================

@@ -247,7 +247,7 @@ class TestStateIncomeTax:
 
 
 class TestMedicalExpenses:
-    def test_sometimes_zero(self) -> None:
+    def test_always_positive(self) -> None:
         gen = ExpenseGenerator(_empty_distributions())
         results = []
         for i in range(100):
@@ -255,27 +255,26 @@ class TestMedicalExpenses:
             hh = _make_household()
             gen._assign_medical_expenses(hh)
             results.append(hh.medical_expenses)
-        assert any(m == 0 for m in results)
-        assert any(m > 0 for m in results)
+        assert all(m > 0 for m in results)
+        assert any(m < 1000 for m in results)  # Most are small
 
-    def test_elderly_more_likely(self) -> None:
+    def test_elderly_higher_amounts(self) -> None:
         gen = ExpenseGenerator(_empty_distributions())
-        young_hits = 0
-        old_hits = 0
+        young_amounts = []
+        old_amounts = []
         for i in range(200):
             np.random.seed(i)
             hh_young = _make_household(members=[_make_person(age=30)])
             gen._assign_medical_expenses(hh_young)
-            if hh_young.medical_expenses > 0:
-                young_hits += 1
+            young_amounts.append(hh_young.medical_expenses)
 
             np.random.seed(i)
             hh_old = _make_household(members=[_make_person(age=70)])
             gen._assign_medical_expenses(hh_old)
-            if hh_old.medical_expenses > 0:
-                old_hits += 1
+            old_amounts.append(hh_old.medical_expenses)
 
-        assert old_hits > young_hits
+        # Elderly hit the high path more often, so average should be much higher
+        assert sum(old_amounts) / len(old_amounts) > sum(young_amounts) / len(young_amounts)
 
 
 # =========================================================================
@@ -663,6 +662,8 @@ class TestExpenseDocumentCreation:
         hh = _make_household(members=[_make_person(
             wage_income=0,
             employment_status=EmploymentStatus.NOT_IN_LABOR_FORCE.value,
+            education="high_school",
+            occupation_code=None,
         )])
         gen.overlay(hh)
         householder = hh.get_householder()
