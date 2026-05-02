@@ -406,6 +406,48 @@ _PAGE_TABS = [
      "card_title": "Part III — Expenses"},
 ]
 
+_CATEGORY_PAGE: Dict[str, int] = {
+    "citizenship": 1,
+    "filing": 1,
+    "contact": 1,
+    "employment": 1,
+    "dependent": 1,
+    "address": 1,
+    "income": 2,
+    "expenses": 3,
+    "credits": 3,
+}
+
+_CATEGORY_LABELS: Dict[str, str] = {
+    "citizenship": "Citizenship",
+    "filing": "Filing Status",
+    "contact": "Contact Information",
+    "employment": "Employment",
+    "dependent": "Dependents",
+    "address": "Address",
+    "income": "Income",
+    "expenses": "Expenses & Deductions",
+    "credits": "Credits",
+}
+
+_CATEGORY_ORDER: Dict[str, int] = {
+    "citizenship": 0, "filing": 1, "contact": 2, "employment": 3,
+    "dependent": 4, "address": 5, "income": 0, "expenses": 0, "credits": 1,
+}
+
+
+def _group_notes_by_page(
+    notes: List[dict],
+) -> Dict[int, List[dict]]:
+    """Group interview notes by page number, sorted by category order."""
+    by_page: Dict[int, List[dict]] = {1: [], 2: [], 3: []}
+    for n in notes:
+        page = _CATEGORY_PAGE.get(n.get("category", ""), 1)
+        by_page.setdefault(page, []).append(n)
+    for page_notes in by_page.values():
+        page_notes.sort(key=lambda n: _CATEGORY_ORDER.get(n.get("category", ""), 99))
+    return by_page
+
 
 @router.get("/scenarios/{scenario_id}", response_class=HTMLResponse)
 async def page_exercise(
@@ -431,12 +473,17 @@ async def page_exercise(
             "complete": graded,
         })
 
+    notes = scenario.interview_notes or []
+    notes_by_page = _group_notes_by_page(notes)
+
     return templates.TemplateResponse(request, "encounter.html", {
         "scenario_id": scenario_id,
         "mode": scenario.mode,
         "difficulty": scenario.difficulty,
         "page_tabs": page_tabs,
         "section_grades": section_grades,
+        "notes_by_page": notes_by_page,
+        "category_labels": _CATEGORY_LABELS,
     })
 
 
