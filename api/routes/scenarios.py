@@ -394,185 +394,50 @@ h1 {{ color: #c62828; }}
 
 
 # =========================================================================
-# HTML page: exercise overview (links to docs + form)
+# HTML page: encounter screen
 # =========================================================================
+
+_PAGE_TABS = [
+    {"page": 1, "label": "1·Personal", "section": "encounter",
+     "card_title": "Part I — Personal Information"},
+    {"page": 2, "label": "2·Income", "section": "income",
+     "card_title": "Part II — Income"},
+    {"page": 3, "label": "3·Expenses", "section": "expenses",
+     "card_title": "Part III — Expenses"},
+]
+
 
 @router.get("/scenarios/{scenario_id}", response_class=HTMLResponse)
 async def page_exercise(
     request: Request,
     scenario_id: str,
 ) -> HTMLResponse:
-    """Exercise landing page — shows document links, client facts, and form link."""
+    """Encounter screen — main gameplay interface."""
     store = request.app.state.store
+    templates = request.app.state.templates
+
     scenario = store.get_scenario(scenario_id)
     if scenario is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    hh = scenario.household
-
-    # Build document links
-    doc_links: List[str] = []
-    income_doc_links: List[str] = []
-    expense_doc_links: List[str] = []
-    if hh:
-        for p in hh.members:
-            name = p.full_legal_name() or f"Person {p.person_id}"
-            rel = p.relationship.value if hasattr(p.relationship, "value") else str(p.relationship)
-            pid = p.person_id
-            if p.ssn:
-                doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/ssn-card/{pid}" '
-                    f'target="_blank">SSN Card — {name} ({rel})</a></li>'
-                )
-            if p.id_type:
-                id_label = "Driver License" if p.id_type == "drivers_license" else "State ID"
-                doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/photo-id/{pid}" '
-                    f'target="_blank">{id_label} — {name} ({rel})</a></li>'
-                )
-            for i, w2 in enumerate(p.w2s):
-                emp = w2.employer.name if w2.employer else "Employer"
-                income_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/w2/{pid}/{i}" '
-                    f'target="_blank">W-2 — {name} ({emp})</a></li>'
-                )
-            for i, _ in enumerate(p.form_1099_ints):
-                income_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-int/{pid}/{i}" '
-                    f'target="_blank">1099-INT — {name}</a></li>'
-                )
-            for i, _ in enumerate(p.form_1099_divs):
-                income_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-div/{pid}/{i}" '
-                    f'target="_blank">1099-DIV — {name}</a></li>'
-                )
-            for i, _ in enumerate(p.form_1099_rs):
-                income_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-r/{pid}/{i}" '
-                    f'target="_blank">1099-R — {name}</a></li>'
-                )
-            if p.ssa_1099 is not None:
-                income_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/ssa-1099/{pid}" '
-                    f'target="_blank">SSA-1099 — {name}</a></li>'
-                )
-            for i, _ in enumerate(p.form_1099_necs):
-                income_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1099-nec/{pid}/{i}" '
-                    f'target="_blank">1099-NEC — {name}</a></li>'
-                )
-            for i, f1098 in enumerate(p.form_1098s):
-                expense_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1098/{pid}/{i}" '
-                    f'target="_blank">Form 1098 — {name} ({f1098.lender_name})</a></li>'
-                )
-            for i, _ in enumerate(p.form_1098_es):
-                expense_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1098-e/{pid}/{i}" '
-                    f'target="_blank">Form 1098-E — {name}</a></li>'
-                )
-            for i, _ in enumerate(p.form_1098_ts):
-                expense_doc_links.append(
-                    f'<li><a href="/scenarios/{scenario_id}/documents/1098-t/{pid}/{i}" '
-                    f'target="_blank">Form 1098-T — {name}</a></li>'
-                )
-
-    # Interview notes
-    facts_html = ""
-    notes = scenario.interview_notes or []
-    if notes:
-        facts_rows = "\n".join(
-            f"<tr><td>{n['category']}</td><td>{n['question']}</td><td><strong>{n['answer']}</strong></td></tr>"
-            for n in notes
-        )
-        facts_html = f"""\
-<h2>Client Interview Notes</h2>
-<p>The following information was provided verbally by the client:</p>
-<table>
-<thead><tr><th>Category</th><th>Question</th><th>Answer</th></tr></thead>
-<tbody>{facts_rows}</tbody>
-</table>"""
-
-    # Check for existing per-section grades
     section_grades = store.get_section_grades(scenario_id)
 
-    def _section_badge(sec_key: str) -> str:
-        if sec_key in section_grades:
-            g = section_grades[sec_key]
-            if g.accuracy >= 0.9:
-                color = "#4caf50"
-            elif g.accuracy >= 0.7:
-                color = "#ff9800"
-            else:
-                color = "#f44336"
-            return (
-                f'<span class="section-score" style="color:{color}">'
-                f'{g.score}/{g.max_score} ({g.accuracy:.0%})</span>'
-            )
-        return '<span class="section-score pending">Not yet submitted</span>'
+    page_tabs = []
+    for t in _PAGE_TABS:
+        graded = t["section"] in section_grades
+        page_tabs.append({
+            **t,
+            "active": t["page"] == 1,
+            "complete": graded,
+        })
 
-    html = f"""\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Scenario {scenario_id} — VITATrainer</title>
-<style>
-body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
-h1 {{ color: #1a3a5c; }}
-h2 {{ color: #2c5f8a; margin-top: 32px; }}
-.meta {{ background: #f0f4f8; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px; }}
-.meta span {{ margin-right: 24px; }}
-ul {{ line-height: 2; }}
-a {{ color: #2c5f8a; }}
-table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
-th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-th {{ background: #f0f4f8; }}
-.form-sections {{ display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }}
-.form-card {{ display: flex; flex-direction: column; align-items: center; padding: 20px 28px;
-              background: #f0f4f8; border-radius: 8px; text-decoration: none; min-width: 200px;
-              border: 2px solid #ddd; transition: border-color 0.2s; }}
-.form-card:hover {{ border-color: #1a3a5c; }}
-.form-card .card-title {{ font-size: 16px; font-weight: bold; color: #1a3a5c; margin-bottom: 8px; }}
-.section-score {{ font-size: 13px; font-weight: bold; }}
-.section-score.pending {{ color: #999; font-weight: normal; }}
-</style>
-</head>
-<body>
-<h1>Scenario {scenario_id[:12]}</h1>
-<div class="meta">
-    <span><strong>Mode:</strong> {scenario.mode}</span>
-    <span><strong>Difficulty:</strong> {scenario.difficulty}</span>
-    <span><strong>Pattern:</strong> {hh.pattern if hh else "—"}</span>
-    <span><strong>Members:</strong> {len(hh.members) if hh else 0}</span>
-</div>
-<h2>Identity Documents</h2>
-<p>Open each document in a new tab to review:</p>
-<ul>
-{"".join(doc_links)}
-</ul>
-{"<h2>Income Documents</h2><ul>" + "".join(income_doc_links) + "</ul>" if income_doc_links else ""}
-{"<h2>Expense Documents</h2><ul>" + "".join(expense_doc_links) + "</ul>" if expense_doc_links else ""}
-{facts_html}
-<p style="margin-top:8px"><a href="/scenarios/{scenario_id}/debug/notes" target="_blank">View interview notes debug panel &rarr;</a></p>
-<h2>Encounter Form Sections</h2>
-<div class="form-sections">
-    <a class="form-card" href="/scenarios/{scenario_id}/form">
-        <span class="card-title">Part I — Personal Information</span>
-        {_section_badge("encounter")}
-    </a>
-    <a class="form-card" href="/scenarios/{scenario_id}/form/income">
-        <span class="card-title">Part II — Income</span>
-        {_section_badge("income")}
-    </a>
-    <a class="form-card" href="/scenarios/{scenario_id}/form/expenses">
-        <span class="card-title">Part III — Expenses</span>
-        {_section_badge("expenses")}
-    </a>
-</div>
-</body>
-</html>"""
-    return HTMLResponse(content=html)
+    return templates.TemplateResponse(request, "encounter.html", {
+        "scenario_id": scenario_id,
+        "mode": scenario.mode,
+        "difficulty": scenario.difficulty,
+        "page_tabs": page_tabs,
+        "section_grades": section_grades,
+    })
 
 
 # =========================================================================

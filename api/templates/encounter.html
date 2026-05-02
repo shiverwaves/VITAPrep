@@ -44,18 +44,49 @@ html, body { height: 100%; overflow: hidden; }
     {# --- Main area: workspace + sidebar (2.1) --- #}
     <div class="app-main">
         <div class="workspace" id="workspace">
-            {# Workspace content (form sheet + document panes) injected by later phases #}
-            {% block workspace %}
             <div class="workspace__form" id="form-area">
-                {% block form_content %}{% endblock %}
+                {# --- Page tab strip (2.3) --- #}
+                <div class="sheet">
+                    <div class="sheet__tabs" id="page-tabs">
+                        {% for tab in page_tabs %}
+                        <button class="sheet__tab{% if tab.active %} sheet__tab--active{% endif %}{% if tab.complete %} sheet__tab--complete{% endif %}"
+                                data-page="{{ tab.page }}"
+                                type="button">
+                            {{ tab.label }}
+                        </button>
+                        {% endfor %}
+                    </div>
+
+                    {# Page content panels — switched by encounter.js #}
+                    {% for tab in page_tabs %}
+                    <div class="sheet__page{% if tab.active %} sheet__page--active{% endif %}"
+                         id="page-{{ tab.page }}"
+                         data-page="{{ tab.page }}">
+
+                        {# Form card for this section (preserves test compatibility) #}
+                        <div class="form-card" data-section="{{ tab.section }}">
+                            <span class="card-title">{{ tab.card_title }}</span>
+                            {% if section_grades[tab.section] %}
+                                {% set g = section_grades[tab.section] %}
+                                <span class="section-score" style="color:{{ '#4caf50' if g.accuracy >= 0.9 else '#ff9800' if g.accuracy >= 0.7 else '#f44336' }}">
+                                    {{ g.score }}/{{ g.max_score }} ({{ (g.accuracy * 100)|int }}%)
+                                </span>
+                            {% else %}
+                                <span class="section-score pending">Not yet submitted</span>
+                            {% endif %}
+                        </div>
+
+                        {# Placeholder for form sheet content (Phase 3) #}
+                        <div class="sheet__content" id="sheet-content-{{ tab.page }}">
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
             <div class="workspace__doc-left" id="doc-pane-left">
-                {% block doc_left %}{% endblock %}
             </div>
             <div class="workspace__doc-right" id="doc-pane-right">
-                {% block doc_right %}{% endblock %}
             </div>
-            {% endblock %}
         </div>
 
         {# --- Right sidebar (collapsed by default) --- #}
@@ -83,4 +114,5 @@ html, body { height: 100%; overflow: hidden; }
 
 <script src="/app-static/js/menus.js"></script>
 <script src="/app-static/js/sidebar.js"></script>
+<script src="/app-static/js/encounter.js"></script>
 {% endblock %}
