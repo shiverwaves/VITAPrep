@@ -19,7 +19,7 @@ Difficulty filtering (matching the old client_profile.py behavior):
 import logging
 from typing import List, Optional
 
-from generator.models import FilingStatus, Household, Person
+from generator.models import FilingStatus, Household, Person, RelationshipType
 from intake.analyzer.types import InterviewNote
 from training.form_fields import MAX_DEPENDENTS
 
@@ -79,6 +79,8 @@ def generate_boilerplate(
     notes.extend(_wage_and_se_notes(household))
     notes.extend(_passive_income_notes(household))
     notes.extend(_schedule_a_notes(household))
+    notes.extend(_above_line_notes(household))
+    notes.extend(_education_and_care_notes(household))
 
     logger.info(
         "Generated %d boilerplate notes at difficulty=%s for household %s",
@@ -448,3 +450,139 @@ def _schedule_a_notes(household: Household) -> List[InterviewNote]:
         ))
 
     return notes
+
+
+# =========================================================================
+# Page 3 — Expenses (Subset 4: Above-the-line deductions)
+# =========================================================================
+
+
+def _above_line_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Student loan interest (Form 1098-E)
+    sl_total = sum(m.student_loan_interest for m in household.members)
+    if sl_total > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay student loan interest?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much student loan interest, roughly?",
+            answer=f"${sl_total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay student loan interest?",
+            answer="No",
+        ))
+
+    # IRA contributions
+    ira_members = [m for m in household.members if m.ira_contributions > 0]
+    if ira_members:
+        total = sum(m.ira_contributions for m in ira_members)
+        ira_type = ira_members[0].ira_type or "traditional"
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you contribute to a retirement account (IRA)?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Traditional or Roth?",
+            answer=ira_type.capitalize(),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you contribute to a retirement account (IRA)?",
+            answer="No",
+        ))
+
+    # Educator expenses
+    edu_total = sum(m.educator_expenses for m in household.members)
+    if edu_total > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay for school supplies as an educator?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much in educator expenses, roughly?",
+            answer=f"${edu_total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay for school supplies as an educator?",
+            answer="No",
+        ))
+
+    return notes
+
+
+# =========================================================================
+# Page 3 — Credits (Subset 5: Education and child care)
+# =========================================================================
+
+
+def _education_and_care_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Education expenses (Form 1098-T)
+    if household.education_expenses > 0:
+        recipient = _education_recipient(household)
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for educational classes (college, technical school, or job-related)?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="credits",
+            question="Who took the classes?",
+            answer=recipient,
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for educational classes (college, technical school, or job-related)?",
+            answer="No",
+        ))
+
+    # Child and dependent care
+    if household.child_care_expenses > 0:
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for child or dependent care?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="credits",
+            question="How much in child care expenses, roughly?",
+            answer=f"${household.child_care_expenses:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for child or dependent care?",
+            answer="No",
+        ))
+
+    return notes
+
+
+def _education_recipient(household: Household) -> str:
+    for m in household.members:
+        if m.form_1098_ts:
+            if m.relationship == RelationshipType.HOUSEHOLDER:
+                return "Primary filer"
+            elif m.relationship == RelationshipType.SPOUSE:
+                return "Spouse"
+            else:
+                name = f"{m.legal_first_name} {m.legal_last_name}".strip()
+                return name or "Dependent"
+    return "Primary filer"

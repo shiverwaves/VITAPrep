@@ -14,6 +14,7 @@ import pytest
 from generator.models import (
     Address,
     FilingStatus,
+    Form1098T,
     Household,
     Person,
     RelationshipType,
@@ -584,3 +585,188 @@ class TestScheduleANotes:
         notes = generate_boilerplate(hh, "easy")
         char = [n for n in notes if "charitable" in n.question.lower()]
         assert char[0].answer == "No"
+
+
+# =========================================================================
+# 9. Above-the-line notes (Subset 4)
+# =========================================================================
+
+
+class TestAboveLineNotes:
+
+    def test_student_loan_positive(self) -> None:
+        hh = _single_adult()
+        hh.members[0].student_loan_interest = 1800
+        notes = generate_boilerplate(hh, "easy")
+        sl = [n for n in notes if "student loan" in n.question.lower()]
+        assert sl[0].answer == "Yes"
+        assert sl[1].answer == "$1,800"
+
+    def test_student_loan_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        sl = [n for n in notes if "student loan" in n.question.lower()]
+        assert sl[0].answer == "No"
+
+    def test_ira_traditional(self) -> None:
+        hh = _single_adult()
+        hh.members[0].ira_contributions = 5000
+        hh.members[0].ira_type = "traditional"
+        notes = generate_boilerplate(hh, "easy")
+        ira = [n for n in notes if "ira" in n.question.lower()
+               or "Traditional or Roth" in n.question]
+        assert ira[0].answer == "Yes"
+        assert ira[1].answer == "Traditional"
+
+    def test_ira_roth(self) -> None:
+        hh = _single_adult()
+        hh.members[0].ira_contributions = 3000
+        hh.members[0].ira_type = "roth"
+        notes = generate_boilerplate(hh, "easy")
+        ira = [n for n in notes if "Traditional or Roth" in n.question]
+        assert ira[0].answer == "Roth"
+
+    def test_ira_both(self) -> None:
+        hh = _single_adult()
+        hh.members[0].ira_contributions = 6000
+        hh.members[0].ira_type = "both"
+        notes = generate_boilerplate(hh, "easy")
+        ira = [n for n in notes if "Traditional or Roth" in n.question]
+        assert ira[0].answer == "Both"
+
+    def test_ira_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        ira = [n for n in notes if "retirement account" in n.question.lower()]
+        assert ira[0].answer == "No"
+
+    def test_educator_positive(self) -> None:
+        hh = _single_adult()
+        hh.members[0].educator_expenses = 250
+        notes = generate_boilerplate(hh, "easy")
+        edu = [n for n in notes if "educator" in n.question.lower()
+               or "school supplies" in n.question.lower()]
+        assert edu[0].answer == "Yes"
+        assert edu[1].answer == "$250"
+
+    def test_educator_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        edu = [n for n in notes if "school supplies" in n.question.lower()]
+        assert edu[0].answer == "No"
+
+
+class TestEducationAndCareNotes:
+
+    def test_education_positive_primary_filer(self) -> None:
+        hh = _single_adult()
+        hh.education_expenses = 8000
+        hh.members[0].form_1098_ts = [Form1098T(
+            institution_name="U of Hawaii",
+            institution_tin="99-1234567",
+            amounts_billed=8000,
+            student_ssn="900-12-3456",
+        )]
+        notes = generate_boilerplate(hh, "easy")
+        edu = [n for n in notes if "educational classes" in n.question.lower()]
+        assert edu[0].answer == "Yes"
+        who = [n for n in notes if "Who took the classes" in n.question]
+        assert who[0].answer == "Primary filer"
+
+    def test_education_positive_spouse(self) -> None:
+        hh = _single_adult()
+        hh.education_expenses = 5000
+        spouse = Person(
+            person_id="p-02",
+            relationship=RelationshipType.SPOUSE,
+            age=28, sex="M", race="white",
+            legal_first_name="John", legal_last_name="Doe",
+            ssn="900-65-4321",
+            dob=date(1994, 3, 10),
+            id_address=_addr(),
+        )
+        spouse.form_1098_ts = [Form1098T(
+            institution_name="UH Manoa",
+            institution_tin="99-7654321",
+            amounts_billed=5000,
+            student_ssn="900-65-4321",
+        )]
+        hh.members.append(spouse)
+        notes = generate_boilerplate(hh, "easy")
+        who = [n for n in notes if "Who took the classes" in n.question]
+        assert who[0].answer == "Spouse"
+
+    def test_education_positive_dependent(self) -> None:
+        hh = _single_adult()
+        hh.education_expenses = 12000
+        dep = Person(
+            person_id="p-03",
+            relationship=RelationshipType.BIOLOGICAL_CHILD,
+            age=19, sex="F", race="white",
+            legal_first_name="Sara", legal_last_name="Doe",
+            ssn="900-99-8888",
+            dob=date(2003, 7, 20),
+            id_address=_addr(),
+            is_dependent=True,
+            is_full_time_student=True,
+        )
+        dep.form_1098_ts = [Form1098T(
+            institution_name="Community College",
+            institution_tin="99-1112222",
+            amounts_billed=12000,
+            student_ssn="900-99-8888",
+        )]
+        hh.members.append(dep)
+        notes = generate_boilerplate(hh, "easy")
+        who = [n for n in notes if "Who took the classes" in n.question]
+        assert who[0].answer == "Sara Doe"
+
+    def test_education_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        edu = [n for n in notes if "educational classes" in n.question.lower()]
+        assert len(edu) == 1
+        assert edu[0].answer == "No"
+
+    def test_child_care_positive(self) -> None:
+        hh = _single_adult()
+        hh.child_care_expenses = 9500
+        notes = generate_boilerplate(hh, "easy")
+        care = [n for n in notes if "child or dependent care" in n.question.lower()]
+        assert care[0].answer == "Yes"
+        amt = [n for n in notes if "child care expenses" in n.question.lower()]
+        assert amt[0].answer == "$9,500"
+
+    def test_child_care_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        care = [n for n in notes if "child or dependent care" in n.question.lower()]
+        assert len(care) == 1
+        assert care[0].answer == "No"
+
+    def test_category_is_credits(self) -> None:
+        hh = _single_adult()
+        hh.education_expenses = 5000
+        hh.child_care_expenses = 8000
+        hh.members[0].form_1098_ts = [Form1098T(
+            institution_name="Test U",
+            institution_tin="99-0000000",
+            amounts_billed=5000,
+        )]
+        notes = generate_boilerplate(hh, "easy")
+        credit_notes = [n for n in notes if n.category == "credits"]
+        assert len(credit_notes) == 4  # edu yes + who + care yes + amount
+
+    def test_not_gated_by_difficulty(self) -> None:
+        hh = _single_adult()
+        hh.education_expenses = 10000
+        hh.child_care_expenses = 7000
+        hh.members[0].form_1098_ts = [Form1098T(
+            institution_name="Test U",
+            institution_tin="99-0000000",
+            amounts_billed=10000,
+        )]
+        for diff in ("easy", "medium", "hard"):
+            notes = generate_boilerplate(hh, diff)
+            credit_notes = [n for n in notes if n.category == "credits"]
+            assert len(credit_notes) == 4, f"Expected 4 credit notes at {diff}"
