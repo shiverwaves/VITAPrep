@@ -476,7 +476,7 @@ body {
 
 .f13c-marital-col1 { width: 200px; flex-shrink: 0; }
 .f13c-marital-col2 { flex: 1; display: flex; align-items: baseline; gap: 8px; }
-.f13c-marital-col3 { display: flex; align-items: baseline; gap: 0; }
+.f13c-marital-col3 { display: flex; align-items: baseline; gap: 0; min-width: 200px; }
 
 .f13c-marital-col3 label {
     min-width: 62px;
@@ -494,10 +494,13 @@ body {
     gap: 6px;
     font-size: 10px;
     font-weight: 400;
+    flex: 1;
+    white-space: nowrap;
 }
 
 .f13c-marital-sub input[type="text"] {
-    width: 120px;
+    flex: 1;
+    min-width: 60px;
 }
 
 /* ================================================================
