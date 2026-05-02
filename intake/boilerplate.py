@@ -19,7 +19,7 @@ Difficulty filtering (matching the old client_profile.py behavior):
 import logging
 from typing import List, Optional
 
-from generator.models import FilingStatus, Household, Person
+from generator.models import FilingStatus, Household, Person, RelationshipType
 from intake.analyzer.types import InterviewNote
 from training.form_fields import MAX_DEPENDENTS
 
@@ -74,6 +74,13 @@ def generate_boilerplate(
 
     if difficulty == "easy":
         notes.extend(_contact_notes(householder))
+
+    # Page 2-3 boilerplate: income and expenses (not gated by difficulty)
+    notes.extend(_wage_and_se_notes(household))
+    notes.extend(_passive_income_notes(household))
+    notes.extend(_schedule_a_notes(household))
+    notes.extend(_above_line_notes(household))
+    notes.extend(_education_and_care_notes(household))
 
     logger.info(
         "Generated %d boilerplate notes at difficulty=%s for household %s",
@@ -180,3 +187,402 @@ def _dependent_notes(dependents: List[Person]) -> List[InterviewNote]:
         ))
 
     return notes
+
+
+# =========================================================================
+# Page 2 — Income (Subset 1: Wage and self-employment)
+# =========================================================================
+
+
+def _wage_and_se_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Wages (W-2)
+    wage_members = [m for m in household.members if m.wage_income > 0
+                    and m.disability_income_source != "w2"]
+    if wage_members:
+        w2_count = sum(len(m.w2s) for m in wage_members)
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive wages as a part-time or full-time employee?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How many jobs?",
+            answer=str(w2_count),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive wages as a part-time or full-time employee?",
+            answer="No",
+        ))
+
+    # Self-employment (1099-NEC)
+    se_members = [m for m in household.members if m.self_employment_income > 0]
+    if se_members:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive self-employment payments?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="What kind of work?",
+            answer=se_members[0].occupation_title or "Self-employed",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive self-employment payments?",
+            answer="No",
+        ))
+
+    # Disability benefits (W-2 or 1099-R)
+    disability_members = [m for m in household.members
+                          if m.disability_income_source is not None]
+    if disability_members:
+        source = disability_members[0].disability_income_source
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive disability benefits?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="Disability income reported on which form?",
+            answer="W-2" if source == "w2" else "1099-R",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive disability benefits?",
+            answer="No",
+        ))
+
+    return notes
+
+
+# =========================================================================
+# Page 2 — Income (Subset 2: Passive income)
+# =========================================================================
+
+
+def _passive_income_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Retirement income (1099-R)
+    ret_members = [m for m in household.members if m.retirement_income > 0]
+    if ret_members:
+        total = sum(m.retirement_income for m in ret_members)
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive income from a retirement account, pension, or annuity?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How much retirement income, roughly?",
+            answer=f"${total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive income from a retirement account, pension, or annuity?",
+            answer="No",
+        ))
+
+    # Social Security (SSA-1099)
+    ss_members = [m for m in household.members if m.social_security_income > 0]
+    if ss_members:
+        total = sum(m.social_security_income for m in ss_members)
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive Social Security or Railroad Retirement benefits?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How much in Social Security benefits, roughly?",
+            answer=f"${total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive Social Security or Railroad Retirement benefits?",
+            answer="No",
+        ))
+
+    # Interest and dividends (1099-INT, 1099-DIV)
+    int_total = sum(m.interest_income for m in household.members)
+    div_total = sum(m.dividend_income for m in household.members)
+    inv_total = int_total + div_total
+    if inv_total > 0:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive any interest or dividend income?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How much in interest and dividends, roughly?",
+            answer=f"${inv_total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive any interest or dividend income?",
+            answer="No",
+        ))
+
+    # Other income (catch-all — permanent No pending generator expansion)
+    notes.append(InterviewNote(
+        category="income",
+        question="Did you receive any other money not already mentioned?",
+        answer="No",
+    ))
+
+    return notes
+
+
+# =========================================================================
+# Page 3 — Expenses (Subset 3: Schedule A items)
+# =========================================================================
+
+
+def _medical_bin_label(amount: int) -> str:
+    if amount < 500:
+        return "a few hundred dollars"
+    elif amount < 2000:
+        return "about a thousand dollars"
+    elif amount < 5000:
+        return "a few thousand dollars"
+    elif amount < 15000:
+        return "around ten thousand dollars"
+    else:
+        return f"${amount:,}"
+
+
+def _schedule_a_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Mortgage interest (Form 1098)
+    if household.mortgage_interest > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay mortgage interest on your home?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much mortgage interest, roughly?",
+            answer=f"${household.mortgage_interest:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay mortgage interest on your home?",
+            answer="No",
+        ))
+
+    # Taxes paid (state, local, property)
+    tax_total = household.state_income_tax + household.property_taxes
+    if tax_total > 0:
+        kinds = []
+        if household.state_income_tax > 0:
+            kinds.append("state income tax")
+        if household.property_taxes > 0:
+            kinds.append("property taxes")
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay state, local, or property taxes?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="What kinds of taxes?",
+            answer=", ".join(kinds),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay state, local, or property taxes?",
+            answer="No",
+        ))
+
+    # Medical expenses (always positive after always-generate change)
+    if household.medical_expenses > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you have medical, dental, or prescription expenses?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much in medical expenses, roughly?",
+            answer=_medical_bin_label(household.medical_expenses),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you have medical, dental, or prescription expenses?",
+            answer="No",
+        ))
+
+    # Charitable contributions
+    if household.charitable_contributions > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you make any charitable contributions?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much in charitable contributions, roughly?",
+            answer=f"${household.charitable_contributions:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you make any charitable contributions?",
+            answer="No",
+        ))
+
+    return notes
+
+
+# =========================================================================
+# Page 3 — Expenses (Subset 4: Above-the-line deductions)
+# =========================================================================
+
+
+def _above_line_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Student loan interest (Form 1098-E)
+    sl_total = sum(m.student_loan_interest for m in household.members)
+    if sl_total > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay student loan interest?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much student loan interest, roughly?",
+            answer=f"${sl_total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay student loan interest?",
+            answer="No",
+        ))
+
+    # IRA contributions
+    ira_members = [m for m in household.members if m.ira_contributions > 0]
+    if ira_members:
+        total = sum(m.ira_contributions for m in ira_members)
+        ira_type = ira_members[0].ira_type or "traditional"
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you contribute to a retirement account (IRA)?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Traditional or Roth?",
+            answer=ira_type.capitalize(),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you contribute to a retirement account (IRA)?",
+            answer="No",
+        ))
+
+    # Educator expenses
+    edu_total = sum(m.educator_expenses for m in household.members)
+    if edu_total > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay for school supplies as an educator?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much in educator expenses, roughly?",
+            answer=f"${edu_total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay for school supplies as an educator?",
+            answer="No",
+        ))
+
+    return notes
+
+
+# =========================================================================
+# Page 3 — Credits (Subset 5: Education and child care)
+# =========================================================================
+
+
+def _education_and_care_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Education expenses (Form 1098-T)
+    if household.education_expenses > 0:
+        recipient = _education_recipient(household)
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for educational classes (college, technical school, or job-related)?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="credits",
+            question="Who took the classes?",
+            answer=recipient,
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for educational classes (college, technical school, or job-related)?",
+            answer="No",
+        ))
+
+    # Child and dependent care
+    if household.child_care_expenses > 0:
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for child or dependent care?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="credits",
+            question="How much in child care expenses, roughly?",
+            answer=f"${household.child_care_expenses:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="credits",
+            question="Did you pay for child or dependent care?",
+            answer="No",
+        ))
+
+    return notes
+
+
+def _education_recipient(household: Household) -> str:
+    for m in household.members:
+        if m.form_1098_ts:
+            if m.relationship == RelationshipType.HOUSEHOLDER:
+                return "Primary filer"
+            elif m.relationship == RelationshipType.SPOUSE:
+                return "Spouse"
+            else:
+                name = f"{m.legal_first_name} {m.legal_last_name}".strip()
+                return name or "Dependent"
+    return "Primary filer"
