@@ -196,70 +196,74 @@ def _dependent_notes(dependents: List[Person]) -> List[InterviewNote]:
 
 def _wage_and_se_notes(household: Household) -> List[InterviewNote]:
     notes: List[InterviewNote] = []
+    householder = household.get_householder()
+    spouse = household.get_spouse()
+    filers = [f for f in (householder, spouse) if f is not None]
 
-    # Wages (W-2)
-    wage_members = [m for m in household.members if m.wage_income > 0
-                    and m.disability_income_source != "w2"]
-    if wage_members:
-        w2_count = sum(len(m.w2s) for m in wage_members)
-        notes.append(InterviewNote(
-            category="income",
-            question="Did you receive wages as a part-time or full-time employee?",
-            answer="Yes",
-        ))
-        notes.append(InterviewNote(
-            category="income",
-            question="How many jobs?",
-            answer=str(w2_count),
-        ))
-    else:
-        notes.append(InterviewNote(
-            category="income",
-            question="Did you receive wages as a part-time or full-time employee?",
-            answer="No",
-        ))
+    for filer in filers:
+        who = "you" if filer.relationship == RelationshipType.HOUSEHOLDER else "your spouse"
+        label = "You" if filer.relationship == RelationshipType.HOUSEHOLDER else "Spouse"
 
-    # Self-employment (1099-NEC)
-    se_members = [m for m in household.members if m.self_employment_income > 0]
-    if se_members:
-        notes.append(InterviewNote(
-            category="income",
-            question="Did you receive self-employment payments?",
-            answer="Yes",
-        ))
-        notes.append(InterviewNote(
-            category="income",
-            question="What kind of work?",
-            answer=se_members[0].occupation_title or "Self-employed",
-        ))
-    else:
-        notes.append(InterviewNote(
-            category="income",
-            question="Did you receive self-employment payments?",
-            answer="No",
-        ))
+        # Wages (W-2)
+        has_wages = (filer.wage_income > 0
+                     and filer.disability_income_source != "w2")
+        if has_wages:
+            w2_count = len(filer.w2s)
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Did {who} receive wages as an employee?",
+                answer="Yes",
+            ))
+            notes.append(InterviewNote(
+                category="income",
+                question=f"How many W-2s? ({label})",
+                answer=str(w2_count),
+            ))
+        else:
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Did {who} receive wages as an employee?",
+                answer="No",
+            ))
 
-    # Disability benefits (W-2 or 1099-R)
-    disability_members = [m for m in household.members
-                          if m.disability_income_source is not None]
-    if disability_members:
-        source = disability_members[0].disability_income_source
-        notes.append(InterviewNote(
-            category="income",
-            question="Did you receive disability benefits?",
-            answer="Yes",
-        ))
-        notes.append(InterviewNote(
-            category="income",
-            question="Disability income reported on which form?",
-            answer="W-2" if source == "w2" else "1099-R",
-        ))
-    else:
-        notes.append(InterviewNote(
-            category="income",
-            question="Did you receive disability benefits?",
-            answer="No",
-        ))
+        # Self-employment (1099-NEC)
+        if filer.self_employment_income > 0:
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Did {who} receive self-employment income?",
+                answer="Yes",
+            ))
+            notes.append(InterviewNote(
+                category="income",
+                question=f"What kind of work? ({label})",
+                answer=filer.occupation_title or "Self-employed",
+            ))
+        else:
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Did {who} receive self-employment income?",
+                answer="No",
+            ))
+
+        # Disability benefits (W-2 or 1099-R)
+        if filer.disability_income_source is not None:
+            source = filer.disability_income_source
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Did {who} receive disability benefits?",
+                answer="Yes",
+            ))
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Disability form? ({label})",
+                answer="W-2" if source == "w2" else "1099-R",
+            ))
+        else:
+            notes.append(InterviewNote(
+                category="income",
+                question=f"Did {who} receive disability benefits?",
+                answer="No",
+            ))
 
     return notes
 
@@ -351,18 +355,6 @@ def _passive_income_notes(household: Household) -> List[InterviewNote]:
 # =========================================================================
 
 
-def _medical_bin_label(amount: int) -> str:
-    if amount < 500:
-        return "a few hundred dollars"
-    elif amount < 2000:
-        return "about a thousand dollars"
-    elif amount < 5000:
-        return "a few thousand dollars"
-    elif amount < 15000:
-        return "around ten thousand dollars"
-    else:
-        return f"${amount:,}"
-
 
 def _schedule_a_notes(household: Household) -> List[InterviewNote]:
     notes: List[InterviewNote] = []
@@ -421,7 +413,7 @@ def _schedule_a_notes(household: Household) -> List[InterviewNote]:
         notes.append(InterviewNote(
             category="expenses",
             question="How much in medical expenses, roughly?",
-            answer=_medical_bin_label(household.medical_expenses),
+            answer=f"${household.medical_expenses:,}",
         ))
     else:
         notes.append(InterviewNote(

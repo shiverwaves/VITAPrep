@@ -420,14 +420,16 @@ class TestPassiveIncomeNotes:
 
 class TestWageAndSENotes:
 
-    def test_no_wage_income_negative(self) -> None:
+    def test_single_no_wages(self) -> None:
         hh = _single_adult()
         hh.members[0].wage_income = 0
         notes = generate_boilerplate(hh, "easy")
-        wage = [n for n in notes if "wages" in n.question.lower()]
+        wage = [n for n in notes if "receive wages" in n.question.lower()]
+        assert len(wage) == 1
+        assert "you" in wage[0].question.lower()
         assert wage[0].answer == "No"
 
-    def test_wage_income_positive_with_job_count(self) -> None:
+    def test_single_with_w2s(self) -> None:
         from generator.models import W2
         hh = _single_adult()
         hh.members[0].wage_income = 40000
@@ -442,33 +444,52 @@ class TestWageAndSENotes:
                state_wages=15000, state_tax=400),
         ]
         notes = generate_boilerplate(hh, "easy")
-        wage = [n for n in notes if "wages" in n.question.lower()]
+        wage = [n for n in notes if "receive wages" in n.question.lower()]
         assert wage[0].answer == "Yes"
-        jobs = [n for n in notes if "How many jobs" in n.question]
-        assert jobs[0].answer == "2"
+        w2s = [n for n in notes if "How many W-2s" in n.question]
+        assert w2s[0].answer == "2"
+
+    def test_married_both_employed(self) -> None:
+        from generator.models import W2
+        hh = _married_with_kids()
+        hh.members[0].w2s = [
+            W2(wages=55000, federal_tax_withheld=6000,
+               social_security_wages=55000, social_security_tax=3410,
+               medicare_wages=55000, medicare_tax=797, state="HI",
+               state_wages=55000, state_tax=2000),
+        ]
+        hh.members[1].w2s = [
+            W2(wages=48000, federal_tax_withheld=5000,
+               social_security_wages=48000, social_security_tax=2976,
+               medicare_wages=48000, medicare_tax=696, state="HI",
+               state_wages=48000, state_tax=1700),
+        ]
+        notes = generate_boilerplate(hh, "easy")
+        wage = [n for n in notes if "receive wages" in n.question.lower()]
+        assert len(wage) == 2
+        assert "you" in wage[0].question
+        assert wage[0].answer == "Yes"
+        assert "spouse" in wage[1].question
+        assert wage[1].answer == "Yes"
+
+    def test_married_one_employed(self) -> None:
+        hh = _married_with_kids()
+        hh.members[1].wage_income = 0
+        notes = generate_boilerplate(hh, "easy")
+        wage = [n for n in notes if "receive wages" in n.question.lower()]
+        assert len(wage) == 2
+        assert wage[0].answer == "Yes"
+        assert wage[1].answer == "No"
 
     def test_disability_w2_not_counted_as_wages(self) -> None:
-        from generator.models import W2
         hh = _single_adult()
         hh.members[0].wage_income = 20000
         hh.members[0].disability_income_source = "w2"
-        hh.members[0].w2s = [
-            W2(wages=20000, federal_tax_withheld=2000,
-               social_security_wages=20000, social_security_tax=1240,
-               medicare_wages=20000, medicare_tax=290, state="HI",
-               state_wages=20000, state_tax=500),
-        ]
         notes = generate_boilerplate(hh, "easy")
-        wage = [n for n in notes if "wages" in n.question.lower()]
+        wage = [n for n in notes if "receive wages" in n.question.lower()]
         assert wage[0].answer == "No"
 
-    def test_no_se_income_negative(self) -> None:
-        hh = _single_adult()
-        notes = generate_boilerplate(hh, "easy")
-        se = [n for n in notes if "self-employment" in n.question.lower()]
-        assert se[0].answer == "No"
-
-    def test_se_income_positive_with_occupation(self) -> None:
+    def test_se_positive_with_occupation(self) -> None:
         hh = _single_adult()
         hh.members[0].self_employment_income = 30000
         hh.members[0].occupation_title = "Carpenter"
@@ -478,7 +499,13 @@ class TestWageAndSENotes:
         occ = [n for n in notes if "What kind of work" in n.question]
         assert occ[0].answer == "Carpenter"
 
-    def test_disability_positive(self) -> None:
+    def test_se_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        se = [n for n in notes if "self-employment" in n.question.lower()]
+        assert se[0].answer == "No"
+
+    def test_disability_w2(self) -> None:
         hh = _single_adult()
         hh.members[0].disability_income_source = "w2"
         notes = generate_boilerplate(hh, "easy")
@@ -494,11 +521,18 @@ class TestWageAndSENotes:
         assert dis[0].answer == "Yes"
         assert dis[1].answer == "1099-R"
 
-    def test_no_disability_negative(self) -> None:
+    def test_no_disability(self) -> None:
         hh = _single_adult()
         notes = generate_boilerplate(hh, "easy")
         dis = [n for n in notes if "disability" in n.question.lower()]
         assert dis[0].answer == "No"
+
+    def test_per_filer_notes_not_gated_by_difficulty(self) -> None:
+        hh = _married_with_kids()
+        for diff in ("easy", "medium", "hard"):
+            notes = generate_boilerplate(hh, diff)
+            wage = [n for n in notes if "receive wages" in n.question.lower()]
+            assert len(wage) == 2, f"Expected 2 wage notes at {diff}"
 
 
 # =========================================================================
@@ -542,29 +576,15 @@ class TestScheduleANotes:
         tax = [n for n in notes if "state, local, or property" in n.question]
         assert tax[0].answer == "No"
 
-    def test_medical_bin_small(self) -> None:
+    def test_medical_exact_amount(self) -> None:
         hh = _single_adult()
         hh.medical_expenses = 350
         notes = generate_boilerplate(hh, "easy")
         med = [n for n in notes if "medical" in n.question.lower()]
         assert med[0].answer == "Yes"
-        assert med[1].answer == "a few hundred dollars"
+        assert med[1].answer == "$350"
 
-    def test_medical_bin_medium(self) -> None:
-        hh = _single_adult()
-        hh.medical_expenses = 3500
-        notes = generate_boilerplate(hh, "easy")
-        med = [n for n in notes if "medical" in n.question.lower()]
-        assert med[1].answer == "a few thousand dollars"
-
-    def test_medical_bin_large(self) -> None:
-        hh = _single_adult()
-        hh.medical_expenses = 8000
-        notes = generate_boilerplate(hh, "easy")
-        med = [n for n in notes if "medical" in n.question.lower()]
-        assert med[1].answer == "around ten thousand dollars"
-
-    def test_medical_bin_very_large(self) -> None:
+    def test_medical_exact_amount_large(self) -> None:
         hh = _single_adult()
         hh.medical_expenses = 25000
         notes = generate_boilerplate(hh, "easy")
