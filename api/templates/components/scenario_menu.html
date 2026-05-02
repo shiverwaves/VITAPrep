@@ -1,0 +1,29 @@
+<!-- Scenario dropdown menu — triggered from the titlebar center -->
+<div class="dropdown__backdrop" id="scenario-backdrop"></div>
+<nav class="dropdown dropdown--scenario" id="scenario-menu" role="menu">
+    <div class="dropdown__section-label">Scenario</div>
+    <a class="dropdown__item" href="/scenarios/new" role="menuitem">
+        Restart
+    </a>
+    <button class="dropdown__item" role="menuitem" disabled>
+        Abandon
+    </button>
+    <div class="dropdown__separator"></div>
+    <button class="dropdown__item" role="menuitem" id="menu-show-seed">
+        Show seed
+    </button>
+    <a class="dropdown__item" href="/scenarios/{{ scenario_id }}/debug/notes" target="_blank" role="menuitem">
+        Show interview notes
+    </a>
+    <div class="dropdown__separator"></div>
+    <div class="dropdown__section-label">Mode</div>
+    <button class="dropdown__item" role="menuitem" disabled>
+        Tutorial
+    </button>
+    <button class="dropdown__item dropdown__item--active" role="menuitem">
+        Practice
+    </button>
+    <button class="dropdown__item" role="menuitem" disabled>
+        Solo
+    </button>
+</nav>

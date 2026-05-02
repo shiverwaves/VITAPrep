@@ -1,14 +1,15 @@
-<!-- Titlebar — shared across Home and Encounter screens -->
+<!-- Titlebar — shared across Home and Encounter screens.
+     Set `titlebar_center_html` and `titlebar_right_html` before including. -->
 <header class="titlebar">
     <div class="titlebar__left">
         <button class="iconbtn" id="hamburger-btn" aria-label="Menu">&#9776;</button>
         <span class="titlebar__wordmark">VITAPrep</span>
     </div>
     <div class="titlebar__center">
-        {% block titlebar_center %}{% endblock %}
+        {{ titlebar_center_html|default("", true) }}
     </div>
     <div class="titlebar__right">
-        {% block titlebar_right %}{% endblock %}
+        {{ titlebar_right_html|default("", true) }}
     </div>
 </header>
 {% include "components/hamburger.html" %}
