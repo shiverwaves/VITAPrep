@@ -75,6 +75,9 @@ def generate_boilerplate(
     if difficulty == "easy":
         notes.extend(_contact_notes(householder))
 
+    # Page 2-3 boilerplate: income and expenses (not gated by difficulty)
+    notes.extend(_passive_income_notes(household))
+
     logger.info(
         "Generated %d boilerplate notes at difficulty=%s for household %s",
         len(notes), difficulty, household.household_id,
@@ -178,5 +181,87 @@ def _dependent_notes(dependents: List[Person]) -> List[InterviewNote]:
             question=f"Is {name} a U.S. citizen?",
             answer="Yes",
         ))
+
+    return notes
+
+
+# =========================================================================
+# Page 2 — Income (Subset 2: Passive income)
+# =========================================================================
+
+
+def _passive_income_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Retirement income (1099-R)
+    ret_members = [m for m in household.members if m.retirement_income > 0]
+    if ret_members:
+        total = sum(m.retirement_income for m in ret_members)
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive income from a retirement account, pension, or annuity?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How much retirement income, roughly?",
+            answer=f"${total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive income from a retirement account, pension, or annuity?",
+            answer="No",
+        ))
+
+    # Social Security (SSA-1099)
+    ss_members = [m for m in household.members if m.social_security_income > 0]
+    if ss_members:
+        total = sum(m.social_security_income for m in ss_members)
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive Social Security or Railroad Retirement benefits?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How much in Social Security benefits, roughly?",
+            answer=f"${total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive Social Security or Railroad Retirement benefits?",
+            answer="No",
+        ))
+
+    # Interest and dividends (1099-INT, 1099-DIV)
+    int_total = sum(m.interest_income for m in household.members)
+    div_total = sum(m.dividend_income for m in household.members)
+    inv_total = int_total + div_total
+    if inv_total > 0:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive any interest or dividend income?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How much in interest and dividends, roughly?",
+            answer=f"${inv_total:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive any interest or dividend income?",
+            answer="No",
+        ))
+
+    # Other income (catch-all — permanent No pending generator expansion)
+    notes.append(InterviewNote(
+        category="income",
+        question="Did you receive any other money not already mentioned?",
+        answer="No",
+    ))
 
     return notes

@@ -255,10 +255,11 @@ class TestDifficultyFiltering:
         dep = [n for n in notes if n.category == "dependent"]
         assert len(dep) > 0
 
-    def test_hard_only_citizenship_and_filing(self) -> None:
+    def test_hard_only_citizenship_filing_and_income(self) -> None:
         notes = generate_boilerplate(_single_adult(), "hard")
         categories = {n.category for n in notes}
-        assert categories <= {"citizenship", "filing"}
+        # Hard drops employment, dependents, contact — keeps citizenship, filing, income
+        assert categories <= {"citizenship", "filing", "income"}
 
     def test_hard_no_employment(self) -> None:
         notes = generate_boilerplate(_single_adult(), "hard")
@@ -331,3 +332,70 @@ class TestEdgeCases:
         notes = generate_boilerplate(hh, "easy")
         dep = [n for n in notes if "claim you" in n.question]
         assert dep[0].answer == "Yes"
+
+
+# =========================================================================
+# 6. Passive income notes (Subset 2)
+# =========================================================================
+
+
+class TestPassiveIncomeNotes:
+
+    def test_no_passive_income_all_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        income_notes = [n for n in notes if n.category == "income"]
+        assert len(income_notes) == 4  # retirement, SS, interest/div, other
+        assert all(n.answer == "No" for n in income_notes)
+
+    def test_retirement_income_positive(self) -> None:
+        hh = _single_adult()
+        hh.members[0].retirement_income = 15000
+        notes = generate_boilerplate(hh, "easy")
+        ret = [n for n in notes if "retirement" in n.question]
+        assert ret[0].answer == "Yes"
+        assert ret[1].answer == "$15,000"
+
+    def test_social_security_positive(self) -> None:
+        hh = _single_adult()
+        hh.members[0].social_security_income = 18000
+        notes = generate_boilerplate(hh, "easy")
+        ss = [n for n in notes if "Social Security" in n.question]
+        assert ss[0].answer == "Yes"
+        assert ss[1].answer == "$18,000"
+
+    def test_interest_and_dividends_positive(self) -> None:
+        hh = _single_adult()
+        hh.members[0].interest_income = 500
+        hh.members[0].dividend_income = 200
+        notes = generate_boilerplate(hh, "easy")
+        inv = [n for n in notes if "interest" in n.question and "dividend" in n.question]
+        assert len(inv) == 2
+        assert inv[0].answer == "Yes"
+        assert inv[1].answer == "$700"
+
+    def test_other_income_always_no(self) -> None:
+        hh = _single_adult()
+        hh.members[0].retirement_income = 10000
+        hh.members[0].social_security_income = 5000
+        notes = generate_boilerplate(hh, "easy")
+        other = [n for n in notes if "other money" in n.question]
+        assert len(other) == 1
+        assert other[0].answer == "No"
+
+    def test_multiple_members_aggregated(self) -> None:
+        hh = _married_with_kids()
+        hh.members[0].retirement_income = 10000
+        hh.members[1].retirement_income = 8000
+        notes = generate_boilerplate(hh, "easy")
+        ret = [n for n in notes if "retirement" in n.question]
+        assert ret[0].answer == "Yes"
+        assert ret[1].answer == "$18,000"
+
+    def test_passive_income_not_gated_by_difficulty(self) -> None:
+        hh = _single_adult()
+        hh.members[0].social_security_income = 12000
+        for diff in ("easy", "medium", "hard"):
+            notes = generate_boilerplate(hh, diff)
+            ss = [n for n in notes if "Social Security" in n.question]
+            assert ss[0].answer == "Yes"
