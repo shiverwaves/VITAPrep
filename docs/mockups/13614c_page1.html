@@ -476,7 +476,10 @@ body {
 
 .f13c-marital-col1 { width: 200px; flex-shrink: 0; }
 .f13c-marital-col2 { flex: 1; display: flex; align-items: baseline; gap: 8px; }
-.f13c-marital-col3 { display: flex; align-items: baseline; gap: 0; min-width: 200px; }
+/* Width 186px = 3 × 62px slots, matching the You/Spouse/No group in the
+   Election row above so Yes (slot 1) aligns under "You" and No (slot 2)
+   aligns under "Spouse". Slot 3 stays empty. */
+.f13c-marital-col3 { display: flex; align-items: baseline; gap: 0; width: 186px; flex-shrink: 0; }
 
 .f13c-marital-col3 label {
     min-width: 62px;
@@ -511,47 +514,41 @@ body {
     border-bottom: 0.5px solid #000;
 }
 
-.f13c-dep-intro {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    border-bottom: 0.5px solid #888;
-}
-
-.f13c-dep-intro-left {
-    padding: 3px 8px;
-    font-size: 10.5px;
-    font-weight: 700;
-    line-height: 1.3;
-}
-
-.f13c-dep-intro-mid {
-    padding: 3px 12px;
-    font-size: 10px;
-    font-weight: 400;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-left: 0.5px solid #888;
-}
-
-.f13c-dep-intro-right {
-    padding: 3px 8px;
-    font-size: 9px;
-    font-weight: 700;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    border-left: 0.5px solid #888;
-    min-width: 280px;
-    background: #e8e6df;
-}
-
 .f13c-dep-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 9px;
+}
+
+/* Intro banner row — lives inside the table so the three segments
+   align to the 5+5+5 column groups (client name cols / Y/N cols / volunteer cols). */
+.f13c-dep-table th.f13c-dep-intro--left {
+    text-align: left;
+    font-weight: 700;
+    font-size: 10.5px;
+    padding: 3px 8px;
+    line-height: 1.3;
+    background: #fff;
+    border: 0.5px solid #888;
+}
+
+.f13c-dep-table th.f13c-dep-intro--mid {
+    text-align: center;
+    font-weight: 400;
+    font-size: 10px;
+    padding: 3px 8px;
+    background: #fff;
+    border: 0.5px solid #888;
+}
+
+.f13c-dep-table th.f13c-dep-intro--right {
+    text-align: center;
+    font-weight: 700;
+    font-size: 9px;
+    padding: 3px 8px;
+    background: #e8e6df;
+    border: 0.5px solid #888;
+    line-height: 1.25;
 }
 
 .f13c-dep-table th {
@@ -947,20 +944,19 @@ body {
      Section 11: Dependents grid
      ============================================================ -->
 <div class="f13c-dependents">
-    <div class="f13c-dep-intro">
-        <div class="f13c-dep-intro-left">
-            List the names below of everyone who lived with you last year (except your
-            spouse) <strong>AND</strong> anyone you supported but did not live with you last year.
-        </div>
-        <div class="f13c-dep-intro-mid">Answer Yes or No (Y/N)</div>
-        <div class="f13c-dep-intro-right">
-            To be completed by certified volunteer<br>
-            (Yes, No, or N/A)
-        </div>
-    </div>
-
     <table class="f13c-dep-table">
         <thead>
+            <!-- Intro banner row: 5 cols / 5 cols / 5 cols -->
+            <tr>
+                <th class="f13c-dep-intro--left" colspan="5">
+                    List the names below of everyone who lived with you last year (except your
+                    spouse) <strong>AND</strong> anyone you supported but did not live with you last year.
+                </th>
+                <th class="f13c-dep-intro--mid" colspan="5">Answer Yes or No (Y/N)</th>
+                <th class="f13c-dep-intro--right" colspan="5">
+                    To be completed by certified volunteer<br>(Yes, No, or N/A)
+                </th>
+            </tr>
             <tr>
                 <!-- Client columns -->
                 <th class="f13c-dep-th--client" style="min-width:140px;">Name (first, last)</th>
@@ -979,10 +975,6 @@ body {
                 <th class="f13c-dep-th--vol" style="width:50px;">This person had less than $5,200 of income</th>
                 <th class="f13c-dep-th--vol" style="width:55px;">Taxpayer(s) provided more than 50% of support for this person</th>
                 <th class="f13c-dep-th--vol" style="width:55px;">Taxpayer(s) paid more than half the cost of maintaining a home for this person</th>
-            </tr>
-            <tr>
-                <th class="f13c-dep-th--client" colspan="10" style="text-align:center; font-size:8.5px; font-weight:400;">Answer Yes or No (Y/N)</th>
-                <th class="f13c-dep-th--vol" colspan="5" style="text-align:center; font-size:8.5px; font-weight:400;">(Yes, No, or N/A)</th>
             </tr>
         </thead>
         <tbody>
