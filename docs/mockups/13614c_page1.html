@@ -384,36 +384,27 @@ body {
    Section 8: Language preference
    ================================================================ */
 
-.f13c-lang-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 3px 8px;
-    border-bottom: 0.5px solid #000;
-    font-size: 10.5px;
-    gap: 8px;
-}
-
-.f13c-lang-row .f13c-lang-q {
-    flex: 1;
-}
-
-.f13c-lang-sub {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 2px 8px;
+.f13c-lang-block {
     border-bottom: 0.5px solid #000;
     font-size: 10.5px;
 }
 
-.f13c-lang-sub .f13c-label {
-    display: inline;
-    margin-right: 6px;
+.f13c-lang-line1 {
+    display: flex;
+    align-items: center;
+    padding: 3px 8px 0;
+    gap: 8px;
 }
 
-.f13c-lang-sub input[type="text"] {
+.f13c-lang-line1 .f13c-lang-q {
     flex: 1;
+}
+
+.f13c-lang-line2 {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px 3px;
+    gap: 6px;
 }
 
 /* ================================================================
@@ -843,17 +834,19 @@ body {
 <!-- ============================================================
      Section 8: Language preference
      ============================================================ -->
-<div class="f13c-lang-row">
-    <span class="f13c-lang-q">Would you like to receive written communications from the IRS in a language other than English</span>
-    <div class="f13c-yn-group">
-        <label><input type="checkbox" name="lang_pref_you"> You</label>
-        <label><input type="checkbox" name="lang_pref_spouse"> Spouse</label>
-        <label><input type="checkbox" name="lang_pref_no" checked> No</label>
+<div class="f13c-lang-block">
+    <div class="f13c-lang-line1">
+        <span class="f13c-lang-q">Would you like to receive written communications from the IRS in a language other than English</span>
+        <div class="f13c-yn-group">
+            <label><input type="checkbox" name="lang_pref_you"> You</label>
+            <label><input type="checkbox" name="lang_pref_spouse"> Spouse</label>
+            <label><input type="checkbox" name="lang_pref_no" checked> No</label>
+        </div>
     </div>
-</div>
-<div class="f13c-lang-sub">
-    <span class="f13c-label">What language</span>
-    <input type="text" name="lang_pref_language" value="">
+    <div class="f13c-lang-line2">
+        <span class="f13c-label">What language</span>
+        <input type="text" name="lang_pref_language" value="" style="flex:1;">
+    </div>
 </div>
 
 <!-- ============================================================
