@@ -606,6 +606,7 @@ th {{ background: #f0f4f8; }}
 {"<h2>Income Documents</h2><ul>" + "".join(income_doc_links) + "</ul>" if income_doc_links else ""}
 {"<h2>Expense Documents</h2><ul>" + "".join(expense_doc_links) + "</ul>" if expense_doc_links else ""}
 {facts_html}
+<p style="margin-top:8px"><a href="/scenarios/{scenario_id}/debug/notes" target="_blank">View interview notes debug panel &rarr;</a></p>
 <h2>Encounter Form Sections</h2>
 <div class="form-sections">
     <a class="form-card" href="/scenarios/{scenario_id}/form">
@@ -621,6 +622,84 @@ th {{ background: #f0f4f8; }}
         {_section_badge("expenses")}
     </a>
 </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+# =========================================================================
+# HTML: interview notes debug panel
+# =========================================================================
+
+@router.get(
+    "/scenarios/{scenario_id}/debug/notes",
+    response_class=HTMLResponse,
+)
+async def page_debug_notes(
+    request: Request,
+    scenario_id: str,
+) -> HTMLResponse:
+    """Debug view: raw interview notes table for ground-truth inspection."""
+    store = request.app.state.store
+    scenario = store.get_scenario(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    notes = scenario.interview_notes or []
+
+    rows = ""
+    for n in notes:
+        slot = n.get("source_slot", "") or ""
+        rows += (
+            f"<tr>"
+            f"<td>{n['category']}</td>"
+            f"<td>{n['question']}</td>"
+            f"<td><strong>{n['answer']}</strong></td>"
+            f"<td class=\"slot\">{slot}</td>"
+            f"</tr>\n"
+        )
+
+    empty_msg = "" if notes else '<p class="empty">No interview notes for this scenario.</p>'
+
+    html = f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Interview Notes — Scenario {scenario_id[:12]}</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 20px; }}
+h1 {{ color: #1a3a5c; font-size: 20px; }}
+.meta {{ font-size: 13px; color: #666; margin-bottom: 16px; }}
+.meta span {{ margin-right: 20px; }}
+.back-link {{ display: inline-block; margin-bottom: 16px; color: #2c5f8a; }}
+table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
+th {{ background: #f0f4f8; font-size: 11px; text-transform: uppercase; padding: 8px 10px;
+      text-align: left; border: 1px solid #ddd; }}
+td {{ border: 1px solid #ddd; padding: 6px 10px; font-size: 13px; }}
+td.slot {{ font-size: 11px; color: #999; font-family: monospace; }}
+.empty {{ color: #999; font-style: italic; }}
+.count {{ font-size: 13px; color: #666; margin-bottom: 8px; }}
+</style>
+</head>
+<body>
+<a class="back-link" href="/scenarios/{scenario_id}">&larr; Back to scenario</a>
+<h1>Interview Notes — Debug View</h1>
+<div class="meta">
+    <span><strong>Scenario:</strong> {scenario_id[:12]}</span>
+    <span><strong>Mode:</strong> {scenario.mode}</span>
+    <span><strong>Difficulty:</strong> {scenario.difficulty}</span>
+</div>
+<p class="count">{len(notes)} notes</p>
+{empty_msg}
+<table>
+<thead>
+<tr><th>Category</th><th>Question</th><th>Answer</th><th>Source Slot</th></tr>
+</thead>
+<tbody>
+{rows}
+</tbody>
+</table>
 </body>
 </html>"""
     return HTMLResponse(content=html)
