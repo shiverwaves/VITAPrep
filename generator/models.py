@@ -371,6 +371,7 @@ class Person:
     student_loan_interest: int = 0
     educator_expenses: int = 0
     ira_contributions: int = 0
+    ira_type: Optional[str] = None  # "traditional", "roth", or "both"
 
     # === Expense Documents (populated by expenses.py — Sprint 12) ===
     form_1098s: List[Form1098] = field(default_factory=list)
@@ -452,6 +453,7 @@ class Person:
             "student_loan_interest": self.student_loan_interest,
             "educator_expenses": self.educator_expenses,
             "ira_contributions": self.ira_contributions,
+            "ira_type": self.ira_type,
             "form_1098s": [f.to_dict() for f in self.form_1098s],
             "form_1098_es": [f.to_dict() for f in self.form_1098_es],
             "form_1098_ts": [f.to_dict() for f in self.form_1098_ts],

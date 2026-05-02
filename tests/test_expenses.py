@@ -360,6 +360,47 @@ class TestAboveLine:
             amount = gen._ira_contributions(p)
             assert amount <= ira_contribution_limit(35, 2022)
 
+    def test_ira_type_set_when_contributions_nonzero(self) -> None:
+        gen = ExpenseGenerator(_empty_distributions())
+        found = False
+        for i in range(100):
+            np.random.seed(i)
+            p = _make_person(age=40, wage_income=70000)
+            amount = gen._ira_contributions(p)
+            if amount > 0:
+                assert p.ira_type in ("traditional", "roth", "both")
+                found = True
+                break
+        assert found
+
+    def test_ira_type_none_when_no_contributions(self) -> None:
+        gen = ExpenseGenerator(_empty_distributions())
+        p = _make_person(employment_status=EmploymentStatus.UNEMPLOYED.value)
+        gen._ira_contributions(p)
+        assert p.ira_type is None
+
+    def test_ira_type_income_weighting(self) -> None:
+        gen = ExpenseGenerator(_empty_distributions())
+        low_types = []
+        high_types = []
+        for i in range(500):
+            np.random.seed(i)
+            p = _make_person(age=40, wage_income=30000)
+            if gen._ira_contributions(p) > 0:
+                low_types.append(p.ira_type)
+            np.random.seed(i + 1000)
+            p2 = _make_person(age=40, wage_income=120000)
+            if gen._ira_contributions(p2) > 0:
+                high_types.append(p2.ira_type)
+        # Low income should favor traditional
+        if low_types:
+            trad_low = sum(1 for t in low_types if t == "traditional") / len(low_types)
+            assert trad_low > 0.4
+        # High income should favor roth
+        if high_types:
+            roth_high = sum(1 for t in high_types if t == "roth") / len(high_types)
+            assert roth_high > 0.3
+
 
 # =========================================================================
 # Credit-related expenses
