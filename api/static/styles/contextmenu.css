@@ -1,0 +1,77 @@
+/* Right-click context menu for form fields */
+
+.contextmenu {
+    position: fixed;
+    z-index: 500;
+    min-width: 220px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-xs) 0;
+    display: none;
+}
+
+.contextmenu--open {
+    display: block;
+}
+
+.contextmenu__header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.contextmenu__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+}
+
+.contextmenu__item:hover {
+    background: #eef2f6;
+}
+
+.contextmenu__item--danger {
+    color: var(--color-error);
+}
+
+.contextmenu__item--danger:hover {
+    background: #fff0f0;
+}
+
+.contextmenu__shortcut {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin-left: var(--spacing-lg);
+}
+
+.contextmenu__separator {
+    height: 1px;
+    background: var(--color-border-light);
+    margin: var(--spacing-xs) 0;
+}
+
+/* Backdrop to close menu on outside click */
+.contextmenu__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 499;
+    display: none;
+}
+
+.contextmenu__backdrop--open {
+    display: block;
+}

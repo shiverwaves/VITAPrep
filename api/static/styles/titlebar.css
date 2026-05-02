@@ -1,0 +1,81 @@
+/* Titlebar — fixed 40px strip at the top of every screen */
+
+.titlebar {
+    display: flex;
+    align-items: center;
+    height: var(--titlebar-height);
+    background: var(--color-navy);
+    color: #fff;
+    padding: 0 var(--spacing-sm);
+    flex-shrink: 0;
+    z-index: 100;
+}
+
+.titlebar__left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.titlebar__wordmark {
+    font-size: var(--font-size-md);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    user-select: none;
+}
+
+.titlebar__center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.titlebar__scenario-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-sm);
+    color: #fff;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.titlebar__scenario-trigger:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.titlebar__right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+/* Status bar — fixed 28px strip at the bottom */
+
+.statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--statusbar-height);
+    background: var(--color-navy);
+    color: rgba(255, 255, 255, 0.75);
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-xs);
+    flex-shrink: 0;
+}
+
+.statusbar__left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+}
+
+.statusbar__right {
+    font-style: italic;
+    opacity: 0.7;
+}
