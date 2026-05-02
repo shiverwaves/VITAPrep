@@ -2,7 +2,7 @@
 
 > **Status:** Pre-implementation sketch. Vida is not in MVP scope. This document captures the design space discussed during architecture planning so the choices are recorded when implementation is eventually scheduled.
 >
-> **Companion documents:** Vida consumes [`SCENARIO_LIFECYCLE.md`](./SCENARIO_LIFECYCLE.md) (scenario state), [`CONCEPT_CATALOG.md`](./CONCEPT_CATALOG.md) (what concepts exist), and the predicate library in `tax_core` (the source of tax-law truth). Vida adds nothing to those layers; she surfaces what they already know.
+> **Companion documents:** Vida consumes [`SCENARIO_LIFECYCLE.md`](./SCENARIO_LIFECYCLE.md) (scenario state), [`CONCEPT_CATALOG.md`](./CONCEPT_CATALOG.md) (what concepts exist), [`INTERVIEW_NOTES_EXPANSION.md`](./INTERVIEW_NOTES_EXPANSION.md) (the boilerplate baseline procedure scripts walk over), and the predicate library in `tax_core` (the source of tax-law truth). Vida adds nothing to those layers; she surfaces what they already know.
 
 ---
 
@@ -28,7 +28,7 @@ This rule is non-negotiable. Violating it produces the failure mode where Vida c
 
 ---
 
-## Two jobs
+## What Vida actually does: two jobs, one workflow engine
 
 Vida's behavior decomposes into two distinct jobs that share infrastructure but differ in trigger.
 
@@ -36,7 +36,7 @@ Vida's behavior decomposes into two distinct jobs that share infrastructure but 
 
 Catches mistakes and omissions. Fires in response to player behavior: a stuck pause, a skipped field, a wrong submission, a too-fast click-through. The player is doing something; Vida intervenes when the something is wrong or about to be.
 
-Coach scripts are deterministic event handlers. Each script has a trigger predicate over player state and 3–6 response variants. Examples:
+Coach scripts are deterministic event handlers. Each script has a trigger predicate over player state and 3-6 response variants. Examples:
 
 - `intake_completeness_check` — fires when a section is submitted with required fields blank.
 - `document_reconciliation` — fires when a section is marked complete but a document in the pile wasn't referenced.
@@ -44,7 +44,7 @@ Coach scripts are deterministic event handlers. Each script has a trigger predic
 - `pacing_caution` — fires when a section is completed in under 30 seconds.
 - `dependent_residency_check` — fires when a child is claimed without residency being verified.
 
-A starter catalog of 8–12 scripts covers the common procedural failure modes. Catalog grows over time as new patterns surface.
+A starter catalog of 8-12 scripts covers the common procedural failure modes. Catalog grows over time as new patterns surface.
 
 ### Tutor (proactive)
 
@@ -52,19 +52,60 @@ Walks the player through the workflow step by step. Fires when the player explic
 
 Tutor logic is a procedure script — an ordered list of steps with completion checks. The current step is the first step whose completion check fails. Each step has Vida-voiced introduction text and stuck-text. The procedure script is stateless; player state determines current step.
 
-A first procedure script covers Form 13614-C intake end to end, roughly:
-
-1. Verify identity documents
-2. Confirm citizenship for all adults
-3. Establish marital status and filing status
-4. Identify dependents and run the qualifying tests
-5. Walk Part II income sources
-6. Walk Part III expenses and life events
-7. Final review
-
 Steps can express prerequisites ("compute_agi requires intake_complete, income_recorded, adjustments_recorded") so non-linear play still produces the right "what's next" answer — Vida always volunteers the first step whose prerequisites are met and whose completion check fails.
 
-A second procedure script for 1040 preparation lives in VITAPrep proper, the future product. Same architecture, different content.
+---
+
+## The workflow engine
+
+Coach and Tutor sit on top of the same primitive: a workflow engine that knows the procedure and tracks where the player is in it. The engine is the architectural foundation; coach and tutor are policies that consume it.
+
+### What the engine is
+
+A small piece of `learn` that maintains, per scenario:
+
+- Which procedure is active (Intake / Verify / Prep — see "Three loops, three procedures" below).
+- Which step is current (the first whose prerequisites are met and whose completion check fails).
+- Player state — fields filled, time elapsed, recent submissions, which coach scripts have fired this scenario.
+
+That's it. The engine doesn't render anything; it answers questions like "what's the next step?" and "is this step complete?" Coach scripts (which fire on triggers) and tutor scripts (which surface the current step) both read from it.
+
+### Why this is the right architectural primitive
+
+Workflow ordering is a **presentation concern, not a generation concern.** VITAPrep generates the same scenario data regardless of how the player will be guided through it. The workflow engine decides how to reveal it. Same scenario, three modes (tutorial / practice / solo), three reveal patterns — all sitting on top of one set of generated facts.
+
+The `category` field already on every interview note is the substrate: notes are grouped by category, categories map to procedure steps, steps have completion signals. The infrastructure for grouping and ordering is largely in place; the gap is the engine that walks it and the "what's next" logic that answers Vida's queries.
+
+### Three loops, three procedures
+
+VITAPrep supports three distinct gameplay loops. The workflow engine serves all three with the same machinery and different procedure-script content.
+
+**Intake loop (data entry and discovery).** Player receives a scenario, reads documents and interview notes, fills the form from blank. Procedure script: 13614-C intake, six steps (see below). Vida walks the player through identity -> filing status -> dependents -> income -> expenses -> credits.
+
+**Verify loop (peer review).** Player receives a scenario where the form is *already filled in* — possibly correctly, possibly with introduced errors, possibly clean. Their job is to audit. Procedure script: Quality Review, walking the form against documents and interview notes section by section, looking for three failure modes (form vs document, form vs interview, document vs interview). Mirrors the Quality Review role at a real VITA site, where a second volunteer reviews the prep before the return is filed. ~15% of Verify scenarios have no errors at all — the player must be willing to declare a return correct rather than always assuming something is wrong.
+
+**Prep loop (1040 preparation, future product).** Player computes the return from intake data. Procedure script: gather data -> AGI -> adjustments -> deductions -> tax -> credits -> payments -> refund. Lives in VITAPrep proper, not the current intake-focused product. Same workflow engine, different content.
+
+That all three loops use the same engine is the architectural reason to build the engine cleanly rather than as a one-off intake feature. Once it works for Intake, Verify is a content addition; once Verify works, Prep is the same.
+
+### The intake procedure (six steps)
+
+For the Intake loop specifically, the procedure script walks the 13614-C in this order. Each step has a clear input (interview-note category + corresponding documents), action (fill the relevant form section), and completion signal (that section graded correctly).
+
+1. **Identity & citizenship** — verify ID documents, confirm SSN, citizenship status. Inputs: `citizenship` and `contact` notes, SSN cards, IDs.
+2. **Filing status** — marital status, determine correct filing status. Inputs: `filing` notes.
+3. **Dependents** — qualifying child/relative tests, months in home, student status. Inputs: `dependent` notes, dependent SSN cards.
+4. **Income** — walk through each income type, match to documents. Inputs: `income` notes, W-2s, 1099-Rs, SSA-1099s, 1099-INTs, 1099-DIVs, 1099-NECs.
+5. **Expenses & deductions** — itemized vs standard, above-the-line deductions. Inputs: `expenses` notes, Form 1098s.
+6. **Credits & other events** — education credits, child care credit, prior-year items. Inputs: `expenses` notes (life-events portion).
+
+The procedure ends at step 6 with intake complete. It does not include "compute refund" — that's a Prep procedure step, in the Prep loop. It does not include "verify entries" as a final review — that's the *Verify procedure*, which is its own loop, not a step within Intake.
+
+### The Verify procedure (separate loop, separate procedure script)
+
+The Verify loop runs when the player is auditing a pre-filled form rather than filling one from blank. It walks the same six form sections in roughly the same order, but the action at each step differs: instead of "fill from interview + documents," the action is "compare form entry to interview, compare form entry to documents, flag any discrepancy or confirm correct." A Verify procedure script lives alongside the Intake script in `learn`, sharing all the same step structure and most of the completion checks but with audit-specific Vida-voiced text and audit-specific coach scripts (e.g., "you confirmed Part II without flagging anything — are you sure every line matches the interview?").
+
+The Verify-mode corruption strategy — what kinds of errors are introduced, at what frequency, how the audit submission is graded — is a separate design problem covered in the Verify Mode design (forthcoming). This document only specifies that the workflow engine is the same.
 
 ---
 
@@ -74,7 +115,7 @@ Three tiers of how Vida produces her words. MVP uses tiers 1 and 2 only.
 
 ### Tier 1: Canned variants
 
-Each coach script and procedure step has 3–6 prewritten lines covering different tones and situations. Picked round-robin or weighted-random to avoid repetition. Pure templates with `{player_name}`, `{client_name}`, etc. substituted. No AI.
+Each coach script and procedure step has 3-6 prewritten lines covering different tones and situations. Picked round-robin or weighted-random to avoid repetition. Pure templates with `{player_name}`, `{client_name}`, etc. substituted. No AI.
 
 This tier covers most of what Vida says. Cheap, debuggable, predictable.
 
@@ -104,9 +145,13 @@ Three modes controlling how aggressively Vida's scripts fire. Player-toggleable;
 
 Vida proactively walks the procedure. Procedure scripts run heavily; coach scripts can be quieter (less reactive nudging needed when she's actively guiding). Default for new players or unfamiliar form sections.
 
+Useful framing: tutorial mode is "step-by-step reveal" — Vida walks the player through one category at a time, and the next category isn't surfaced until the current one is complete. The form sections may all be visible, but Vida's attention (and her nudges) are scoped to the current step. Brand-new VITA volunteers who have never done a live intake benefit most from this.
+
 ### Practice
 
 Vida is silent unless asked or until something needs catching. Coach scripts fire on omissions and mistakes; procedure scripts available on demand if the player clicks "what should I do next?" The default mode for the bulk of play.
+
+Useful framing: practice mode is "all sections visible, all coach scripts active." The player owns the flow; Vida intervenes when they stall or err. Useful for volunteers who know the rules but lose track during a complex scenario.
 
 ### Solo
 
@@ -142,6 +187,16 @@ The following come up when discussing Vida and are deferred:
 - **Voice/audio.** Vida is text-only for MVP. Voice acting is an aesthetic choice, not an architecture decision.
 - **Spanish-language scripts.** The persona is bilingual-coded; whether the product actually supports Spanish UI is a localization question, separate from Vida's design.
 - **Vida-as-narrator-for-non-Vida content.** Tempting to make Vida the voice of system messages ("Scenario generated"), error states, etc. Don't. Keeps her contextual and prevents her from becoming wallpaper.
+- **Verify-mode corruption strategy.** What kinds of errors are introduced, at what frequency, how audit submissions are graded. The workflow engine serves the Verify loop the same way it serves Intake; the corruption-and-grading mechanics are a separate design surface.
+
+---
+
+## Prerequisites
+
+Two prerequisites before Vida implementation can usefully begin.
+
+1. **Interview-notes expansion through Subset 5.** The Intake procedure script's steps 4-6 (income, expenses, credits) walk the player through interview content that doesn't currently exist for Pages 2-3 of the 13614-C. Without that content, the procedure script walks through three empty steps in the middle. See [`INTERVIEW_NOTES_EXPANSION.md`](./INTERVIEW_NOTES_EXPANSION.md). Vida implementation can begin in parallel with later subsets but cannot complete before Subset 5 ships.
+2. **Restructure E complete.** The competence rating signal "grading accuracy on a concept" requires concept tagging from Restructure D, and concept-driven scenario selection requires the targeting from E. The earlier Vida sub-features (player state model, coach scripts, tutorial procedure script) can land before E; competence-driven mode defaulting cannot.
 
 ---
 
@@ -150,14 +205,17 @@ The following come up when discussing Vida and are deferred:
 The smallest viable Vida is smaller than it looks. The order:
 
 1. **Player state model.** Track which scenario, section, fields filled, time elapsed, recent submissions. Most of the value of an "AI tutor" is just *having* this state model — most existing tools don't.
-2. **Coach script framework.** Trigger-and-response infrastructure plus a starter catalog of 8–12 scripts. Covers reactive nudging.
-3. **Tier 1 + tier 2 response renderer.** The voicing layer that takes a script's chosen variant and renders it with substitutions.
-4. **Procedure script for 13614-C.** First proactive walkthrough, covering intake end to end.
-5. **Mode toggle.** Tutorial / practice / solo selector. Initially manual, no auto-defaulting.
-6. **Competence rating.** Per-concept and per-section. Begins driving auto-default for mode.
-7. **(Later) tier 3 AI inference.** Free-form Q&A. Only after 1–6 are stable and there's evidence the deterministic tiers are insufficient.
+2. **Workflow engine.** Procedure-script type system, current-step resolution, prerequisite handling. No content yet — the engine accepts a procedure script and answers "what's next." Initially serves the Intake procedure only.
+3. **Coach script framework.** Trigger-and-response infrastructure plus a starter catalog of 8-12 scripts. Covers reactive nudging.
+4. **Tier 1 + tier 2 response renderer.** The voicing layer that takes a script's chosen variant and renders it with substitutions.
+5. **Procedure script for 13614-C Intake.** First proactive walkthrough, six steps, covering intake end to end.
+6. **Mode toggle.** Tutorial / practice / solo selector. Initially manual, no auto-defaulting.
+7. **Procedure script for Verify loop.** Adds the Quality Review walkthrough using the same engine and similar step structure but audit-specific text and coach scripts. Depends on Verify-mode corruption strategy being designed (separate doc).
+8. **Competence rating.** Per-concept and per-section. Begins driving auto-default for mode.
+9. **(Later) Procedure script for 1040 Prep.** When VITAPrep proper exists. Same engine, new content.
+10. **(Later) Tier 3 AI inference.** Free-form Q&A. Only after 1-8 are stable and there's evidence the deterministic tiers are insufficient.
 
-Each step ships independently. Stopping after step 4 produces a usable coach + tutor with manual mode control. Adding 5 and 6 produces a system that adapts to player skill. Step 7 is decoration on top.
+Each step ships independently. Stopping after step 5 produces a usable coach + tutor with manual mode control for Intake. Adding 6 produces mode flexibility. Adding 7 closes the Verify-mode coaching gap. Adding 8 produces a system that adapts to player skill. Steps 9 and 10 are decoration on top.
 
 ---
 
@@ -183,5 +241,6 @@ Resolve when implementing.
 - Does Vida's coach mode interrupt the player or queue (silently log nudges and surface them at submission)?
 - What's the failure mode when no script matches? Default response, silence, or escalate to tier 3?
 - How are script catalog entries tested? Snapshot tests on rendered output, hand-review, both?
+- For Verify mode: does Vida coach the audit differently than the prep? (Probably yes — different failure modes to catch.)
 
 These are UX-design questions more than architecture questions. Defer to when the product is ready to be built.

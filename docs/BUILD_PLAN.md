@@ -652,42 +652,27 @@ Out-of-scope questions (tips, unemployment, alimony, rental, gambling, HSA, 1095
 
 ---
 
-## Future: Guided Workflow and Procedural Nudging
+## Future: Guided Workflow and Procedural Nudging (Vida)
 
-VITAPrep currently trains **tax knowledge** — can the student identify the correct filing status, apply the dependency test, match documents to form lines? But real VITA intake also requires **procedural knowledge** — knowing *what to do next* and in what order. A new volunteer who understands the earned income credit rules may still freeze at a live intake because they don't know whether to verify identity first or ask about dependents first.
+**Full design:** [`VIDA_DESIGN.md`](./VIDA_DESIGN.md)
 
-### The opportunity
+VITAPrep currently trains tax knowledge but not **procedural knowledge** — knowing what to do next and in what order during a live intake. Vida is the planned in-product coach/tutor that addresses this gap, surfacing workflow guidance without inventing tax-law facts.
 
-Interview notes already carry a `category` field (`citizenship`, `filing`, `dependent`, `income`, `expenses`, `address`, `contact`). These categories map naturally to the 13614-C's page-by-page structure, which is itself a recommended processing order:
+Vida's behavior decomposes into two jobs on a shared workflow engine:
 
-1. **Identity & citizenship** — verify ID documents, confirm SSN, citizenship status
-2. **Filing status** — marital status, determine correct filing status
-3. **Dependents** — qualifying child/relative tests, months in home, student status
-4. **Income** — walk through each income type, match to documents (W-2, 1099s, SSA-1099)
-5. **Expenses & deductions** — itemized vs standard, above-the-line deductions
-6. **Credits & other events** — education credits, child care credit, prior-year items
-7. **Review & complete** — verify entries, compute refund/balance due
+- **Coach (reactive):** Deterministic event handlers that fire on player mistakes and omissions — stuck pauses, skipped fields, wrong submissions, too-fast click-throughs. A starter catalog of 8–12 scripts covers the common procedural failure modes.
+- **Tutor (proactive):** Procedure scripts that walk the player through the intake step by step, firing on explicit request ("what do I do next?"), stalls, or tutorial mode. The six-step Intake procedure (identity → filing status → dependents → income → expenses → credits) maps directly to the interview-note `category` field already on every note.
 
-Each step has a clear input (category of interview notes + corresponding documents), a clear action (fill the relevant form section), and a clear completion signal (that section is graded correctly).
+The same workflow engine serves three gameplay loops — **Intake** (fill from blank), **Verify** (audit a pre-filled form), and **Prep** (compute the return) — with different procedure-script content for each.
 
-### What this enables
+Key design decisions documented in the full design:
 
-- **Step-by-step tutorial mode**: Reveal one category at a time. The student completes identity verification before seeing income questions. Teaches the procedure alongside the rules. Useful for brand-new VITA volunteers who have never done a live intake.
+- **Vida surfaces, never invents.** Every fact traces to a `tax_core` predicate, scenario state, or human-authored script. No AI-generated tax law.
+- **Three response tiers.** Tier 1 (canned variants) and Tier 2 (templates with structured content) cover MVP. Tier 3 (AI-generated free-form) is deferred.
+- **Three modes.** Tutorial (proactive walkthrough), Practice (silent unless asked or error), Solo (fully silent). Player-toggleable, eventually auto-defaulted by competence rating.
+- **Competence rating.** Per-concept Elo-style signal composing grading accuracy, coach-script firing rate, time-to-completion, and self-toggle history.
 
-- **Procedural nudging**: All sections visible, but the system highlights the recommended next action when the student stalls or works out of order. "You haven't verified the dependent's months in home yet — check the interview notes." Useful for volunteers who know the rules but lose track during a complex scenario.
-
-- **Scenario-specific workflow**: The workflow adapts to the scenario. A single filer with one W-2 has a short workflow; a head of household with three dependents, SE income, and itemized deductions has a long one. The category sequence is fixed but the *content* within each step is scenario-driven.
-
-### Design considerations
-
-- The workflow ordering is a **presentation concern**, not a generation concern. VITAPrep generates the same scenario data regardless. The workflow layer decides how to reveal it.
-- Categories already exist on interview notes. The infrastructure for grouping and ordering is mostly in place — the gap is the UI progression model and the "what's next" logic.
-- This could operate as a separate consumer of VITAPrep's scenario data. The scenario envelope (household, documents, interview notes, ground truth, concept tags) contains everything a workflow engine needs. The workflow engine adds sequencing, state tracking, and nudge logic on top.
-- The same approach extends to tax return preparation training (Form 1040 workflow), not just intake. The processing order for a return maps to form sections the same way intake maps to 13614-C pages.
-
-### Prerequisite from VITAPrep
-
-The main prerequisite is the **13614-C Pages 2–3 interview notes** sprint (above). Without income and expense interview notes, the workflow has gaps in steps 4-6. Once those notes exist, the category sequence covers the full intake procedure.
+Prerequisites: Interview-notes expansion through Subset 5 (income/expense interview content for procedure steps 4–6) and Restructure E (concept tagging for competence rating). Earlier Vida sub-features can land before E; competence-driven mode defaulting cannot.
 
 ---
 
