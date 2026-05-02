@@ -636,7 +636,7 @@ class Scenario:
     is created.
     """
     scenario_id: str = ""
-    mode: str = ""  # "intake", "verify", "crosscheck"
+    mode: str = ""  # "encounter", "verify", "crosscheck"
     difficulty: str = ""  # "easy", "medium", "hard"
     household: Optional[Household] = None
     injected_errors: List[InjectedError] = field(default_factory=list)

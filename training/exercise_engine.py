@@ -12,7 +12,7 @@ Documents are rendered on-demand by the API layer (HTML served directly
 to the browser), not pre-generated at scenario creation time.
 
 Modes:
-- "intake": Student gets source docs, fills blank 13614-C Part I
+- "encounter": Student gets source docs, fills blank 13614-C Part I
 - "verify": Student gets pre-filled 13614-C + source docs, finds discrepancies
 - "crosscheck": Student verifies 1040 against source docs (future)
 """
@@ -87,7 +87,7 @@ class ExerciseEngine:
 
     def generate_scenario(
         self,
-        mode: str = "intake",
+        mode: str = "encounter",
         difficulty: str = "easy",
         error_count: int = 3,
         pattern: Optional[str] = None,
@@ -102,11 +102,11 @@ class ExerciseEngine:
         scenario doesn't fire all requested concepts.
 
         Args:
-            mode: "intake" (fill blank form), "verify" (find errors),
+            mode: "encounter" (fill blank form), "verify" (find errors),
                 or "crosscheck" (future).
             difficulty: "easy", "medium", or "hard".
             error_count: Number of errors to inject (verify mode).
-                Ignored for intake mode.
+                Ignored for encounter mode.
             pattern: Specific household pattern or None for random.
             seed: Random seed for reproducibility.
             concepts: Optional list of concept names to target. When

@@ -57,7 +57,7 @@ async def get_modes() -> JSONResponse:
     """Return available exercise modes and their descriptions."""
     return JSONResponse(content={
         "modes": {
-            "intake": {
+            "encounter": {
                 "description": "Fill a blank 13614-C Part I from source documents",
                 "student_action": "Fill form fields",
             },

@@ -1,6 +1,6 @@
 """
 Scenario routes — generate exercises, serve documents as HTML,
-present interactive intake forms, and grade submissions server-side.
+present interactive encounter forms, and grade submissions server-side.
 
 Endpoints
 ---------
@@ -8,7 +8,7 @@ POST /api/v1/scenarios
     Generate a new scenario and redirect to the exercise page.
 
 GET  /scenarios/{scenario_id}
-    Exercise page: links to documents + interactive intake form.
+    Exercise page: links to documents + interactive encounter form.
 
 GET  /scenarios/{scenario_id}/documents/ssn-card/{person_id}
     Render an SSN card as HTML.
@@ -134,7 +134,7 @@ router = APIRouter()
 
 class GenerateRequest(BaseModel):
     """Request body for POST /api/v1/scenarios."""
-    mode: str = "intake"
+    mode: str = "encounter"
     difficulty: str = "easy"
     error_count: int = 3
     pattern: Optional[str] = None
@@ -365,7 +365,7 @@ legend {{ font-weight: bold; color: #1a3a5c; }}
 <form method="post" action="/scenarios/new">
     <label>Mode
         <select name="mode">
-            <option value="intake">Intake — fill blank form from documents</option>
+            <option value="encounter">Encounter — fill blank form from documents</option>
             <option value="verify">Verify — find errors in pre-filled form</option>
         </select>
     </label>
@@ -397,7 +397,7 @@ legend {{ font-weight: bold; color: #1a3a5c; }}
 @router.post("/scenarios/new")
 async def page_create_scenario(
     request: Request,
-    mode: str = Form("intake"),
+    mode: str = Form("encounter"),
     difficulty: str = Form("easy"),
     pattern: str = Form(""),
     concepts: Optional[List[str]] = Form(None),
@@ -606,11 +606,11 @@ th {{ background: #f0f4f8; }}
 {"<h2>Income Documents</h2><ul>" + "".join(income_doc_links) + "</ul>" if income_doc_links else ""}
 {"<h2>Expense Documents</h2><ul>" + "".join(expense_doc_links) + "</ul>" if expense_doc_links else ""}
 {facts_html}
-<h2>Intake Form Sections</h2>
+<h2>Encounter Form Sections</h2>
 <div class="form-sections">
     <a class="form-card" href="/scenarios/{scenario_id}/form">
         <span class="card-title">Part I — Personal Information</span>
-        {_section_badge("intake")}
+        {_section_badge("encounter")}
     </a>
     <a class="form-card" href="/scenarios/{scenario_id}/form/income">
         <span class="card-title">Part II — Income</span>
@@ -969,14 +969,14 @@ async def page_1098t(
 
 
 # =========================================================================
-# HTML: interactive intake form
+# HTML: interactive encounter form
 # =========================================================================
 
 @router.get(
     "/scenarios/{scenario_id}/form",
     response_class=HTMLResponse,
 )
-async def page_intake_form(
+async def page_encounter_form(
     request: Request,
     scenario_id: str,
 ) -> HTMLResponse:
@@ -994,7 +994,7 @@ async def page_intake_form(
         from training.form_populator import build_field_values
         prefill = build_field_values(hh)
 
-    html = _build_intake_form_html(scenario_id, scenario.mode, prefill)
+    html = _build_encounter_form_html(scenario_id, scenario.mode, prefill)
     return HTMLResponse(content=html)
 
 
@@ -1073,12 +1073,12 @@ async def page_submit(
                 })
         result = grader.grade_verification(flagged, scenario.injected_errors)
     else:
-        result = grader.grade_intake(
+        result = grader.grade_encounter(
             submission, scenario.ground_truth, fields=PART1_FIELDS,
         )
 
     # Save grade with section tag
-    store.save_grade(scenario_id, result, section="intake")
+    store.save_grade(scenario_id, result, section="encounter")
 
     logger.info(
         "Graded Part I for scenario %s: %d/%d (%.0f%%)",
@@ -1086,7 +1086,7 @@ async def page_submit(
     )
 
     html = _build_results_html(
-        scenario_id, scenario.mode, result, section="intake",
+        scenario_id, scenario.mode, result, section="encounter",
         concept_tags=scenario.concept_tags,
     )
     return HTMLResponse(content=html)
@@ -1122,7 +1122,7 @@ async def page_submit_income(
         if isinstance(val, str) and val.strip():
             submission[field_name] = val.strip()
 
-    result = grader.grade_intake(
+    result = grader.grade_encounter(
         submission, scenario.ground_truth, fields=PART2_FIELDS,
     )
 
@@ -1199,7 +1199,7 @@ async def page_submit_expenses(
         if isinstance(val, str) and val.strip():
             submission[field_name] = val.strip()
 
-    result = grader.grade_intake(
+    result = grader.grade_encounter(
         submission, scenario.ground_truth, fields=PART3_FIELDS,
     )
 
@@ -1245,7 +1245,7 @@ async def page_results(
         result = grades[-1]
 
     html = _build_results_html(
-        scenario_id, scenario.mode, result, section=section or "intake",
+        scenario_id, scenario.mode, result, section=section or "encounter",
         concept_tags=scenario.concept_tags,
     )
     return HTMLResponse(content=html)
@@ -1265,7 +1265,7 @@ def _find_person(scenario, person_id: str):
     return None
 
 
-def _build_intake_form_html(
+def _build_encounter_form_html(
     scenario_id: str,
     mode: str,
     prefill: Dict[str, str],
@@ -1274,8 +1274,8 @@ def _build_intake_form_html(
 
     Args:
         scenario_id: Scenario identifier.
-        mode: Exercise mode ("intake" or "verify").
-        prefill: Pre-filled field values (empty for intake mode).
+        mode: Exercise mode ("encounter" or "verify").
+        prefill: Pre-filled field values (empty for encounter mode).
 
     Returns:
         Complete HTML page string.
@@ -1317,14 +1317,14 @@ def _build_intake_form_html(
 </tr>
 """
 
-    mode_label = "Fill in the form from the source documents." if mode == "intake" else "Review the pre-filled form and correct any errors."
+    mode_label = "Fill in the form from the source documents." if mode == "encounter" else "Review the pre-filled form and correct any errors."
 
     return f"""\
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Intake Form — Scenario {scenario_id[:12]}</title>
+<title>Encounter Form — Scenario {scenario_id[:12]}</title>
 <style>
 body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }}
 h1 {{ color: #1a3a5c; font-size: 22px; }}
@@ -1453,8 +1453,8 @@ def _build_income_form_html(
 
     Args:
         scenario_id: Scenario identifier.
-        mode: Exercise mode ("intake" or "verify").
-        prefill: Pre-filled field values (empty for intake mode).
+        mode: Exercise mode ("encounter" or "verify").
+        prefill: Pre-filled field values (empty for encounter mode).
 
     Returns:
         Complete HTML page string.
@@ -1480,7 +1480,7 @@ def _build_income_form_html(
     mode_label = (
         "Using the income documents provided, check each income source "
         "that applies and enter the total amount."
-        if mode == "intake"
+        if mode == "encounter"
         else "Review the pre-filled income fields and correct any errors."
     )
 
@@ -1619,7 +1619,7 @@ def _build_expense_form_html(
         "Using the expense documents and client interview notes, check each "
         "expense that applies and enter the amounts. Then choose Standard or "
         "Itemized deduction."
-        if mode == "intake"
+        if mode == "encounter"
         else "Review the pre-filled expense fields and correct any errors."
     )
 
@@ -1709,7 +1709,7 @@ td {{ padding: 8px 12px; border-bottom: 1px solid #eee; }}
 
 
 def _build_results_html(
-    scenario_id: str, mode: str, result, section: str = "intake",
+    scenario_id: str, mode: str, result, section: str = "encounter",
     concept_tags: Optional[List[str]] = None,
 ) -> str:
     """Build the grading results HTML page.
@@ -1718,7 +1718,7 @@ def _build_results_html(
         scenario_id: Scenario identifier.
         mode: Exercise mode.
         result: GradingResult object.
-        section: Which form section ("intake" or "income").
+        section: Which form section ("encounter" or "income").
 
     Returns:
         Complete HTML page string.
@@ -1796,7 +1796,7 @@ def _build_results_html(
         )
 
     section_labels = {
-        "intake": "Part I — Personal Info",
+        "encounter": "Part I — Personal Info",
         "income": "Part II — Income",
         "expenses": "Part III — Expenses",
     }

@@ -339,13 +339,13 @@ def _build_expense_key(key: Dict[str, str], household: Household) -> None:
 class Grader:
     """Grades student submissions against scenario answer keys."""
 
-    def grade_intake(
+    def grade_encounter(
         self,
         submission: Dict[str, str],
         ground_truth: dict,
         fields: Optional[List[str]] = None,
     ) -> GradingResult:
-        """Grade a student's intake form fill (Mode 1).
+        """Grade a student's encounter form fill (Mode 1).
 
         Compares each submitted field against the pre-computed
         form_answers from GroundTruth.

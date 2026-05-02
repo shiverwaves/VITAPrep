@@ -105,7 +105,7 @@ def _scenario(
         }
     return Scenario(
         scenario_id="sc-test",
-        mode="intake",
+        mode="encounter",
         difficulty="easy",
         household=hh,
         document_paths={},

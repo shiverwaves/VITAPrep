@@ -14,7 +14,7 @@ ExerciseEngine.generate_scenario(mode, difficulty, error_count, pattern, seed)
 Requirements:
 1. Returns a Scenario with a unique scenario_id and created_at timestamp.
 2. Household is fully populated (demographics + PII).
-3. Mode "intake":
+3. Mode "encounter":
    - injected_errors is empty (student fills from clean docs).
    - interview_notes populated and filtered by difficulty.
 4. Mode "verify":
@@ -162,22 +162,22 @@ def _mock_inject(household, difficulty="medium", error_count=3):
 class TestReturnType:
 
     def test_returns_scenario(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert isinstance(result, Scenario)
 
     def test_has_scenario_id(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.scenario_id
         assert len(result.scenario_id) > 0
 
     def test_has_created_at(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.created_at is not None
         assert len(result.created_at) > 0
 
     def test_unique_ids(self, engine: ExerciseEngine) -> None:
-        s1 = engine.generate_scenario(mode="intake", difficulty="easy")
-        s2 = engine.generate_scenario(mode="intake", difficulty="easy")
+        s1 = engine.generate_scenario(mode="encounter", difficulty="easy")
+        s2 = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert s1.scenario_id != s2.scenario_id
 
     def test_mode_stored(self, engine: ExerciseEngine) -> None:
@@ -185,7 +185,7 @@ class TestReturnType:
         assert result.mode == "verify"
 
     def test_difficulty_stored(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="hard")
+        result = engine.generate_scenario(mode="encounter", difficulty="hard")
         assert result.difficulty == "hard"
 
 
@@ -196,19 +196,19 @@ class TestReturnType:
 class TestHousehold:
 
     def test_household_populated(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.household is not None
         assert len(result.household.members) > 0
 
     def test_household_has_pii(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         primary = result.household.members[0]
         assert primary.legal_first_name
         assert primary.ssn
 
     def test_pattern_forwarded(self, engine: ExerciseEngine) -> None:
         engine.generate_scenario(
-            mode="intake", difficulty="easy", pattern="single_adult",
+            mode="encounter", difficulty="easy", pattern="single_adult",
         )
         engine.generator.generate_with_pii.assert_called()
         call_kwargs = engine.generator.generate_with_pii.call_args
@@ -218,7 +218,7 @@ class TestHousehold:
 
     def test_seed_forwarded(self, engine: ExerciseEngine) -> None:
         engine.generate_scenario(
-            mode="intake", difficulty="easy", seed=42,
+            mode="encounter", difficulty="easy", seed=42,
         )
         call_kwargs = engine.generator.generate_with_pii.call_args
         assert call_kwargs[1].get("seed") == 42 or \
@@ -232,18 +232,18 @@ class TestHousehold:
 class TestIntakeMode:
 
     def test_no_injected_errors(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.injected_errors == []
 
     def test_interview_notes_populated(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.interview_notes is not None
         assert len(result.interview_notes) > 0
 
     def test_interview_notes_are_dicts(
         self, engine: ExerciseEngine,
     ) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert all(isinstance(n, dict) for n in result.interview_notes)
         assert all("category" in n for n in result.interview_notes)
 
@@ -306,8 +306,8 @@ class TestDifficultyPropagation:
     def test_easy_has_more_notes_than_hard(
         self, engine: ExerciseEngine,
     ) -> None:
-        easy = engine.generate_scenario(mode="intake", difficulty="easy")
-        hard = engine.generate_scenario(mode="intake", difficulty="hard")
+        easy = engine.generate_scenario(mode="encounter", difficulty="easy")
+        hard = engine.generate_scenario(mode="encounter", difficulty="hard")
         assert len(easy.interview_notes) >= len(hard.interview_notes)
 
 
@@ -318,19 +318,19 @@ class TestDifficultyPropagation:
 class TestGroundTruth:
 
     def test_ground_truth_present(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.ground_truth is not None
 
     def test_ground_truth_has_schema_version(
         self, engine: ExerciseEngine,
     ) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.ground_truth["schema_version"] == 1
 
     def test_ground_truth_has_form_answers(
         self, engine: ExerciseEngine,
     ) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         fa = result.ground_truth.get("form_answers", {})
         assert len(fa) > 0
         assert "you.first_name" in fa
@@ -347,14 +347,14 @@ class TestGroundTruth:
     def test_ground_truth_has_filing_status(
         self, engine: ExerciseEngine,
     ) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.ground_truth["filing_status"] != ""
 
     def test_ground_truth_roundtrip_dict(
         self, engine: ExerciseEngine,
     ) -> None:
         from tax_core.ground_truth import GroundTruth
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         gt = GroundTruth.from_dict(result.ground_truth)
         assert gt.schema_version == 1
         assert len(gt.form_answers) > 0
@@ -363,20 +363,20 @@ class TestGroundTruth:
         self, engine: ExerciseEngine,
     ) -> None:
         from training.grader import Grader
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         grader = Grader()
         sub = {"you.first_name": "Jane"}
-        grade = grader.grade_intake(sub, result.ground_truth)
+        grade = grader.grade_encounter(sub, result.ground_truth)
         correct = [f for f in grade.field_feedback
                    if f["field"] == "you.first_name"]
         assert correct[0]["status"] == "correct"
 
     def test_grader_wrong_answer(self, engine: ExerciseEngine) -> None:
         from training.grader import Grader
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         grader = Grader()
         sub = {"you.first_name": "WRONG"}
-        grade = grader.grade_intake(sub, result.ground_truth)
+        grade = grader.grade_encounter(sub, result.ground_truth)
         wrong = [f for f in grade.field_feedback
                  if f["field"] == "you.first_name"]
         assert wrong[0]["status"] == "incorrect"
@@ -389,13 +389,13 @@ class TestGroundTruth:
 class TestConceptTags:
 
     def test_concept_tags_present(self, engine: ExerciseEngine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.concept_tags is None or isinstance(result.concept_tags, list)
 
     def test_concept_tags_are_sorted_strings(
         self, engine: ExerciseEngine,
     ) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         if result.concept_tags:
             assert all(isinstance(t, str) for t in result.concept_tags)
             assert result.concept_tags == sorted(result.concept_tags)
@@ -409,7 +409,7 @@ class TestConceptTags:
         self, engine: ExerciseEngine,
     ) -> None:
         result = engine.generate_scenario(
-            mode="intake", difficulty="easy",
+            mode="encounter", difficulty="easy",
             pattern="single_adult", seed=42,
         )
         if result.concept_tags is not None:
