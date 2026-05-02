@@ -1,0 +1,93 @@
+/* Document panes — multi-pane viewer with independent tab switching */
+
+.doc-pane {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    min-width: 200px;
+    min-height: 150px;
+}
+
+.doc-pane__tabs {
+    display: flex;
+    background: #eef2f6;
+    border-bottom: 1px solid var(--color-border);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.doc-pane__tab {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.doc-pane__tab:hover {
+    color: var(--color-text);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.doc-pane__tab--active {
+    color: var(--color-navy);
+    border-bottom-color: var(--color-navy);
+    background: var(--color-surface);
+}
+
+.doc-pane__content {
+    flex: 1;
+    overflow: auto;
+    padding: var(--spacing-sm);
+}
+
+.doc-pane__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-style: italic;
+}
+
+.doc-pane__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+/* Default workspace grid: form on top, two doc panes below */
+.workspace {
+    flex: 1;
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    overflow: hidden;
+}
+
+.workspace__form {
+    grid-column: 1 / -1;
+    overflow: auto;
+}
+
+.workspace__doc-left {
+    overflow: hidden;
+}
+
+.workspace__doc-right {
+    overflow: hidden;
+}
