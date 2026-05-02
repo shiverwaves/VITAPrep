@@ -513,7 +513,7 @@ body {
 
 .f13c-dep-intro {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     border-bottom: 0.5px solid #888;
 }
 
@@ -522,6 +522,17 @@ body {
     font-size: 10.5px;
     font-weight: 700;
     line-height: 1.3;
+}
+
+.f13c-dep-intro-mid {
+    padding: 3px 12px;
+    font-size: 10px;
+    font-weight: 400;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 0.5px solid #888;
 }
 
 .f13c-dep-intro-right {
@@ -941,6 +952,7 @@ body {
             List the names below of everyone who lived with you last year (except your
             spouse) <strong>AND</strong> anyone you supported but did not live with you last year.
         </div>
+        <div class="f13c-dep-intro-mid">Answer Yes or No (Y/N)</div>
         <div class="f13c-dep-intro-right">
             To be completed by certified volunteer<br>
             (Yes, No, or N/A)
