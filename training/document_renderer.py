@@ -426,10 +426,10 @@ class DocumentRenderer:
         )
 
     # =================================================================
-    # Form 13614-C Part II — Income Intake
+    # Form 13614-C Part II — Income Encounter
     # =================================================================
 
-    def render_intake_p2_html(
+    def render_encounter_p2_html(
         self, household: Household, field_values: Dict[str, str],
         tax_year: int = 2022,
     ) -> str:

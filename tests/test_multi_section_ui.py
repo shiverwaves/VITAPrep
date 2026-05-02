@@ -1,4 +1,4 @@
-"""Tests for Sprint 10: multi-section intake UI.
+"""Tests for Sprint 10: multi-section encounter UI.
 
 Covers:
 - Part II income form renders with correct field names and pre-fill
@@ -121,7 +121,7 @@ def _make_household() -> Household:
     )
 
 
-def _create_scenario(client, mode="intake", difficulty="easy"):
+def _create_scenario(client, mode="encounter", difficulty="easy"):
     """Create a scenario via the API and return the scenario_id."""
     resp = client.post(
         "/api/v1/scenarios",
@@ -180,7 +180,7 @@ class TestIncomeFormRender:
 class TestIntakeFormNav:
     """Test that the Part I form has section navigation."""
 
-    def test_intake_form_has_section_nav(self):
+    def test_encounter_form_has_section_nav(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             resp = client.get(f"/scenarios/{sid}/form")
@@ -189,7 +189,7 @@ class TestIntakeFormNav:
             assert "Part I" in html
             assert "Part II" in html
 
-    def test_intake_form_part1_active(self):
+    def test_encounter_form_part1_active(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             resp = client.get(f"/scenarios/{sid}/form")
@@ -235,7 +235,7 @@ class TestIncomeSubmission:
 class TestIntakeSubmissionScoped:
     """Test Part I submission grades only Part I fields, not income."""
 
-    def test_submit_intake_excludes_income(self):
+    def test_submit_encounter_excludes_income(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             resp = client.post(
@@ -248,7 +248,7 @@ class TestIntakeSubmissionScoped:
             assert "income.wages" not in html
             assert "income.total" not in html
 
-    def test_submit_intake_shows_part1_label(self):
+    def test_submit_encounter_shows_part1_label(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             resp = client.post(
@@ -280,7 +280,7 @@ class TestLandingPageGrades:
             resp = client.get(f"/scenarios/{sid}")
             assert "Not yet submitted" in resp.text
 
-    def test_graded_intake_shows_score(self):
+    def test_graded_encounter_shows_score(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             # Submit Part I
@@ -332,7 +332,7 @@ class TestVerifyModeIncome:
             # or non-empty amount inputs)
             assert "checked" in html or 'value="' in html
 
-    def test_verify_prefills_intake_form(self):
+    def test_verify_prefills_encounter_form(self):
         with TestClient(app) as client:
             sid = _create_scenario(client, mode="verify")
             resp = client.get(f"/scenarios/{sid}/form")
@@ -600,8 +600,8 @@ class TestGraderFieldsFilter:
         hh = _make_household()
         grader = Grader()
 
-        full_result = grader.grade_intake({}, _gt_dict(hh))
-        part1_result = grader.grade_intake({}, _gt_dict(hh), fields=PART1_FIELDS)
+        full_result = grader.grade_encounter({}, _gt_dict(hh))
+        part1_result = grader.grade_encounter({}, _gt_dict(hh), fields=PART1_FIELDS)
 
         # Part 1 result should have fewer fields than full
         assert part1_result.max_score < full_result.max_score
@@ -614,7 +614,7 @@ class TestGraderFieldsFilter:
         hh = _make_household()
         grader = Grader()
 
-        part2_result = grader.grade_intake({}, _gt_dict(hh), fields=PART2_FIELDS)
+        part2_result = grader.grade_encounter({}, _gt_dict(hh), fields=PART2_FIELDS)
         p2_fields = {fb["field"] for fb in part2_result.field_feedback}
         assert all(f.startswith("income.") for f in p2_fields)
 
@@ -634,7 +634,7 @@ class TestGraderFieldsFilter:
             INCOME_SELF_EMPLOYMENT: "No",
             INCOME_TOTAL: "45350",
         }
-        result = grader.grade_intake(submission, _gt_dict(hh), fields=PART2_FIELDS)
+        result = grader.grade_encounter(submission, _gt_dict(hh), fields=PART2_FIELDS)
         assert result.accuracy == 1.0
 
     def test_grade_part3_only(self):
@@ -647,7 +647,7 @@ class TestGraderFieldsFilter:
         hh.uses_standard_deduction = True
         grader = Grader()
 
-        part3_result = grader.grade_intake({}, _gt_dict(hh), fields=PART3_FIELDS)
+        part3_result = grader.grade_encounter({}, _gt_dict(hh), fields=PART3_FIELDS)
         p3_fields = {fb["field"] for fb in part3_result.field_feedback}
         assert all(f.startswith("expense.") for f in p3_fields)
         # Should not have personal or income fields
@@ -661,7 +661,7 @@ class TestGraderFieldsFilter:
         hh.uses_standard_deduction = True
         grader = Grader()
 
-        part1_result = grader.grade_intake({}, _gt_dict(hh), fields=PART1_FIELDS)
+        part1_result = grader.grade_encounter({}, _gt_dict(hh), fields=PART1_FIELDS)
         p1_fields = {fb["field"] for fb in part1_result.field_feedback}
         assert not any(f.startswith("expense.") for f in p1_fields)
 
@@ -672,7 +672,7 @@ class TestGraderFieldsFilter:
         grader = Grader()
 
         submission = {EXPENSE_DEDUCTION_TYPE: "standard"}
-        result = grader.grade_intake(submission, _gt_dict(hh), fields=PART3_FIELDS)
+        result = grader.grade_encounter(submission, _gt_dict(hh), fields=PART3_FIELDS)
         deduction_fb = [
             fb for fb in result.field_feedback
             if fb["field"] == EXPENSE_DEDUCTION_TYPE

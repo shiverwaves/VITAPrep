@@ -62,7 +62,7 @@ def _make_scenario() -> Scenario:
     )
     return Scenario(
         scenario_id="sc-concept-test",
-        mode="intake",
+        mode="encounter",
         difficulty="easy",
         household=hh,
         document_paths={},

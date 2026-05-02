@@ -86,7 +86,7 @@ _CREATE_GRADES = """\
 CREATE TABLE IF NOT EXISTS grades (
     grade_id      INTEGER PRIMARY KEY AUTOINCREMENT,
     scenario_id   TEXT NOT NULL REFERENCES scenarios(scenario_id),
-    section       TEXT NOT NULL DEFAULT '',      -- 'intake', 'income', or '' (legacy)
+    section       TEXT NOT NULL DEFAULT '',      -- 'encounter', 'income', or '' (legacy)
     score         INTEGER NOT NULL,
     max_score     INTEGER NOT NULL,
     accuracy      REAL NOT NULL,
@@ -300,9 +300,12 @@ def _deserialize_grade(row: sqlite3.Row) -> GradingResult:
 def _grade_section(row: sqlite3.Row) -> str:
     """Extract the section tag from a grade row."""
     try:
-        return row["section"] or ""
+        section = row["section"] or ""
     except (IndexError, KeyError):
         return ""
+    if section == "intake":
+        section = "encounter"
+    return section
 
 
 # =========================================================================
@@ -543,7 +546,7 @@ class ScenarioStore:
         Args:
             scenario_id: The scenario that was graded.
             result: Grading output from the Grader.
-            section: Form section tag (e.g. "intake", "income").
+            section: Form section tag (e.g. "encounter", "income").
 
         Returns:
             The auto-incremented grade_id.
@@ -607,7 +610,7 @@ class ScenarioStore:
 
         Returns:
             Dict mapping section name to the latest GradingResult
-            for that section. Keys are "intake", "income", or ""
+            for that section. Keys are "encounter", "income", or ""
             (legacy unsectioned grades).
         """
         rows = self._conn.execute(
@@ -736,9 +739,13 @@ class ScenarioStore:
         tags_blob = row["concept_tags"]
         concept_tags = json.loads(tags_blob) if tags_blob else None
 
+        mode = row["mode"]
+        if mode == "intake":
+            mode = "encounter"
+
         return Scenario(
             scenario_id=row["scenario_id"],
-            mode=row["mode"],
+            mode=mode,
             difficulty=row["difficulty"],
             household=household,
             injected_errors=_deserialize_errors(row["injected_errors"]),

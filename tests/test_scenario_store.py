@@ -125,7 +125,7 @@ def sample_scenario(sample_household: Household) -> Scenario:
                 document="intake_form",
                 correct_value="Mary",
                 erroneous_value="Marie",
-                explanation="First name misspelled on intake form",
+                explanation="First name misspelled on encounter form",
                 difficulty="easy",
             ),
         ],
@@ -358,7 +358,7 @@ class TestSaveAndGet:
     def test_auto_created_at(self, store: ScenarioStore) -> None:
         sc = Scenario(
             scenario_id="sc-auto",
-            mode="intake",
+            mode="encounter",
             difficulty="easy",
         )
         store.save_scenario(sc)
@@ -381,7 +381,7 @@ class TestListScenarios:
     def test_list_all(self, store: ScenarioStore) -> None:
         for i in range(5):
             store.save_scenario(
-                self._make_scenario(f"sc-{i}", "intake", "easy"),
+                self._make_scenario(f"sc-{i}", "encounter", "easy"),
             )
         result = store.list_scenarios()
         assert len(result) == 5
@@ -389,7 +389,7 @@ class TestListScenarios:
     def test_list_with_limit(self, store: ScenarioStore) -> None:
         for i in range(5):
             store.save_scenario(
-                self._make_scenario(f"sc-{i}", "intake", "easy"),
+                self._make_scenario(f"sc-{i}", "encounter", "easy"),
             )
         result = store.list_scenarios(limit=3)
         assert len(result) == 3
@@ -397,39 +397,39 @@ class TestListScenarios:
     def test_list_with_offset(self, store: ScenarioStore) -> None:
         for i in range(5):
             store.save_scenario(
-                self._make_scenario(f"sc-{i}", "intake", "easy"),
+                self._make_scenario(f"sc-{i}", "encounter", "easy"),
             )
         result = store.list_scenarios(limit=50, offset=3)
         assert len(result) == 2
 
     def test_filter_by_mode(self, store: ScenarioStore) -> None:
-        store.save_scenario(self._make_scenario("sc-1", "intake", "easy"))
+        store.save_scenario(self._make_scenario("sc-1", "encounter", "easy"))
         store.save_scenario(self._make_scenario("sc-2", "verify", "easy"))
-        store.save_scenario(self._make_scenario("sc-3", "intake", "hard"))
-        result = store.list_scenarios(mode="intake")
+        store.save_scenario(self._make_scenario("sc-3", "encounter", "hard"))
+        result = store.list_scenarios(mode="encounter")
         assert len(result) == 2
-        assert all(s.mode == "intake" for s in result)
+        assert all(s.mode == "encounter" for s in result)
 
     def test_filter_by_difficulty(self, store: ScenarioStore) -> None:
-        store.save_scenario(self._make_scenario("sc-1", "intake", "easy"))
+        store.save_scenario(self._make_scenario("sc-1", "encounter", "easy"))
         store.save_scenario(self._make_scenario("sc-2", "verify", "hard"))
-        store.save_scenario(self._make_scenario("sc-3", "intake", "hard"))
+        store.save_scenario(self._make_scenario("sc-3", "encounter", "hard"))
         result = store.list_scenarios(difficulty="hard")
         assert len(result) == 2
         assert all(s.difficulty == "hard" for s in result)
 
     def test_filter_combined(self, store: ScenarioStore) -> None:
-        store.save_scenario(self._make_scenario("sc-1", "intake", "easy"))
+        store.save_scenario(self._make_scenario("sc-1", "encounter", "easy"))
         store.save_scenario(self._make_scenario("sc-2", "verify", "hard"))
-        store.save_scenario(self._make_scenario("sc-3", "intake", "hard"))
-        result = store.list_scenarios(mode="intake", difficulty="hard")
+        store.save_scenario(self._make_scenario("sc-3", "encounter", "hard"))
+        result = store.list_scenarios(mode="encounter", difficulty="hard")
         assert len(result) == 1
         assert result[0].scenario_id == "sc-3"
 
     def test_newest_first(self, store: ScenarioStore) -> None:
-        store.save_scenario(self._make_scenario("sc-1", "intake", "easy"))
-        store.save_scenario(self._make_scenario("sc-5", "intake", "easy"))
-        store.save_scenario(self._make_scenario("sc-3", "intake", "easy"))
+        store.save_scenario(self._make_scenario("sc-1", "encounter", "easy"))
+        store.save_scenario(self._make_scenario("sc-5", "encounter", "easy"))
+        store.save_scenario(self._make_scenario("sc-3", "encounter", "easy"))
         result = store.list_scenarios()
         ids = [s.scenario_id for s in result]
         # sc-5 has latest date (Jan 5), sc-3 next (Jan 3), sc-1 last (Jan 1)
@@ -567,7 +567,7 @@ class TestSummaryStats:
 
     def test_stats_with_data(self, store: ScenarioStore) -> None:
         sc1 = Scenario(
-            scenario_id="sc-1", mode="intake", difficulty="easy",
+            scenario_id="sc-1", mode="encounter", difficulty="easy",
         )
         sc2 = Scenario(
             scenario_id="sc-2", mode="verify", difficulty="hard",
@@ -590,8 +590,8 @@ class TestSummaryStats:
         assert stats["by_difficulty"]["easy"]["count"] == 1
         assert stats["by_difficulty"]["easy"]["average_accuracy"] == 0.9
 
-        assert "intake" in stats["by_mode"]
-        assert stats["by_mode"]["intake"]["count"] == 1
+        assert "encounter" in stats["by_mode"]
+        assert stats["by_mode"]["encounter"]["count"] == 1
 
 
 # =========================================================================
@@ -616,7 +616,7 @@ class TestRelationshipRoundTrip:
             pattern="other",
             members=members,
         )
-        sc = Scenario(scenario_id="sc-rt", mode="intake", difficulty="easy", household=hh)
+        sc = Scenario(scenario_id="sc-rt", mode="encounter", difficulty="easy", household=hh)
         store.save_scenario(sc)
 
         got = store.get_scenario("sc-rt")
@@ -671,7 +671,7 @@ class TestGroundTruthStore:
         gt_dict = self._make_ground_truth()
         sc = Scenario(
             scenario_id="sc-gt-1",
-            mode="intake",
+            mode="encounter",
             difficulty="easy",
             household=sample_household,
             ground_truth=gt_dict,
@@ -692,7 +692,7 @@ class TestGroundTruthStore:
         """Scenarios without ground_truth load with ground_truth=None."""
         sc = Scenario(
             scenario_id="sc-pre-b",
-            mode="intake",
+            mode="encounter",
             difficulty="easy",
         )
         store.save_scenario(sc)
@@ -737,7 +737,7 @@ class TestGroundTruthStore:
         bad_gt = {"schema_version": 999, "tax_year": 2022}
         sc = Scenario(
             scenario_id="sc-bad-v",
-            mode="intake",
+            mode="encounter",
             difficulty="easy",
             ground_truth=bad_gt,
         )
@@ -747,7 +747,7 @@ class TestGroundTruthStore:
 
     def test_lifecycle_fields_default_none(self) -> None:
         """New Scenario lifecycle fields all default to None."""
-        sc = Scenario(scenario_id="sc-new", mode="intake", difficulty="easy")
+        sc = Scenario(scenario_id="sc-new", mode="encounter", difficulty="easy")
         assert sc.ground_truth is None
         assert sc.narrative_slots is None
         assert sc.concept_tags is None
@@ -763,7 +763,7 @@ class TestGroundTruthStore:
 
         sc = Scenario(
             scenario_id="sc-gt-grade",
-            mode="intake",
+            mode="encounter",
             difficulty="easy",
             household=sample_household,
             ground_truth=gt_dict,
@@ -773,6 +773,6 @@ class TestGroundTruthStore:
 
         grader = Grader()
         fa = loaded.ground_truth["form_answers"]
-        result = grader.grade_intake(fa, loaded.ground_truth)
+        result = grader.grade_encounter(fa, loaded.ground_truth)
         assert result.accuracy == 1.0
         assert result.score == result.max_score

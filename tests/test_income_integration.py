@@ -3,7 +3,7 @@
 Validates the full pipeline:
 1. Build a household with PII + employment + income data
 2. Render all applicable income documents (W-2, 1099s, SSA-1099)
-3. Verify income fields populated on the intake form
+3. Verify income fields populated on the encounter form
 4. Inject income errors → grade → verify feedback
 
 No mocks — these exercise the real DocumentRenderer, form_populator,
@@ -322,7 +322,7 @@ class TestDocumentRendering:
     def test_dependent_documents_render(
         self, renderer: DocumentRenderer,
     ) -> None:
-        """Dependent's 1099-INT renders, but is NOT on intake form."""
+        """Dependent's 1099-INT renders, but is NOT on encounter form."""
         hh = _make_married_diverse_income()
         child = hh.members[2]
         html = renderer.render_1099_int_html(child, child.form_1099_ints[0])
@@ -381,12 +381,12 @@ class TestIntakePopulation:
         expected_total = 72000 + 2000 + 3200 + 18000 + 12000 + 8000
         assert values["income.total"] == str(expected_total)
 
-    def test_intake_p2_html_render(self) -> None:
+    def test_encounter_p2_html_render(self) -> None:
         """Form 13614-C Part II renders with populated values."""
         hh = _make_married_diverse_income()
         values = build_field_values(hh)
         renderer = DocumentRenderer()
-        html = renderer.render_intake_p2_html(hh, values)
+        html = renderer.render_encounter_p2_html(hh, values)
         assert "income" in html.lower()
         assert "watermark" in html
 
@@ -432,17 +432,17 @@ class TestIncomeErrorInjection:
 
 
 # =========================================================================
-# 4. Grading — intake mode with income fields
+# 4. Grading — encounter mode with income fields
 # =========================================================================
 
 class TestIntakeGrading:
 
-    def test_perfect_intake_score(self) -> None:
+    def test_perfect_encounter_score(self) -> None:
         """Submitting exact answer key gets 100%."""
         hh = _make_married_diverse_income()
         values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy == 1.0
         assert result.score == result.max_score
         assert "Perfect" in result.feedback
@@ -453,7 +453,7 @@ class TestIntakeGrading:
         values = build_field_values(hh)
         values["income.wages.amount"] = "99999"
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong = [f for f in result.field_feedback if f["status"] == "incorrect"]
         wrong_fields = {f["field"] for f in wrong}
@@ -466,7 +466,7 @@ class TestIntakeGrading:
         del values["income.interest"]
         del values["income.interest.amount"]
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong_fields = {
             f["field"] for f in result.field_feedback
@@ -481,13 +481,13 @@ class TestIntakeGrading:
         values = build_field_values(hh)
         values["income.wages.amount"] = "$55,000"
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy == 1.0
 
     def test_empty_submission_scores_zero(self) -> None:
         hh = _make_single_worker()
         grader = Grader()
-        result = grader.grade_intake({}, _gt_dict(hh))
+        result = grader.grade_encounter({}, _gt_dict(hh))
         assert result.score == 0
         assert result.accuracy == 0.0
 
@@ -551,8 +551,8 @@ class TestVerificationGrading:
 
 class TestFullPipeline:
 
-    def test_end_to_end_intake(self) -> None:
-        """Complete intake flow: build → render → populate → grade."""
+    def test_end_to_end_encounter(self) -> None:
+        """Complete encounter flow: build → render → populate → grade."""
         hh = _make_married_diverse_income()
         renderer = DocumentRenderer()
 
@@ -578,7 +578,7 @@ class TestFullPipeline:
         assert "income.total" in answer
 
         grader = Grader()
-        result = grader.grade_intake(answer, _gt_dict(hh))
+        result = grader.grade_encounter(answer, _gt_dict(hh))
         assert result.accuracy == 1.0
 
     def test_end_to_end_verify(self) -> None:
@@ -601,7 +601,7 @@ class TestFullPipeline:
             assert result.score == len(errors)
 
     def test_end_to_end_with_documents_and_grading(self) -> None:
-        """Full loop: render docs from modified household, grade intake."""
+        """Full loop: render docs from modified household, grade encounter."""
         hh = _make_married_diverse_income()
         injector = ErrorInjector()
         modified_hh, errors = injector.inject(
@@ -619,7 +619,7 @@ class TestFullPipeline:
 
         correct_values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(correct_values, _gt_dict(hh))
+        result = grader.grade_encounter(correct_values, _gt_dict(hh))
         assert result.accuracy == 1.0
 
 
@@ -741,7 +741,7 @@ class TestExpensePipeline:
         hh = self._make_expense_household()
         values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy == 1.0
         assert "Perfect" in result.feedback
 
@@ -751,7 +751,7 @@ class TestExpensePipeline:
         values = build_field_values(hh)
         values["expense.deduction_type"] = "itemized"
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong_fields = {f["field"] for f in result.field_feedback if f["status"] == "incorrect"}
         assert "expense.deduction_type" in wrong_fields
@@ -762,7 +762,7 @@ class TestExpensePipeline:
         values = build_field_values(hh)
         values["expense.mortgage_interest.amount"] = "99999"
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy < 1.0
         wrong_fields = {f["field"] for f in result.field_feedback if f["status"] == "incorrect"}
         assert "expense.mortgage_interest.amount" in wrong_fields
@@ -789,5 +789,5 @@ class TestExpensePipeline:
         # Populate and grade
         values = build_field_values(hh)
         grader = Grader()
-        result = grader.grade_intake(values, _gt_dict(hh))
+        result = grader.grade_encounter(values, _gt_dict(hh))
         assert result.accuracy == 1.0

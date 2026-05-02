@@ -175,7 +175,7 @@ def _make_scenario(household: Household) -> Scenario:
     """Wrap a household in a minimal Scenario for analyzer/obfuscator."""
     return Scenario(
         scenario_id="sc-test",
-        mode="intake",
+        mode="encounter",
         difficulty="easy",
         household=household,
         document_paths={},
@@ -374,7 +374,7 @@ class TestPipelineIntegration:
 
     def test_clean_scenario_no_slot_notes(self) -> None:
         eng = _engine_with_household(_make_household_clean())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         assert result.narrative_slots is None or result.narrative_slots == {}
         slot_notes = [
             n for n in (result.interview_notes or [])
@@ -389,7 +389,7 @@ class TestPipelineIntegration:
 
     def test_address_mismatch_populates_notes(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         assert result.narrative_slots is not None
         assert "address_mismatch" in result.narrative_slots
         assert result.interview_notes is not None
@@ -398,21 +398,21 @@ class TestPipelineIntegration:
 
     def test_zero_income_populates_notes(self) -> None:
         eng = _engine_with_household(_make_household_zero_income())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         assert result.interview_notes is not None
         income_notes = [n for n in result.interview_notes if n["category"] == "income"]
         assert len(income_notes) > 0
 
     def test_partial_residency_populates_notes(self) -> None:
         eng = _engine_with_household(_make_household_partial_residency())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         assert result.interview_notes is not None
         dep_notes = [n for n in result.interview_notes if n["category"] == "dependent"]
         assert len(dep_notes) > 0
 
     def test_narrative_slots_serialized_as_dicts(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         for slot_name, fired_list in result.narrative_slots.items():
             assert isinstance(slot_name, str)
             for entry in fired_list:
@@ -421,7 +421,7 @@ class TestPipelineIntegration:
 
     def test_interview_notes_serialized_as_dicts(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         for note in result.interview_notes:
             assert isinstance(note, dict)
             assert "category" in note
@@ -431,13 +431,13 @@ class TestPipelineIntegration:
 
     def test_boilerplate_notes_included(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         boilerplate = [n for n in result.interview_notes if n["source_slot"] is None]
         assert len(boilerplate) > 0
 
     def test_ground_truth_still_computed(self) -> None:
         eng = _engine_with_household(_make_household_address_mismatch())
-        result = eng.generate_scenario(mode="intake", difficulty="easy")
+        result = eng.generate_scenario(mode="encounter", difficulty="easy")
         assert result.ground_truth is not None
         assert "form_answers" in result.ground_truth
 
@@ -452,6 +452,6 @@ class TestPipelineIntegration:
     def test_difficulty_affects_subtlety(self) -> None:
         eng_easy = _engine_with_household(_make_household_address_mismatch())
         eng_hard = _engine_with_household(_make_household_address_mismatch())
-        easy = eng_easy.generate_scenario(mode="intake", difficulty="easy")
-        hard = eng_hard.generate_scenario(mode="intake", difficulty="hard")
+        easy = eng_easy.generate_scenario(mode="encounter", difficulty="easy")
+        hard = eng_hard.generate_scenario(mode="encounter", difficulty="hard")
         assert easy.interview_notes[0]["question"] != hard.interview_notes[0]["question"]

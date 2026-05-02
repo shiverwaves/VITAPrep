@@ -65,7 +65,7 @@ def _make_scenario() -> Scenario:
     )
     return Scenario(
         scenario_id="sc-test",
-        mode="intake",
+        mode="encounter",
         difficulty="easy",
         household=hh,
     )
@@ -279,7 +279,7 @@ class TestAnalyzerFiring:
             ],
         )
         scenario = Scenario(
-            scenario_id="sc-t2", mode="intake", difficulty="easy",
+            scenario_id="sc-t2", mode="encounter", difficulty="easy",
             household=hh,
         )
         analyzer = ScenarioAnalyzer()
@@ -434,16 +434,16 @@ class TestPipelineIntegration:
             yield eng
 
     def test_scenario_generated_with_ground_truth(self, engine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.ground_truth is not None
         assert result.ground_truth["schema_version"] == 1
 
     def test_narrative_slots_none_when_no_slots(self, engine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.narrative_slots is None
 
     def test_interview_notes_populated(self, engine) -> None:
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result.interview_notes is not None
         assert len(result.interview_notes) > 0
 
@@ -458,7 +458,7 @@ class TestPipelineIntegration:
             return original_analyze(scenario)
 
         engine.analyzer.analyze = flaky_analyze
-        result = engine.generate_scenario(mode="intake", difficulty="easy")
+        result = engine.generate_scenario(mode="encounter", difficulty="easy")
         assert result is not None
         assert call_count["n"] == 3
 
@@ -467,5 +467,5 @@ class TestPipelineIntegration:
             side_effect=Unrescuable("always fails"),
         )
         with pytest.raises(Unrescuable, match="Failed to generate"):
-            engine.generate_scenario(mode="intake", difficulty="easy")
+            engine.generate_scenario(mode="encounter", difficulty="easy")
         assert engine.analyzer.analyze.call_count == MAX_REROLL_ATTEMPTS

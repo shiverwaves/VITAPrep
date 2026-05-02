@@ -53,7 +53,7 @@ SUBTLETY_LEVELS = ["obvious", "moderate", "subtle"]
 def _scenario(household: Household) -> Scenario:
     return Scenario(
         scenario_id="sc-test",
-        mode="intake",
+        mode="encounter",
         difficulty="easy",
         household=household,
     )
@@ -565,7 +565,7 @@ class TestSlotConstraint:
             )],
         )
         sc = Scenario(
-            scenario_id="sc-con", mode="intake", difficulty="easy",
+            scenario_id="sc-con", mode="encounter", difficulty="easy",
             household=hh,
             ground_truth=None,
             concept_tags=None,
