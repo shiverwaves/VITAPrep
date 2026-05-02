@@ -213,7 +213,8 @@ class TestMarriedWithKids:
 
     def test_dependent_disability(self) -> None:
         notes = generate_boilerplate(_married_with_kids(), "easy")
-        disabled = [n for n in notes if "disability" in n.question]
+        disabled = [n for n in notes if n.category == "dependent"
+                    and "disability" in n.question]
         assert len(disabled) == 1
         assert "Sarah" in disabled[0].question
 
@@ -343,10 +344,15 @@ class TestPassiveIncomeNotes:
 
     def test_no_passive_income_all_negative(self) -> None:
         hh = _single_adult()
+        hh.members[0].wage_income = 0  # remove wage so everything is negative
         notes = generate_boilerplate(hh, "easy")
-        income_notes = [n for n in notes if n.category == "income"]
-        assert len(income_notes) == 4  # retirement, SS, interest/div, other
-        assert all(n.answer == "No" for n in income_notes)
+        # Passive income questions: retirement, SS, interest/div, other
+        passive_questions = [n for n in notes if n.category == "income"
+                            and any(kw in n.question for kw in
+                                    ("retirement", "Social Security",
+                                     "interest or dividend", "other money"))]
+        assert len(passive_questions) == 4
+        assert all(n.answer == "No" for n in passive_questions)
 
     def test_retirement_income_positive(self) -> None:
         hh = _single_adult()
@@ -399,3 +405,91 @@ class TestPassiveIncomeNotes:
             notes = generate_boilerplate(hh, diff)
             ss = [n for n in notes if "Social Security" in n.question]
             assert ss[0].answer == "Yes"
+
+
+# =========================================================================
+# 7. Wage and SE income notes (Subset 1)
+# =========================================================================
+
+
+class TestWageAndSENotes:
+
+    def test_no_wage_income_negative(self) -> None:
+        hh = _single_adult()
+        hh.members[0].wage_income = 0
+        notes = generate_boilerplate(hh, "easy")
+        wage = [n for n in notes if "wages" in n.question.lower()]
+        assert wage[0].answer == "No"
+
+    def test_wage_income_positive_with_job_count(self) -> None:
+        from generator.models import W2
+        hh = _single_adult()
+        hh.members[0].wage_income = 40000
+        hh.members[0].w2s = [
+            W2(wages=25000, federal_tax_withheld=3000,
+               social_security_wages=25000, social_security_tax=1550,
+               medicare_wages=25000, medicare_tax=362, state="HI",
+               state_wages=25000, state_tax=800),
+            W2(wages=15000, federal_tax_withheld=1500,
+               social_security_wages=15000, social_security_tax=930,
+               medicare_wages=15000, medicare_tax=217, state="HI",
+               state_wages=15000, state_tax=400),
+        ]
+        notes = generate_boilerplate(hh, "easy")
+        wage = [n for n in notes if "wages" in n.question.lower()]
+        assert wage[0].answer == "Yes"
+        jobs = [n for n in notes if "How many jobs" in n.question]
+        assert jobs[0].answer == "2"
+
+    def test_disability_w2_not_counted_as_wages(self) -> None:
+        from generator.models import W2
+        hh = _single_adult()
+        hh.members[0].wage_income = 20000
+        hh.members[0].disability_income_source = "w2"
+        hh.members[0].w2s = [
+            W2(wages=20000, federal_tax_withheld=2000,
+               social_security_wages=20000, social_security_tax=1240,
+               medicare_wages=20000, medicare_tax=290, state="HI",
+               state_wages=20000, state_tax=500),
+        ]
+        notes = generate_boilerplate(hh, "easy")
+        wage = [n for n in notes if "wages" in n.question.lower()]
+        assert wage[0].answer == "No"
+
+    def test_no_se_income_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        se = [n for n in notes if "self-employment" in n.question.lower()]
+        assert se[0].answer == "No"
+
+    def test_se_income_positive_with_occupation(self) -> None:
+        hh = _single_adult()
+        hh.members[0].self_employment_income = 30000
+        hh.members[0].occupation_title = "Carpenter"
+        notes = generate_boilerplate(hh, "easy")
+        se = [n for n in notes if "self-employment" in n.question.lower()]
+        assert se[0].answer == "Yes"
+        occ = [n for n in notes if "What kind of work" in n.question]
+        assert occ[0].answer == "Carpenter"
+
+    def test_disability_positive(self) -> None:
+        hh = _single_adult()
+        hh.members[0].disability_income_source = "w2"
+        notes = generate_boilerplate(hh, "easy")
+        dis = [n for n in notes if "disability" in n.question.lower()]
+        assert dis[0].answer == "Yes"
+        assert dis[1].answer == "W-2"
+
+    def test_disability_1099r(self) -> None:
+        hh = _single_adult()
+        hh.members[0].disability_income_source = "1099r"
+        notes = generate_boilerplate(hh, "easy")
+        dis = [n for n in notes if "disability" in n.question.lower()]
+        assert dis[0].answer == "Yes"
+        assert dis[1].answer == "1099-R"
+
+    def test_no_disability_negative(self) -> None:
+        hh = _single_adult()
+        notes = generate_boilerplate(hh, "easy")
+        dis = [n for n in notes if "disability" in n.question.lower()]
+        assert dis[0].answer == "No"

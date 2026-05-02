@@ -76,6 +76,7 @@ def generate_boilerplate(
         notes.extend(_contact_notes(householder))
 
     # Page 2-3 boilerplate: income and expenses (not gated by difficulty)
+    notes.extend(_wage_and_se_notes(household))
     notes.extend(_passive_income_notes(household))
 
     logger.info(
@@ -180,6 +181,81 @@ def _dependent_notes(dependents: List[Person]) -> List[InterviewNote]:
             category="dependent",
             question=f"Is {name} a U.S. citizen?",
             answer="Yes",
+        ))
+
+    return notes
+
+
+# =========================================================================
+# Page 2 — Income (Subset 1: Wage and self-employment)
+# =========================================================================
+
+
+def _wage_and_se_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Wages (W-2)
+    wage_members = [m for m in household.members if m.wage_income > 0
+                    and m.disability_income_source != "w2"]
+    if wage_members:
+        w2_count = sum(len(m.w2s) for m in wage_members)
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive wages as a part-time or full-time employee?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="How many jobs?",
+            answer=str(w2_count),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive wages as a part-time or full-time employee?",
+            answer="No",
+        ))
+
+    # Self-employment (1099-NEC)
+    se_members = [m for m in household.members if m.self_employment_income > 0]
+    if se_members:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive self-employment payments?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="What kind of work?",
+            answer=se_members[0].occupation_title or "Self-employed",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive self-employment payments?",
+            answer="No",
+        ))
+
+    # Disability benefits (W-2 or 1099-R)
+    disability_members = [m for m in household.members
+                          if m.disability_income_source is not None]
+    if disability_members:
+        source = disability_members[0].disability_income_source
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive disability benefits?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="income",
+            question="Disability income reported on which form?",
+            answer="W-2" if source == "w2" else "1099-R",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="income",
+            question="Did you receive disability benefits?",
+            answer="No",
         ))
 
     return notes
