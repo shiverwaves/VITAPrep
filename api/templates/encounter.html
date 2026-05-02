@@ -45,8 +45,15 @@ html, body { height: 100%; overflow: hidden; }
     <div class="app-main">
         <div class="workspace" id="workspace">
             <div class="workspace__form" id="form-area">
-                {# --- Page tab strip (2.3) --- #}
+                {# --- Form sheet (3.1 + 3.2) --- #}
                 <div class="sheet">
+                    {# Navy banner header #}
+                    <div class="sheet__header">
+                        <span class="sheet__header-title">Form 13614-C — Intake/Interview Sheet</span>
+                        <span class="sheet__header-subtitle">OMB 1545-2272</span>
+                    </div>
+
+                    {# Page tab strip (2.3) #}
                     <div class="sheet__tabs" id="page-tabs">
                         {% for tab in page_tabs %}
                         <button class="sheet__tab{% if tab.active %} sheet__tab--active{% endif %}{% if tab.complete %} sheet__tab--complete{% endif %}"
@@ -63,7 +70,7 @@ html, body { height: 100%; overflow: hidden; }
                          id="page-{{ tab.page }}"
                          data-page="{{ tab.page }}">
 
-                        {# Form card for this section (preserves test compatibility) #}
+                        {# Grade badge (preserves test compatibility) #}
                         <div class="form-card" data-section="{{ tab.section }}">
                             <span class="card-title">{{ tab.card_title }}</span>
                             {% if section_grades[tab.section] %}
@@ -76,11 +83,49 @@ html, body { height: 100%; overflow: hidden; }
                             {% endif %}
                         </div>
 
-                        {# Placeholder for form sheet content (Phase 3) #}
-                        <div class="sheet__content" id="sheet-content-{{ tab.page }}">
-                        </div>
+                        {# Client column rows grouped by category #}
+                        {% set page_notes = notes_by_page.get(tab.page, []) %}
+                        {% set current_cat = namespace(value="") %}
+                        {% for note in page_notes %}
+                            {# Section head when category changes #}
+                            {% if note.category != current_cat.value %}
+                                {% set current_cat.value = note.category %}
+                                <div class="sheet__section-head">
+                                    {{ category_labels.get(note.category, note.category) }}
+                                </div>
+                            {% endif %}
+
+                            <div class="sheet__row">
+                                <div class="sheet__client-cell">
+                                    {% if note.answer in ("Yes", "No") %}
+                                        <span class="sheet__checkbox">{{ "■" if note.answer == "Yes" else "□" }}</span>
+                                        <span class="sheet__question">{{ note.question }}</span>
+                                    {% else %}
+                                        <span class="sheet__checkbox">&nbsp;</span>
+                                        <span class="sheet__question">
+                                            {{ note.question }}
+                                            <span class="sheet__followup">{{ note.answer }}</span>
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="sheet__volunteer-cell">
+                                    {# Volunteer input column — Phase 3B #}
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                        {% if not page_notes %}
+                        <div class="sheet__empty-page">No interview notes for this section.</div>
+                        {% endif %}
                     </div>
                     {% endfor %}
+
+                    {# Sheet footer #}
+                    <div class="sheet__footer">
+                        <span>Catalog Number 52121E</span>
+                        <span>www.irs.gov</span>
+                        <span>Form 13614-C (Rev. 10-2024)</span>
+                    </div>
                 </div>
             </div>
             <div class="workspace__doc-left" id="doc-pane-left">
