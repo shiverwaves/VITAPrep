@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}New Scenario — VITAPrep{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/app-static/styles/home.css">
+{% endblock %}
+
+{% block body %}
+{% include "components/titlebar.html" %}
+
+<main class="home">
+    <div class="home__header">
+        <h1 class="home__title">Generate New Scenario</h1>
+        <p class="home__subtitle">Configure your practice session and start training.</p>
+    </div>
+
+    <form class="home__form" method="post" action="/scenarios/new">
+        <div class="home__field">
+            <label class="home__label" for="mode">Mode</label>
+            <select class="home__select" id="mode" name="mode">
+                <option value="encounter">Encounter — fill blank form from documents</option>
+                <option value="verify">Verify — find errors in pre-filled form</option>
+            </select>
+        </div>
+
+        <div class="home__field">
+            <label class="home__label" for="difficulty">Difficulty</label>
+            <select class="home__select" id="difficulty" name="difficulty">
+                <option value="easy">Easy — all client facts provided</option>
+                <option value="medium">Medium — required facts only</option>
+                <option value="hard">Hard — minimal facts</option>
+            </select>
+        </div>
+
+        <div class="home__field">
+            <label class="home__label" for="pattern">Household Pattern</label>
+            <select class="home__select" id="pattern" name="pattern">
+                <option value="">Random</option>
+                {% for name, meta in patterns.items() %}
+                <option value="{{ name }}">{{ meta.description }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="home__concepts">
+            <div class="home__concepts-title">Target Concepts (optional)</div>
+            <div class="home__concepts-hint">
+                Select concepts to practice. The generator will create a scenario
+                that exercises these tax-law features.
+            </div>
+            <div class="home__concepts-grid">
+                {% for name, label in concepts.items() %}
+                <label class="home__concept-item">
+                    <input type="checkbox" name="concepts" value="{{ name }}">
+                    {{ label }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="home__actions">
+            <button type="submit" class="btn-primary">Generate Scenario</button>
+            {% if resume_id %}
+            <a href="/scenarios/{{ resume_id }}" class="btn-ghost">Resume Last</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <footer class="home__footer">
+        <a href="/scenarios/new">Home</a>
+        <a href="#">Scenario Library</a>
+        <a href="#">My Progress</a>
+        <a href="#">Help</a>
+    </footer>
+</main>
+
+<script src="/app-static/js/menus.js"></script>
+{% endblock %}

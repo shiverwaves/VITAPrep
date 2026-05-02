@@ -318,12 +318,10 @@ async def api_delete_scenario(
 
 @router.get("/scenarios/new", response_class=HTMLResponse)
 async def page_new_scenario(request: Request) -> HTMLResponse:
-    """Simple form to generate a new scenario from the browser."""
-    patterns = list(PATTERN_METADATA.keys())
-    options_html = "\n".join(
-        f'<option value="{p}">{PATTERN_METADATA[p]["description"]}</option>'
-        for p in patterns
-    )
+    """Home screen — configure and launch a new scenario."""
+    store = request.app.state.store
+    templates = request.app.state.templates
+
     concept_labels = {
         "qualifying_child_residency": "Qualifying Child Residency",
         "hoh_qualifying_person": "Head of Household",
@@ -333,65 +331,15 @@ async def page_new_scenario(request: Request) -> HTMLResponse:
         "standard_vs_itemized": "Standard vs. Itemized Deduction",
         "full_time_student_dependent": "Full-Time Student Dependent",
     }
-    concept_checkboxes = "\n".join(
-        f'<label class="checkbox"><input type="checkbox" name="concepts" '
-        f'value="{name}"> {label}</label>'
-        for name, label in concept_labels.items()
-    )
 
-    html = f"""\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>New Scenario — VITATrainer</title>
-<style>
-body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }}
-h1 {{ color: #1a3a5c; }}
-label {{ display: block; margin-top: 16px; font-weight: bold; }}
-select, input[type="text"], input[type="number"] {{ padding: 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }}
-button {{ margin-top: 24px; padding: 12px 24px; background: #1a3a5c; color: white;
-         border: none; cursor: pointer; font-size: 16px; border-radius: 4px; }}
-button:hover {{ background: #2c5f8a; }}
-fieldset {{ border: 1px solid #ccc; border-radius: 6px; padding: 12px 16px; margin-top: 16px; }}
-legend {{ font-weight: bold; color: #1a3a5c; }}
-.checkbox {{ font-weight: normal; margin-top: 6px; }}
-.checkbox input {{ width: auto; margin-right: 6px; }}
-.hint {{ font-size: 13px; color: #666; margin-top: 4px; font-weight: normal; }}
-</style>
-</head>
-<body>
-<h1>Generate New Scenario</h1>
-<form method="post" action="/scenarios/new">
-    <label>Mode
-        <select name="mode">
-            <option value="encounter">Encounter — fill blank form from documents</option>
-            <option value="verify">Verify — find errors in pre-filled form</option>
-        </select>
-    </label>
-    <label>Difficulty
-        <select name="difficulty">
-            <option value="easy">Easy — all client facts provided</option>
-            <option value="medium">Medium — required facts only</option>
-            <option value="hard">Hard — minimal facts</option>
-        </select>
-    </label>
-    <label>Household Pattern
-        <select name="pattern">
-            <option value="">Random</option>
-            {options_html}
-        </select>
-    </label>
-    <fieldset>
-        <legend>Target Concepts (optional)</legend>
-        <div class="hint">Select concepts to practice. The generator will create a scenario that exercises these tax-law features.</div>
-        {concept_checkboxes}
-    </fieldset>
-    <button type="submit">Generate Scenario</button>
-</form>
-</body>
-</html>"""
-    return HTMLResponse(content=html)
+    recent = store.list_scenarios(limit=1)
+    resume_id = recent[0].scenario_id if recent else None
+
+    return templates.TemplateResponse(request, "home.html", {
+        "patterns": PATTERN_METADATA,
+        "concepts": concept_labels,
+        "resume_id": resume_id,
+    })
 
 
 @router.post("/scenarios/new")
