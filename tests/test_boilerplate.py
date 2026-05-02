@@ -256,11 +256,16 @@ class TestDifficultyFiltering:
         dep = [n for n in notes if n.category == "dependent"]
         assert len(dep) > 0
 
-    def test_hard_only_citizenship_filing_and_income(self) -> None:
+    def test_hard_drops_employment_dependents_contact(self) -> None:
         notes = generate_boilerplate(_single_adult(), "hard")
         categories = {n.category for n in notes}
-        # Hard drops employment, dependents, contact — keeps citizenship, filing, income
-        assert categories <= {"citizenship", "filing", "income"}
+        # Hard drops employment, dependents, contact
+        assert "employment" not in categories
+        assert "dependent" not in categories
+        assert "contact" not in categories
+        # Keeps citizenship, filing, and Page 2-3 ground truth (income, expenses)
+        assert "citizenship" in categories
+        assert "filing" in categories
 
     def test_hard_no_employment(self) -> None:
         notes = generate_boilerplate(_single_adult(), "hard")
@@ -493,3 +498,89 @@ class TestWageAndSENotes:
         notes = generate_boilerplate(hh, "easy")
         dis = [n for n in notes if "disability" in n.question.lower()]
         assert dis[0].answer == "No"
+
+
+# =========================================================================
+# 8. Schedule A notes (Subset 3)
+# =========================================================================
+
+
+class TestScheduleANotes:
+
+    def test_mortgage_positive(self) -> None:
+        hh = _single_adult()
+        hh.mortgage_interest = 12000
+        notes = generate_boilerplate(hh, "easy")
+        mort = [n for n in notes if "mortgage" in n.question.lower()]
+        assert mort[0].answer == "Yes"
+        assert mort[1].answer == "$12,000"
+
+    def test_mortgage_negative(self) -> None:
+        hh = _single_adult()
+        hh.mortgage_interest = 0
+        notes = generate_boilerplate(hh, "easy")
+        mort = [n for n in notes if "mortgage" in n.question.lower()]
+        assert mort[0].answer == "No"
+
+    def test_taxes_positive_both(self) -> None:
+        hh = _single_adult()
+        hh.state_income_tax = 5000
+        hh.property_taxes = 3000
+        notes = generate_boilerplate(hh, "easy")
+        tax = [n for n in notes if "taxes" in n.question.lower()
+               and n.category == "expenses"]
+        assert tax[0].answer == "Yes"
+        assert "state income tax" in tax[1].answer
+        assert "property taxes" in tax[1].answer
+
+    def test_taxes_negative(self) -> None:
+        hh = _single_adult()
+        hh.state_income_tax = 0
+        hh.property_taxes = 0
+        notes = generate_boilerplate(hh, "easy")
+        tax = [n for n in notes if "state, local, or property" in n.question]
+        assert tax[0].answer == "No"
+
+    def test_medical_bin_small(self) -> None:
+        hh = _single_adult()
+        hh.medical_expenses = 350
+        notes = generate_boilerplate(hh, "easy")
+        med = [n for n in notes if "medical" in n.question.lower()]
+        assert med[0].answer == "Yes"
+        assert med[1].answer == "a few hundred dollars"
+
+    def test_medical_bin_medium(self) -> None:
+        hh = _single_adult()
+        hh.medical_expenses = 3500
+        notes = generate_boilerplate(hh, "easy")
+        med = [n for n in notes if "medical" in n.question.lower()]
+        assert med[1].answer == "a few thousand dollars"
+
+    def test_medical_bin_large(self) -> None:
+        hh = _single_adult()
+        hh.medical_expenses = 8000
+        notes = generate_boilerplate(hh, "easy")
+        med = [n for n in notes if "medical" in n.question.lower()]
+        assert med[1].answer == "around ten thousand dollars"
+
+    def test_medical_bin_very_large(self) -> None:
+        hh = _single_adult()
+        hh.medical_expenses = 25000
+        notes = generate_boilerplate(hh, "easy")
+        med = [n for n in notes if "medical" in n.question.lower()]
+        assert med[1].answer == "$25,000"
+
+    def test_charitable_positive(self) -> None:
+        hh = _single_adult()
+        hh.charitable_contributions = 2500
+        notes = generate_boilerplate(hh, "easy")
+        char = [n for n in notes if "charitable" in n.question.lower()]
+        assert char[0].answer == "Yes"
+        assert char[1].answer == "$2,500"
+
+    def test_charitable_negative(self) -> None:
+        hh = _single_adult()
+        hh.charitable_contributions = 0
+        notes = generate_boilerplate(hh, "easy")
+        char = [n for n in notes if "charitable" in n.question.lower()]
+        assert char[0].answer == "No"

@@ -78,6 +78,7 @@ def generate_boilerplate(
     # Page 2-3 boilerplate: income and expenses (not gated by difficulty)
     notes.extend(_wage_and_se_notes(household))
     notes.extend(_passive_income_notes(household))
+    notes.extend(_schedule_a_notes(household))
 
     logger.info(
         "Generated %d boilerplate notes at difficulty=%s for household %s",
@@ -339,5 +340,111 @@ def _passive_income_notes(household: Household) -> List[InterviewNote]:
         question="Did you receive any other money not already mentioned?",
         answer="No",
     ))
+
+    return notes
+
+
+# =========================================================================
+# Page 3 — Expenses (Subset 3: Schedule A items)
+# =========================================================================
+
+
+def _medical_bin_label(amount: int) -> str:
+    if amount < 500:
+        return "a few hundred dollars"
+    elif amount < 2000:
+        return "about a thousand dollars"
+    elif amount < 5000:
+        return "a few thousand dollars"
+    elif amount < 15000:
+        return "around ten thousand dollars"
+    else:
+        return f"${amount:,}"
+
+
+def _schedule_a_notes(household: Household) -> List[InterviewNote]:
+    notes: List[InterviewNote] = []
+
+    # Mortgage interest (Form 1098)
+    if household.mortgage_interest > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay mortgage interest on your home?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much mortgage interest, roughly?",
+            answer=f"${household.mortgage_interest:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay mortgage interest on your home?",
+            answer="No",
+        ))
+
+    # Taxes paid (state, local, property)
+    tax_total = household.state_income_tax + household.property_taxes
+    if tax_total > 0:
+        kinds = []
+        if household.state_income_tax > 0:
+            kinds.append("state income tax")
+        if household.property_taxes > 0:
+            kinds.append("property taxes")
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay state, local, or property taxes?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="What kinds of taxes?",
+            answer=", ".join(kinds),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you pay state, local, or property taxes?",
+            answer="No",
+        ))
+
+    # Medical expenses (always positive after always-generate change)
+    if household.medical_expenses > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you have medical, dental, or prescription expenses?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much in medical expenses, roughly?",
+            answer=_medical_bin_label(household.medical_expenses),
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you have medical, dental, or prescription expenses?",
+            answer="No",
+        ))
+
+    # Charitable contributions
+    if household.charitable_contributions > 0:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you make any charitable contributions?",
+            answer="Yes",
+        ))
+        notes.append(InterviewNote(
+            category="expenses",
+            question="How much in charitable contributions, roughly?",
+            answer=f"${household.charitable_contributions:,}",
+        ))
+    else:
+        notes.append(InterviewNote(
+            category="expenses",
+            question="Did you make any charitable contributions?",
+            answer="No",
+        ))
 
     return notes
