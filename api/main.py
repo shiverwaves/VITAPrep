@@ -1,7 +1,7 @@
 """
 FastAPI application — single process, no worker proxy.
 
-Serves scenarios, HTML-rendered documents, interactive intake forms,
+Serves scenarios, HTML-rendered documents, interactive encounter forms,
 and server-side grading.  All training state lives in a local SQLite
 database (``data/scenarios.sqlite``).
 
@@ -11,10 +11,12 @@ Run with:
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from training.document_renderer import DocumentRenderer
 from training.exercise_engine import ExerciseEngine
@@ -38,6 +40,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.renderer = DocumentRenderer()
     app.state.grader = Grader()
 
+    _api_dir = Path(__file__).resolve().parent
+    app.state.templates = Jinja2Templates(directory=str(_api_dir / "templates"))
+
     yield
 
     app.state.store.close()
@@ -51,7 +56,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Static files (CSS for document templates)
+# Static files for the page UI (CSS, JS)
+_api_dir = Path(__file__).resolve().parent
+app.mount(
+    "/app-static",
+    StaticFiles(directory=str(_api_dir / "static")),
+    name="app-static",
+)
+
+# Document template assets (base.css used by rendered documents)
 app.mount(
     "/static",
     StaticFiles(directory="training/templates"),
