@@ -484,8 +484,8 @@ body {
 .f13c-marital-col1 { width: 200px; flex-shrink: 0; }
 .f13c-marital-col2 { flex: 1; display: flex; align-items: baseline; gap: 24px; }
 /* Width 186px = 3 × 62px slots, matching the You/Spouse/No group in
-   the Election row above. Yes lands in slot 1 (under "You") and No
-   in slot 2 (under "Spouse"); slot 3 stays empty. */
+   the Election row above. Slot 1 stays empty so Yes lands under
+   "Spouse" and No lands under "No" (slots 2 and 3). */
 .f13c-marital-col3 {
     display: grid;
     grid-template-columns: 62px 62px 62px;
@@ -497,6 +497,8 @@ body {
 .f13c-marital-col3 label {
     font-weight: 400;
 }
+
+.f13c-marital-col3 .f13c-marital-slot--empty { display: block; }
 
 /* Widowed label and "Year of spouse's death" sub span the full
    3-slot col3 width since they don't follow the Yes/No rhythm. */
@@ -917,6 +919,7 @@ body {
             <span class="f13c-marital-question">If married, were you married on the last day of the year</span>
         </div>
         <div class="f13c-marital-col3">
+            <span class="f13c-marital-slot--empty"></span>
             <label><input type="checkbox" name="marital.married_eoy" checked> Yes</label>
             <label><input type="checkbox" name="marital.married_eoy_no"> No</label>
         </div>
@@ -929,6 +932,7 @@ body {
             <span class="f13c-marital-question">Did you and your spouse live apart all of the last 6 months of the year</span>
         </div>
         <div class="f13c-marital-col3">
+            <span class="f13c-marital-slot--empty"></span>
             <label><input type="checkbox" name="marital.lived_apart_yes"> Yes</label>
             <label><input type="checkbox" name="marital.lived_apart_no" checked> No</label>
         </div>
