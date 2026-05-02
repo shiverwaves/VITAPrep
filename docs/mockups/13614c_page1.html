@@ -305,7 +305,7 @@ body {
 }
 
 .f13c-status-col {
-    padding: 3px 8px;
+    padding: 4px 8px 5px;
 }
 
 .f13c-status-col:first-child {
@@ -314,39 +314,31 @@ body {
 
 .f13c-status-heading {
     font-weight: 700;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     font-size: 10.5px;
 }
 
 .f13c-status-row {
-    display: grid;
-    grid-template-columns: 1fr auto auto auto;
+    display: flex;
     align-items: center;
-    gap: 4px;
-    min-height: 18px;
+    gap: 0;
+    min-height: 20px;
     font-size: 10.5px;
+    padding: 2px 0;
+}
+
+.f13c-status-row .f13c-status-question {
+    flex: 1;
 }
 
 .f13c-status-row label {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 3px;
     cursor: pointer;
     white-space: nowrap;
-}
-
-.f13c-status-header {
-    display: grid;
-    grid-template-columns: 1fr auto auto auto;
-    font-size: 9px;
-    color: #444;
-    margin-bottom: 1px;
-    gap: 4px;
-}
-
-.f13c-status-header span {
-    text-align: center;
-    min-width: 46px;
+    min-width: 62px;
+    font-size: 10.5px;
 }
 
 /* ================================================================
@@ -777,62 +769,49 @@ body {
 <div class="f13c-status-block">
     <div class="f13c-status-col">
         <div class="f13c-status-heading">Check if you or your spouse were in 2025:</div>
-        <div class="f13c-status-header">
-            <span></span>
-            <span>You</span>
-            <span>Spouse</span>
-            <span>No</span>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">A U.S. citizen</span>
+            <label><input type="checkbox" name="filer.us_citizen" checked> You</label>
+            <label><input type="checkbox" name="spouse.us_citizen" checked> Spouse</label>
+            <label><input type="checkbox" name="citizen_no"> No</label>
         </div>
         <div class="f13c-status-row">
-            <span>A U.S. citizen</span>
-            <label><input type="checkbox" name="filer.us_citizen" checked></label>
-            <label><input type="checkbox" name="spouse.us_citizen" checked></label>
-            <label><input type="checkbox" name="citizen_no"></label>
+            <span class="f13c-status-question">In the U.S. on a visa</span>
+            <label><input type="checkbox" name="filer.on_visa"> You</label>
+            <label><input type="checkbox" name="spouse.on_visa"> Spouse</label>
+            <label><input type="checkbox" name="visa_no" checked> No</label>
         </div>
         <div class="f13c-status-row">
-            <span>In the U.S. on a visa</span>
-            <label><input type="checkbox" name="filer.on_visa"></label>
-            <label><input type="checkbox" name="spouse.on_visa"></label>
-            <label><input type="checkbox" name="visa_no" checked></label>
-        </div>
-        <div class="f13c-status-row">
-            <span>A full-time student</span>
-            <label><input type="checkbox" name="filer.full_time_student"></label>
-            <label><input type="checkbox" name="spouse.full_time_student"></label>
-            <label><input type="checkbox" name="student_no" checked></label>
+            <span class="f13c-status-question">A full-time student</span>
+            <label><input type="checkbox" name="filer.full_time_student"> You</label>
+            <label><input type="checkbox" name="spouse.full_time_student"> Spouse</label>
+            <label><input type="checkbox" name="student_no" checked> No</label>
         </div>
     </div>
     <div class="f13c-status-col">
-        <div class="f13c-status-heading">Legally blind</div>
-        <div class="f13c-status-header">
-            <span></span>
-            <span>You</span>
-            <span>Spouse</span>
-            <span>No</span>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">Legally blind</span>
+            <label><input type="checkbox" name="filer.legally_blind"> You</label>
+            <label><input type="checkbox" name="spouse.legally_blind"> Spouse</label>
+            <label><input type="checkbox" name="blind_no" checked> No</label>
         </div>
         <div class="f13c-status-row">
-            <span>Legally blind</span>
-            <label><input type="checkbox" name="filer.legally_blind"></label>
-            <label><input type="checkbox" name="spouse.legally_blind"></label>
-            <label><input type="checkbox" name="blind_no" checked></label>
+            <span class="f13c-status-question">Totally and permanently disabled</span>
+            <label><input type="checkbox" name="filer.disabled"> You</label>
+            <label><input type="checkbox" name="spouse.disabled"> Spouse</label>
+            <label><input type="checkbox" name="disabled_no" checked> No</label>
         </div>
         <div class="f13c-status-row">
-            <span>Totally and permanently disabled</span>
-            <label><input type="checkbox" name="filer.disabled"></label>
-            <label><input type="checkbox" name="spouse.disabled"></label>
-            <label><input type="checkbox" name="disabled_no" checked></label>
+            <span class="f13c-status-question">Issued an identity protection PIN (IPPIN)</span>
+            <label><input type="checkbox" name="filer.ippin"> You</label>
+            <label><input type="checkbox" name="spouse.ippin"> Spouse</label>
+            <label><input type="checkbox" name="ippin_no" checked> No</label>
         </div>
         <div class="f13c-status-row">
-            <span>Issued an identity protection PIN (IPPIN)</span>
-            <label><input type="checkbox" name="filer.ippin"></label>
-            <label><input type="checkbox" name="spouse.ippin"></label>
-            <label><input type="checkbox" name="ippin_no" checked></label>
-        </div>
-        <div class="f13c-status-row">
-            <span>Owners or holders of any digital assets</span>
-            <label><input type="checkbox" name="filer.digital_assets"></label>
-            <label><input type="checkbox" name="spouse.digital_assets"></label>
-            <label><input type="checkbox" name="digital_no" checked></label>
+            <span class="f13c-status-question">Owners or holders of any digital assets</span>
+            <label><input type="checkbox" name="filer.digital_assets"> You</label>
+            <label><input type="checkbox" name="spouse.digital_assets"> Spouse</label>
+            <label><input type="checkbox" name="digital_no" checked> No</label>
         </div>
     </div>
 </div>
