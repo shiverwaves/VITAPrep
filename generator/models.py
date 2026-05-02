@@ -347,6 +347,7 @@ class Person:
     occupation_code: Optional[str] = None
     occupation_title: Optional[str] = None
     has_disability: bool = False
+    disability_income_source: Optional[str] = None  # "w2" or "1099r"
 
     # === Income (populated by income.py — Sprint 9) ===
     wage_income: int = 0
@@ -441,6 +442,7 @@ class Person:
             "education": self.education,
             "occupation_code": self.occupation_code,
             "occupation_title": self.occupation_title,
+            "disability_income_source": self.disability_income_source,
             "w2s": [w.to_dict() for w in self.w2s],
             "form_1099_ints": [f.to_dict() for f in self.form_1099_ints],
             "form_1099_divs": [f.to_dict() for f in self.form_1099_divs],

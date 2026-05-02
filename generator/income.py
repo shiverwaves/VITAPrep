@@ -238,6 +238,8 @@ class IncomeGenerator:
                     target.wage_income += gap
                     target.w2s.append(self._create_w2(target, gap, state))
 
+        self._assign_disability_income(household, state)
+
         total = household.total_household_income()
         logger.info(
             "Income overlay: household total $%s, %d members with income",
@@ -281,6 +283,36 @@ class IncomeGenerator:
             total_wages += w
 
         person.wage_income = total_wages
+
+    def _assign_disability_income(self, household: Household, state: str) -> None:
+        """Assign employer-paid disability income (W-2) to disabled non-employed adults.
+
+        Models short/long-term disability insurance payments reported on W-2.
+        Intentionally simplified: flat $12k-$35k range rather than modeling
+        salary-replacement ratios. Real LTD typically replaces 50-70% of
+        pre-disability salary.
+        """
+        for person in household.members:
+            if not person.is_adult():
+                continue
+            if not person.has_disability:
+                continue
+            if person.employment_status == "employed":
+                continue
+            if person.wage_income > 0:
+                continue
+            if random.random() >= 0.15:
+                continue
+
+            amount = random.randint(12_000, 35_000)
+            w2 = self._create_w2(person, amount, state)
+            person.w2s.append(w2)
+            person.wage_income = amount
+            person.disability_income_source = "w2"
+            logger.debug(
+                "  Disability W-2: $%d for %s (disabled, non-employed)",
+                amount, person.legal_first_name,
+            )
 
     def _sample_occupation_wage(self, person: Person) -> int:
         """Sample a wage from occupation-specific distribution."""
@@ -573,6 +605,8 @@ class IncomeGenerator:
             federal_tax_withheld=fed_withheld,
             distribution_code=code,
         ))
+        if code == "3":
+            person.disability_income_source = "1099r"
 
     def _sample_retirement_amount(
         self, bracket: str, table: Optional[pd.DataFrame]
