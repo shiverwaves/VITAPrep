@@ -29,6 +29,10 @@ from training.form_fields import (
     EXPENSE_CHARITABLE,
     EXPENSE_DEDUCTION_TYPE,
     EXPENSE_MORTGAGE_INTEREST,
+    INCOME_DIVIDENDS,
+    INCOME_RETIREMENT,
+    INCOME_SELF_EMPLOYMENT,
+    INCOME_SOCIAL_SECURITY,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
     INCOME_INTEREST,
@@ -624,6 +628,10 @@ class TestGraderFieldsFilter:
             INCOME_WAGES_AMOUNT: "45000",
             INCOME_INTEREST: "Yes",
             INCOME_INTEREST_AMOUNT: "350",
+            INCOME_DIVIDENDS: "No",
+            INCOME_SOCIAL_SECURITY: "No",
+            INCOME_RETIREMENT: "No",
+            INCOME_SELF_EMPLOYMENT: "No",
             INCOME_TOTAL: "45350",
         }
         result = grader.grade_intake(submission, _gt_dict(hh), fields=PART2_FIELDS)

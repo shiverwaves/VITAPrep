@@ -403,7 +403,7 @@ class TestBuildFieldValues:
 
         # Second row = Jake (younger)
         assert vals[dep_field(1, DEP_FIRST_NAME)] == "Jake"
-        assert vals[dep_field(1, DEP_STUDENT)] == ""
+        assert vals[dep_field(1, DEP_STUDENT)] == "No"
 
     def test_hoh_filing_status(
         self, single_parent_household: Household,
@@ -576,12 +576,12 @@ class TestIncomeFields:
         assert vals[INCOME_WAGES] == "Yes"
         assert vals[INCOME_WAGES_AMOUNT] == "55000"
 
-    def test_no_income_fields_omitted(self, wage_earner_household: Household) -> None:
+    def test_zero_income_fields_are_no(self, wage_earner_household: Household) -> None:
         vals = build_field_values(wage_earner_household)
-        assert INCOME_INTEREST not in vals
+        assert vals[INCOME_INTEREST] == "No"
         assert INCOME_INTEREST_AMOUNT not in vals
-        assert INCOME_SOCIAL_SECURITY not in vals
-        assert INCOME_RETIREMENT not in vals
+        assert vals[INCOME_SOCIAL_SECURITY] == "No"
+        assert vals[INCOME_RETIREMENT] == "No"
 
     def test_retiree_all_sources(self, retiree_household: Household) -> None:
         vals = build_field_values(retiree_household)
@@ -591,7 +591,7 @@ class TestIncomeFields:
         assert vals[INCOME_RETIREMENT_AMOUNT] == "12000"
         assert vals[INCOME_INTEREST] == "Yes"
         assert vals[INCOME_INTEREST_AMOUNT] == "500"
-        assert INCOME_WAGES not in vals
+        assert vals[INCOME_WAGES] == "No"
 
     def test_retiree_total(self, retiree_household: Household) -> None:
         vals = build_field_values(retiree_household)
@@ -651,9 +651,9 @@ class TestIncomeFields:
         assert vals[INCOME_DIVIDENDS] == "Yes"
         assert vals[INCOME_DIVIDENDS_AMOUNT] == "3000"
 
-    def test_no_income_no_fields(self, single_adult_household: Household) -> None:
+    def test_no_income_all_no(self, single_adult_household: Household) -> None:
         vals = build_field_values(single_adult_household)
-        assert INCOME_WAGES not in vals
+        assert vals[INCOME_WAGES] == "No"
         assert INCOME_TOTAL not in vals
 
     def test_dependent_income_excluded(self) -> None:
