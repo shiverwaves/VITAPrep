@@ -231,10 +231,10 @@ def build_field_values(household: Household) -> Dict[str, str]:
         # US citizen — default true for most VITA scenarios
         values[dep_field(i, DEP_US_CITIZEN)] = "Yes"
         values[dep_field(i, DEP_STUDENT)] = (
-            "Yes" if dep.is_full_time_student else ""
+            "Yes" if dep.is_full_time_student else "No"
         )
         values[dep_field(i, DEP_DISABLED)] = (
-            "Yes" if dep.has_disability else ""
+            "Yes" if dep.has_disability else "No"
         )
 
     # =================================================================
@@ -300,26 +300,38 @@ def _populate_income_fields(
     if total_wages > 0:
         values[INCOME_WAGES] = "Yes"
         values[INCOME_WAGES_AMOUNT] = str(total_wages)
+    else:
+        values[INCOME_WAGES] = "No"
 
     if total_interest > 0:
         values[INCOME_INTEREST] = "Yes"
         values[INCOME_INTEREST_AMOUNT] = str(total_interest)
+    else:
+        values[INCOME_INTEREST] = "No"
 
     if total_dividends > 0:
         values[INCOME_DIVIDENDS] = "Yes"
         values[INCOME_DIVIDENDS_AMOUNT] = str(total_dividends)
+    else:
+        values[INCOME_DIVIDENDS] = "No"
 
     if total_ss > 0:
         values[INCOME_SOCIAL_SECURITY] = "Yes"
         values[INCOME_SOCIAL_SECURITY_AMOUNT] = str(total_ss)
+    else:
+        values[INCOME_SOCIAL_SECURITY] = "No"
 
     if total_retirement > 0:
         values[INCOME_RETIREMENT] = "Yes"
         values[INCOME_RETIREMENT_AMOUNT] = str(total_retirement)
+    else:
+        values[INCOME_RETIREMENT] = "No"
 
     if total_se > 0:
         values[INCOME_SELF_EMPLOYMENT] = "Yes"
         values[INCOME_SELF_EMPLOYMENT_AMOUNT] = str(total_se)
+    else:
+        values[INCOME_SELF_EMPLOYMENT] = "No"
 
     total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
     if total > 0:
@@ -338,17 +350,25 @@ def _populate_expense_fields(
     if household.mortgage_interest > 0:
         values[EXPENSE_MORTGAGE_INTEREST] = "Yes"
         values[EXPENSE_MORTGAGE_INTEREST_AMOUNT] = str(household.mortgage_interest)
+    else:
+        values[EXPENSE_MORTGAGE_INTEREST] = "No"
 
     if household.property_taxes > 0:
         values[EXPENSE_PROPERTY_TAXES] = "Yes"
         values[EXPENSE_PROPERTY_TAXES_AMOUNT] = str(household.property_taxes)
+    else:
+        values[EXPENSE_PROPERTY_TAXES] = "No"
 
     if household.medical_expenses > 0:
         values[EXPENSE_MEDICAL] = "Yes"
+    else:
+        values[EXPENSE_MEDICAL] = "No"
 
     if household.charitable_contributions > 0:
         values[EXPENSE_CHARITABLE] = "Yes"
         values[EXPENSE_CHARITABLE_AMOUNT] = str(household.charitable_contributions)
+    else:
+        values[EXPENSE_CHARITABLE] = "No"
 
     values[EXPENSE_DEDUCTION_TYPE] = (
         DEDUCTION_TYPE_STANDARD
@@ -368,21 +388,31 @@ def _populate_expense_fields(
     if total_student_loan > 0:
         values[EXPENSE_STUDENT_LOAN] = "Yes"
         values[EXPENSE_STUDENT_LOAN_AMOUNT] = str(total_student_loan)
+    else:
+        values[EXPENSE_STUDENT_LOAN] = "No"
 
     total_educator = sum(p.educator_expenses for p in filers)
     if total_educator > 0:
         values[EXPENSE_EDUCATOR] = "Yes"
         values[EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+    else:
+        values[EXPENSE_EDUCATOR] = "No"
 
     total_ira = sum(p.ira_contributions for p in filers)
     if total_ira > 0:
         values[EXPENSE_IRA] = "Yes"
         values[EXPENSE_IRA_AMOUNT] = str(total_ira)
+    else:
+        values[EXPENSE_IRA] = "No"
 
     if household.child_care_expenses > 0:
         values[EXPENSE_CHILD_CARE] = "Yes"
         values[EXPENSE_CHILD_CARE_AMOUNT] = str(household.child_care_expenses)
+    else:
+        values[EXPENSE_CHILD_CARE] = "No"
 
     if household.education_expenses > 0:
         values[EXPENSE_EDUCATION] = "Yes"
         values[EXPENSE_EDUCATION_AMOUNT] = str(household.education_expenses)
+    else:
+        values[EXPENSE_EDUCATION] = "No"

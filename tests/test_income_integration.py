@@ -346,11 +346,11 @@ class TestIntakePopulation:
     def test_single_worker_no_other_income(self) -> None:
         hh = _make_single_worker()
         values = build_field_values(hh)
-        assert "income.interest" not in values
-        assert "income.dividends" not in values
-        assert "income.social_security" not in values
-        assert "income.retirement" not in values
-        assert "income.self_employment" not in values
+        assert values["income.interest"] == "No"
+        assert values["income.dividends"] == "No"
+        assert values["income.social_security"] == "No"
+        assert values["income.retirement"] == "No"
+        assert values["income.self_employment"] == "No"
 
     def test_married_all_income_types(self) -> None:
         hh = _make_married_diverse_income()

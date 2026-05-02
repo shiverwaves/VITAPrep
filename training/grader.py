@@ -26,11 +26,15 @@ from training.form_fields import (
     CLAIMED_AS_DEPENDENT,
     DEDUCTION_TYPE_ITEMIZED,
     DEDUCTION_TYPE_STANDARD,
+    DEP_DISABLED,
     DEP_DOB,
     DEP_FIRST_NAME,
     DEP_LAST_NAME,
     DEP_MONTHS,
     DEP_RELATIONSHIP,
+    DEP_SINGLE_OR_MARRIED,
+    DEP_STUDENT,
+    DEP_US_CITIZEN,
     EXPENSE_CHARITABLE,
     EXPENSE_CHARITABLE_AMOUNT,
     EXPENSE_CHILD_CARE,
@@ -77,6 +81,7 @@ from training.form_fields import (
     YOU_MIDDLE_INITIAL,
     YOU_PHONE,
     YOU_SSN,
+    YOU_US_CITIZEN,
     dep_field,
 )
 
@@ -135,6 +140,7 @@ def build_form_answers(household: Household) -> Dict[str, str]:
     key[YOU_LAST_NAME] = householder.legal_last_name
     key[YOU_DOB] = _format_dob(householder)
     key[YOU_SSN] = householder.ssn
+    key[YOU_US_CITIZEN] = "Yes"
 
     # Section B: Address
     addr = household.address
@@ -172,6 +178,15 @@ def build_form_answers(household: Household) -> Dict[str, str]:
             rel_val, "Other"
         )
         key[dep_field(i, DEP_MONTHS)] = str(dep.months_in_home)
+        key[dep_field(i, DEP_US_CITIZEN)] = "Yes"
+        key[dep_field(i, DEP_STUDENT)] = "Yes" if dep.is_full_time_student else "No"
+        key[dep_field(i, DEP_DISABLED)] = "Yes" if dep.has_disability else "No"
+
+    # Section F: Additional questions
+    if householder.can_be_claimed:
+        key[CLAIMED_AS_DEPENDENT] = "Yes"
+    else:
+        key[NOT_CLAIMED_AS_DEPENDENT] = "Yes"
 
     # Part II: Income
     _build_income_key(key, household)
@@ -202,21 +217,38 @@ def _build_income_key(key: Dict[str, str], household: Household) -> None:
     if total_wages > 0:
         key[INCOME_WAGES] = "Yes"
         key[INCOME_WAGES_AMOUNT] = str(total_wages)
+    else:
+        key[INCOME_WAGES] = "No"
+
     if total_interest > 0:
         key[INCOME_INTEREST] = "Yes"
         key[INCOME_INTEREST_AMOUNT] = str(total_interest)
+    else:
+        key[INCOME_INTEREST] = "No"
+
     if total_dividends > 0:
         key[INCOME_DIVIDENDS] = "Yes"
         key[INCOME_DIVIDENDS_AMOUNT] = str(total_dividends)
+    else:
+        key[INCOME_DIVIDENDS] = "No"
+
     if total_ss > 0:
         key[INCOME_SOCIAL_SECURITY] = "Yes"
         key[INCOME_SOCIAL_SECURITY_AMOUNT] = str(total_ss)
+    else:
+        key[INCOME_SOCIAL_SECURITY] = "No"
+
     if total_retirement > 0:
         key[INCOME_RETIREMENT] = "Yes"
         key[INCOME_RETIREMENT_AMOUNT] = str(total_retirement)
+    else:
+        key[INCOME_RETIREMENT] = "No"
+
     if total_se > 0:
         key[INCOME_SELF_EMPLOYMENT] = "Yes"
         key[INCOME_SELF_EMPLOYMENT_AMOUNT] = str(total_se)
+    else:
+        key[INCOME_SELF_EMPLOYMENT] = "No"
 
     total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
     if total > 0:
@@ -229,17 +261,25 @@ def _build_expense_key(key: Dict[str, str], household: Household) -> None:
     if household.mortgage_interest > 0:
         key[EXPENSE_MORTGAGE_INTEREST] = "Yes"
         key[EXPENSE_MORTGAGE_INTEREST_AMOUNT] = str(household.mortgage_interest)
+    else:
+        key[EXPENSE_MORTGAGE_INTEREST] = "No"
 
     if household.property_taxes > 0:
         key[EXPENSE_PROPERTY_TAXES] = "Yes"
         key[EXPENSE_PROPERTY_TAXES_AMOUNT] = str(household.property_taxes)
+    else:
+        key[EXPENSE_PROPERTY_TAXES] = "No"
 
     if household.medical_expenses > 0:
         key[EXPENSE_MEDICAL] = "Yes"
+    else:
+        key[EXPENSE_MEDICAL] = "No"
 
     if household.charitable_contributions > 0:
         key[EXPENSE_CHARITABLE] = "Yes"
         key[EXPENSE_CHARITABLE_AMOUNT] = str(household.charitable_contributions)
+    else:
+        key[EXPENSE_CHARITABLE] = "No"
 
     # Standard vs itemized
     key[EXPENSE_DEDUCTION_TYPE] = (
@@ -261,25 +301,35 @@ def _build_expense_key(key: Dict[str, str], household: Household) -> None:
     if total_student_loan > 0:
         key[EXPENSE_STUDENT_LOAN] = "Yes"
         key[EXPENSE_STUDENT_LOAN_AMOUNT] = str(total_student_loan)
+    else:
+        key[EXPENSE_STUDENT_LOAN] = "No"
 
     total_educator = sum(p.educator_expenses for p in filers)
     if total_educator > 0:
         key[EXPENSE_EDUCATOR] = "Yes"
         key[EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+    else:
+        key[EXPENSE_EDUCATOR] = "No"
 
     total_ira = sum(p.ira_contributions for p in filers)
     if total_ira > 0:
         key[EXPENSE_IRA] = "Yes"
         key[EXPENSE_IRA_AMOUNT] = str(total_ira)
+    else:
+        key[EXPENSE_IRA] = "No"
 
     # Credit-related expenses
     if household.child_care_expenses > 0:
         key[EXPENSE_CHILD_CARE] = "Yes"
         key[EXPENSE_CHILD_CARE_AMOUNT] = str(household.child_care_expenses)
+    else:
+        key[EXPENSE_CHILD_CARE] = "No"
 
     if household.education_expenses > 0:
         key[EXPENSE_EDUCATION] = "Yes"
         key[EXPENSE_EDUCATION_AMOUNT] = str(household.education_expenses)
+    else:
+        key[EXPENSE_EDUCATION] = "No"
 
 
 # =========================================================================
