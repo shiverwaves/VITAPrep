@@ -160,6 +160,16 @@
     font-style: italic;
 }
 
+/* Page panels (switched by tab clicks) */
+.sheet__page {
+    display: none;
+    padding: var(--spacing-md);
+}
+
+.sheet__page--active {
+    display: block;
+}
+
 /* Sheet footer */
 .sheet__footer {
     padding: var(--spacing-xs) var(--spacing-md);
