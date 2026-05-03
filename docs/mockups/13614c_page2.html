@@ -201,19 +201,29 @@ body {
 }
 
 .f13c-p2-subq {
+    /* Two-column grid: text in col 1, Y/N (or other tail content) in
+     * col 2. align-items: end pins the tail to the baseline of the
+     * row's last line — so when the text wraps, the Y/N stays with
+     * the *last* line, not on its own row underneath.
+     *
+     * padding-right pushes the Y/N column away from the cell's right
+     * edge so the [No] checkbox lands at a consistent x-position
+     * across rows (matches the IRS reference's "$ above" alignment
+     * with the client column's sub-question Y/N pairs). */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 6px;
+    align-items: end;
     margin-top: 3px;
     margin-left: 18px;
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
+    padding-right: 60px;
     font-size: 10.5px;
     color: #222;
-    flex-wrap: wrap;
 }
 
 .f13c-p2-subq input[type="text"] {
-    flex: 0 0 auto;
     width: 100px;
+    justify-self: start;
 }
 
 /* Secondary sub-question (a separate question stacked under the
