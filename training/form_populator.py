@@ -463,6 +463,25 @@ def build_field_values(household: Household) -> Dict[str, str]:
         values[dep_field(i, DEP_DISABLED)] = (
             "Yes" if dep.has_disability else "No"
         )
+        # Volunteer columns scored in this version (Page 1 Section 11).
+        # Mirror the rules in grader.build_form_answers so this
+        # populator's output stays a valid "perfect submission" against
+        # the answer key. The two ungraded columns
+        # (vol_qc_other, vol_self_support) are intentionally not
+        # emitted — they live in UNGRADED_FIELDS.
+        income_under = (
+            dep.total_income() < 5200
+            if hasattr(dep, "total_income") else True
+        )
+        values[dep_field(i, "vol_income_under")] = (
+            "Yes" if income_under else "No"
+        )
+        values[dep_field(i, "vol_support")] = (
+            "Yes" if dep.months_in_home >= 6 else "No"
+        )
+        values[dep_field(i, "vol_home_cost")] = (
+            "Yes" if dep.months_in_home >= 6 else "No"
+        )
 
     # =================================================================
     # Section F: Additional Questions

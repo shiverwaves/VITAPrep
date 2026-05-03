@@ -282,6 +282,11 @@ def _perfect_married_submission() -> Dict[str, str]:
         dep_field(0, DEP_US_CITIZEN): "Yes",
         dep_field(0, DEP_STUDENT): "No",
         dep_field(0, DEP_DISABLED): "No",
+        # Volunteer columns scored in this version. Jake earns no
+        # income, lived in the home all year → all three Yes.
+        "dep.0.vol_income_under": "Yes",
+        "dep.0.vol_support": "Yes",
+        "dep.0.vol_home_cost": "Yes",
         INCOME_WAGES: "No",
         INCOME_INTEREST: "No",
         INCOME_DIVIDENDS: "No",
