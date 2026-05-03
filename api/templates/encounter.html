@@ -72,7 +72,8 @@ html, body { height: 100%; overflow: hidden; }
     </svg>
     <span class="hidden-doc-badge" id="hidden-doc-badge" hidden></span>
 </button>
-<button class="btn-primary" id="submit-btn">Submit</button>
+<button class="btn-primary" id="submit-btn" type="submit"
+        form="encounter-form">Submit</button>
 {% endset %}
 
 <div class="app-shell">
@@ -90,6 +91,14 @@ html, body { height: 100%; overflow: hidden; }
            confirms or restores from sessionStorage on hydration. #}
         <div id="workspace" data-layout="form-only">
             <div id="form-pane">
+                {# Form wraps the entire sheet so the titlebar Submit
+                   button (out-of-tree, with form="encounter-form")
+                   posts every input across all four pages. The
+                   /submit route filters to PART1_FIELDS today; other
+                   pages' fields are submitted but ignored until
+                   their per-page submit handlers exist. #}
+                <form id="encounter-form" method="post"
+                      action="/scenarios/{{ scenario_id }}/submit">
                 {# --- Form sheet (3.1 + 3.2) --- #}
                 <div class="sheet">
                     {# Navy banner header #}
@@ -194,8 +203,9 @@ html, body { height: 100%; overflow: hidden; }
                         <span>www.irs.gov</span>
                         <span>Form 13614-C (Rev. 10-2024)</span>
                     </div>
-                </div>
-            </div>
+                </div>{# /.sheet #}
+                </form>{# /#encounter-form #}
+            </div>{# /#form-pane #}
 
             {# Document panes — populated by the renderer when a layout
                with non-zero docSlots is active. Each pane has a tab
