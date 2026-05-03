@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Form 13614-C Page 3 — Mockup</title>
+<style>
+/* ================================================================
+   13614-C Page 3 — Expenses & Tax Related Events
+   ================================================================
+   Reuses the typography and checkbox styles from Page 1 / Page 2
+   (same .f13c-form root). Page-3-specific structural classes use
+   the f13c-p3- prefix.
+
+   Page 3 has THREE section banners (each with its own column
+   header row) instead of Page 2's single banner. Section 1 is one
+   tall row with stacked items in each cell; Sections 2 and 3 are
+   normal multi-row patterns.
+   ================================================================ */
+
+/* --- Reset & base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: #d0d0d0;
+    display: flex;
+    justify-content: center;
+    padding: 24px 0;
+}
+
+.f13c-form {
+    width: 980px;
+    background: #fff;
+    border: 1px solid #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11px;
+    color: #000;
+    line-height: 1.3;
+}
+
+/* --- Typography --- */
+.f13c-form input[type="text"] {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    color: #000;
+    border: none;
+    border-bottom: 1px solid #888;
+    background: transparent;
+    padding: 1px 2px;
+    outline: none;
+    line-height: 1.3;
+}
+
+.f13c-form input[type="text"]:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: 1px;
+    border-bottom-color: #e87a2e;
+}
+
+/* --- Custom checkboxes --- */
+.f13c-form input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border: 1px solid #000;
+    border-radius: 0;
+    background: #fff;
+    cursor: pointer;
+    vertical-align: middle;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.f13c-form input[type="checkbox"]:checked { background: #222; }
+
+.f13c-form input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: 3px;
+    width: 3px;
+    height: 6px;
+    border: solid #fff;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+}
+
+.f13c-form input[type="checkbox"]:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: 1px;
+}
+
+/* ================================================================
+   Page indicator (top-right)
+   ================================================================ */
+
+.f13c-p3-page-indicator {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px 0;
+    border-bottom: 1.5px solid #000;
+}
+
+/* ================================================================
+   Section banner — full-width "Expenses and Tax Related Events..."
+   prologue at the top of the page.
+   ================================================================ */
+
+.f13c-p3-banner {
+    padding: 5px 8px;
+    border-bottom: 1.5px solid #000;
+    font-size: 11px;
+}
+
+.f13c-p3-banner strong {
+    font-size: 11.5px;
+}
+
+/* ================================================================
+   Section header rows — one per section, repeated as the section
+   banner. Three columns matching the body grid.
+   ================================================================ */
+
+.f13c-p3-section-head {
+    display: grid;
+    grid-template-columns: 42% 45% 13%;
+}
+
+.f13c-p3-section-head > div {
+    background: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 8px;
+    border-top: 1.5px solid #000;
+    border-bottom: 0.5px solid #000;
+    border-right: 0.5px solid #888;
+    line-height: 1.3;
+}
+
+.f13c-p3-section-head > div:nth-child(2),
+.f13c-p3-section-head > div:nth-child(3) {
+    background: #f0efea;
+}
+
+.f13c-p3-section-head > div:last-child {
+    border-right: none;
+}
+
+/* ================================================================
+   Body rows — same three-column grid as Page 2.
+   ================================================================ */
+
+.f13c-p3-row {
+    display: grid;
+    grid-template-columns: 42% 45% 13%;
+}
+
+.f13c-p3-row > .f13c-p3-cell {
+    border-bottom: 0.5px solid #888;
+    border-right: 0.5px solid #888;
+    padding: 4px 8px;
+    min-height: 28px;
+}
+
+.f13c-p3-row > .f13c-p3-cell:last-child {
+    border-right: none;
+}
+
+.f13c-p3-cell--client {
+    background: #fff;
+}
+
+.f13c-p3-cell--volunteer,
+.f13c-p3-cell--notes {
+    background: #f0efea;
+}
+
+/* Client cell content: stack of checkbox-label items, optionally
+   with sub-questions (text inputs, Y/N pairs). */
+
+.f13c-p3-cell--client {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.f13c-p3-q {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    line-height: 1.35;
+}
+
+.f13c-p3-q > label {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    cursor: pointer;
+    line-height: 1.35;
+}
+
+.f13c-p3-q > label > input[type="checkbox"] {
+    margin-top: 2px;
+}
+
+/* Volunteer cell content: column flex with stacked entries. */
+
+.f13c-p3-cell--volunteer {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.f13c-p3-vol-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1.35;
+}
+
+.f13c-p3-vol-entry > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+}
+
+.f13c-p3-vol-entry > label > input[type="checkbox"] {
+    flex-shrink: 0;
+}
+
+/* Same Y/N alignment treatment as Page 2 — pull pairs left so [No]
+   aligns with $/# above. */
+.f13c-p3-vol-entry > .f13c-p3-yn {
+    margin-right: 60px;
+}
+
+.f13c-p3-vol-prefix {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: 11px;
+    color: #444;
+}
+
+.f13c-p3-vol-input {
+    flex: 0 0 auto;
+    width: 80px;
+}
+
+/* Two-up volunteer entries — used when a single row has two
+   side-by-side checkbox/input groups (e.g. Standard / Itemized
+   deduction, HSA contributions / HSA distributions). */
+
+.f13c-p3-vol-twoup {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.f13c-p3-vol-twoup > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+/* Inline Yes/No pair (mirrors Page 2 styling). */
+
+.f13c-p3-yn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+.f13c-p3-yn label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    min-width: 36px;
+}
+
+/* Sub-question row (text-input or Y/N follow-up under a primary
+   label). Same grid pattern as Page 2 — Y/N stays with the last
+   line of wrapped text via align-items: end. */
+.f13c-p3-subq {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 6px;
+    align-items: end;
+    margin-top: 3px;
+    margin-left: 18px;
+    padding-right: 60px;
+    font-size: 10.5px;
+    color: #222;
+}
+
+.f13c-p3-subq input[type="text"] {
+    width: 100px;
+    justify-self: start;
+}
+
+/* Inline-text inputs (e.g. "Year disallowed ___ Reason ___" in the
+   tax-credit-disallowed row). Two text fields side-by-side. */
+.f13c-p3-vol-fields {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 2px;
+    font-size: 10.5px;
+    color: #222;
+}
+
+.f13c-p3-vol-fields label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.f13c-p3-vol-fields input[type="text"] {
+    width: 80px;
+}
+
+/* Notes cell — fills the cell, no input underline. */
+
+.f13c-p3-cell--notes {
+    padding: 0;
+}
+
+.f13c-p3-notes-input {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: none !important;
+    background: transparent;
+}
+
+.f13c-p3-notes-input:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: -2px;
+}
+
+/* ================================================================
+   Footer (catalog number / URL / form rev)
+   ================================================================ */
+
+.f13c-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    font-size: 9px;
+    color: #444;
+}
+
+.f13c-footer-right {
+    font-size: 10px;
+    font-weight: 700;
+    color: #000;
+}
+
+</style>
+</head>
+<body>
+
+<div class="f13c-form">
+
+<!-- ============================================================
+     Page indicator
+     ============================================================ -->
+<div class="f13c-p3-page-indicator">Page 3</div>
+
+<!-- ============================================================
+     Top-of-page banner
+     ============================================================ -->
+<div class="f13c-p3-banner">
+    <strong>Expenses and Tax Related Events:</strong> Answer the questions on the left side of this page. Check only the boxes that apply to you and/or your spouse.
+</div>
+
+<!-- ============================================================
+     SECTION 1 — Itemize Deductions
+     A single tall row with stacked items in each cell:
+       - 4 client checkboxes (Mortgage / Taxes / Medical / Charitable)
+       - 3 volunteer entries (1098, then Standard / Itemized two-up)
+       - one notes input
+     ============================================================ -->
+<div class="f13c-p3-section-head">
+    <div>Paid any of the following expenses to itemize in 2025?</div>
+    <div>(To be completed by certified volunteer) Standard or Itemized Deductions</div>
+    <div>Notes/Comments</div>
+</div>
+
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.mortgage_interest"> <span><strong>(A)</strong> Mortgage Interest</span></label>
+        </div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.taxes"> <span><strong>(A)</strong> Taxes: state, local, real estate, sales, etc.</span></label>
+        </div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.medical"> <span><strong>(A)</strong> Medical, dental, prescription expenses</span></label>
+        </div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.charitable"> <span><strong>(A)</strong> Charitable contributions</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.1098"> <strong>(A)</strong> 1098</label>
+            <span class="f13c-p3-vol-prefix">#</span>
+            <input type="text" name="vol.expense.1098.count" class="f13c-p3-vol-input" value="">
+        </div>
+        <div class="f13c-p3-vol-twoup">
+            <label><input type="checkbox" name="vol.expense.standard_deduction"> <strong>(B)</strong> Standard deduction</label>
+            <label><input type="checkbox" name="vol.expense.itemized_deduction"> <strong>(A)</strong> Itemized deduction</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.itemize" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- ============================================================
+     SECTION 2 — Other expenses (5 rows)
+     ============================================================ -->
+<div class="f13c-p3-section-head">
+    <div>Paid any of these expenses in 2025?</div>
+    <div>(To be completed by certified volunteer) Expenses to report</div>
+    <div>Notes/Comments</div>
+</div>
+
+<!-- Row: Student loan interest -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.student_loan"> <span><strong>(B)</strong> Student loan interest</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.1098e"> <strong>(B)</strong> 1098-E</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.student_loan" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Child and dependent care -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.child_care"> <span><strong>(B)</strong> Child and dependent care</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.child_care_credit"> <strong>(B)</strong> Child and dependent care credit</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.child_care" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Retirement account contributions -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.retirement_contrib"> <span><strong>(B/A)</strong> Contributions to a retirement account</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.ira"> <strong>(B/A)</strong> IRA (Basic if a Roth IRA or 401K)</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.retirement_contrib" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Educator expenses -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.educator"> <span><strong>(B)</strong> School supplies by a teacher, teacher's aide or other educator</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.educator"> <strong>(B)</strong> Educator expenses deduction</label>
+            <span class="f13c-p3-vol-prefix">$</span>
+            <input type="text" name="vol.expense.educator.amount" class="f13c-p3-vol-input" value="">
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.educator" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Alimony payments -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.alimony_paid"> <span><strong>(B)</strong> Alimony payments (do not include child support)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.alimony_paid"> <strong>(B)</strong> Alimony payments with spouse's SSN</label>
+            <span class="f13c-p3-vol-prefix">$</span>
+            <input type="text" name="vol.expense.alimony_paid.amount" class="f13c-p3-vol-input" value="">
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label>Adjustment to income</label>
+            <span class="f13c-p3-yn">
+                <label><input type="checkbox" name="vol.expense.alimony_adjustment.yes"> Yes</label>
+                <label><input type="checkbox" name="vol.expense.alimony_adjustment.no"> No</label>
+            </span>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.alimony_paid" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- ============================================================
+     SECTION 3 — Tax Related Events (12 rows)
+     ============================================================ -->
+<div class="f13c-p3-section-head">
+    <div>Did any of the following happen during 2025?</div>
+    <div>(To be completed by certified volunteer) Information to report</div>
+    <div>Notes/Comments</div>
+</div>
+
+<!-- Row: Educational classes -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.education"> <span><strong>(B)</strong> You or someone in your family took educational classes (technical school, college, job related, etc.)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.taxable_scholarship"> <strong>(B)</strong> Taxable scholarship income</label>
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1098t"> <strong>(B)</strong> 1098-T (itemized statement from school, invoice, etc.)</label>
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.education_credit"> <strong>(B)</strong> Education credit or tuition and fees deduction</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.education" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Sell a home -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.sell_home"> <span><strong>(A)</strong> Sell a home</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1099s"> <strong>(A)</strong> Sale of home (1099-S)</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.sell_home" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: HSA -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.hsa"> <span><strong>(A)</strong> Have a health savings account (HSA)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-twoup">
+            <label><input type="checkbox" name="vol.event.hsa_contributions"> <strong>(A)</strong> HSA contributions</label>
+            <label><input type="checkbox" name="vol.event.hsa_distributions"> <strong>(A)</strong> HSA distributions</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.hsa" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Marketplace insurance -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.marketplace"> <span><strong>(A)</strong> Purchase health insurance through the Marketplace (Exchange)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1095a"> <strong>(A)</strong> 1095-A</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.marketplace" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Energy-efficient home items -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.energy_home"> <span><strong>(A)</strong> Purchase and install energy-efficient home items (example: windows, furnace, insulation, etc.)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.energy_credit"> <strong>(A)</strong> Energy efficient home improvement credit (Form 5695, Part II only)</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.energy_home" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Other (vehicle, etc.) -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.other_purchase"> <span><strong>(A)</strong> Other (example: purchased a new vehicle, etc.)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label>VIN #</label>
+            <input type="text" name="vol.event.other_purchase.vin" class="f13c-p3-vol-input" value="" style="width:140px">
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.other_purchase" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Cancelled/forgiven debt -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.debt_cancelled"> <span><strong>(A)</strong> Have credit card, mortgage, or other debt cancelled/forgiven by a lender</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1099c"> <strong>(A)</strong> 1099-C</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.debt_cancelled" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Federal disaster area loss -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.disaster_loss"> <span><strong>(A)</strong> Have a loss related to a declared Federal disaster area</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1099a"> <strong>(A)</strong> 1099-A</label>
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.disaster_relief_impacts"> Disaster relief impacts return</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.disaster_loss" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Tax credit disallowed -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.credit_disallowed"> <span><strong>(B)</strong> Have a tax credit disallowed (example: earned income credit, child tax credit, or American opportunity credit)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.credit_disallowed"> <strong>(B)</strong> EITC, CTC, AOTC or HOH disallowed in a previous year</label>
+        </div>
+        <div class="f13c-p3-vol-fields">
+            <label>Year disallowed <input type="text" name="vol.event.credit_disallowed.year"></label>
+            <label>Reason <input type="text" name="vol.event.credit_disallowed.reason" style="width:140px"></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.credit_disallowed" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Letter from IRS -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.irs_letter"> <span>Receive any letter or bill from the IRS</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.litc_referral"> Eligible for Low Income Taxpayer Clinic referral</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.irs_letter" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Estimated tax payments / prior year refund -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.estimated_payments"> <span><strong>(B)</strong> Make estimated tax payments or apply last year's refund to 2025 taxes</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.estimated_payments"> <strong>(B)</strong> Estimated tax payments</label>
+            <input type="text" name="vol.event.estimated_payments.amount" class="f13c-p3-vol-input" value="">
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.prior_refund_applied"> <strong>(B)</strong> Last year's refund applied to this year</label>
+            <input type="text" name="vol.event.prior_refund_applied.amount" class="f13c-p3-vol-input" value="">
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.estimated_payments" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- Row: Brought last year's return -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.brought_prior_return"> <span>Brought last year's return</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.prior_return_available"> Last year's return available</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.brought_prior_return" class="f13c-p3-notes-input" value="">
+    </div>
+</div>
+
+<!-- ============================================================
+     Footer
+     ============================================================ -->
+<div class="f13c-footer">
+    <span>Catalog Number 52121E</span>
+    <span>www.irs.gov</span>
+    <span class="f13c-footer-right">Form <strong>13614-C</strong> (Rev. 10-2025)</span>
+</div>
+
+</div><!-- /.f13c-form -->
+
+</body>
+</html>
