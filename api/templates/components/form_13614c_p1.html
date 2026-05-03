@@ -1,0 +1,410 @@
+{# ============================================================
+   Form 13614-C, Page 1 — Intake/Interview and Quality Review Sheet.
+
+   Renders the new Page 1 mockup (docs/mockups/13614c_page1.html) with
+   data from build_p1_field_values(scenario.household). The caller
+   passes p1=<that dict>; this template reads from it via p1.get(...).
+
+   Volunteer-completed columns are intentionally blank — the player
+   fills them. Two of the five (vol_qc_other, vol_self_support) carry
+   the f13c-vol-col-ungraded class so the result UI / form headers
+   surface them as not graded in this version.
+   ============================================================ #}
+<div class="f13c-form">
+
+<!-- ============================================================
+     Section 1: Form header
+     ============================================================ -->
+<div class="f13c-header">
+    <div class="f13c-header-left">
+        <span class="f13c-form-number">Form 13614-C</span>
+        <span class="f13c-form-date">(October 2025)</span>
+    </div>
+    <div class="f13c-header-center">
+        <span class="f13c-dept">Department of the Treasury - Internal Revenue Service</span>
+        <span class="f13c-title">Intake/Interview and Quality Review Sheet</span>
+    </div>
+    <div class="f13c-header-right">
+        <span class="f13c-omb-label">OMB Number</span>
+        <span class="f13c-omb-number">1545-1964</span>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 2: Instruction block
+     ============================================================ -->
+<div class="f13c-instructions">
+    <div>
+        <strong>You will need:</strong>
+        <ul>
+            <li>Tax information such as Forms W-2, 1099, 1098, 1095.</li>
+            <li>Social Security cards or ITIN letters for all persons on your tax return</li>
+            <li>Picture ID (such as valid driver's license) for you and your spouse</li>
+        </ul>
+    </div>
+    <div>
+        <ul>
+            <li>Complete pages 1-5 of this form.</li>
+            <li>You are responsible for the information on your return. Provide complete and accurate information.</li>
+            <li>If you have questions, ask the IRS-certified volunteer preparer.</li>
+        </ul>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 3: Volunteers ethics banner
+     ============================================================ -->
+<div class="f13c-ethics">
+    Volunteers are trained to provide high quality service and uphold the highest ethical standards.
+    To report unethical behavior to the IRS, email us at
+    <a href="mailto:ts.voltax@irs.gov">ts.voltax@irs.gov</a>
+</div>
+
+<!-- ============================================================
+     Section 4: Personal information block
+     ============================================================ -->
+
+<!-- Row 1: Filer name / DOB / Job title -->
+<div class="f13c-personal-row f13c-personal-row--filer">
+    <div class="f13c-cell">
+        <span class="f13c-label">Your first name</span>
+        <input type="text" name="filer.first_name" value="{{ p1.get('filer.first_name', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">M.I.</span>
+        <input type="text" name="filer.middle_initial" value="{{ p1.get('filer.middle_initial', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Last name</span>
+        <input type="text" name="filer.last_name" value="{{ p1.get('filer.last_name', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Your date of birth</span>
+        <input type="text" name="filer.dob" value="{{ p1.get('filer.dob', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Your job title</span>
+        <input type="text" name="filer.job_title" value="{{ p1.get('filer.job_title', '') }}">
+    </div>
+</div>
+
+<!-- Row 2: Spouse name / DOB / Job title -->
+<div class="f13c-personal-row f13c-personal-row--spouse">
+    <div class="f13c-cell">
+        <span class="f13c-label">Spouse's first name</span>
+        <input type="text" name="spouse.first_name" value="{{ p1.get('spouse.first_name', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">M.I.</span>
+        <input type="text" name="spouse.middle_initial" value="{{ p1.get('spouse.middle_initial', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Last name</span>
+        <input type="text" name="spouse.last_name" value="{{ p1.get('spouse.last_name', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Spouse's date of birth</span>
+        <input type="text" name="spouse.dob" value="{{ p1.get('spouse.dob', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Spouse's job title</span>
+        <input type="text" name="spouse.job_title" value="{{ p1.get('spouse.job_title', '') }}">
+    </div>
+</div>
+
+<!-- Row 3: Mailing address -->
+<div class="f13c-personal-row f13c-personal-row--address">
+    <div class="f13c-cell">
+        <span class="f13c-label">Mailing address</span>
+        <input type="text" name="addr.street" value="{{ p1.get('addr.street', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Apt #</span>
+        <input type="text" name="addr.apt" value="{{ p1.get('addr.apt', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">City</span>
+        <input type="text" name="addr.city" value="{{ p1.get('addr.city', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">State</span>
+        <input type="text" name="addr.state" value="{{ p1.get('addr.state', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">ZIP code</span>
+        <input type="text" name="addr.zip" value="{{ p1.get('addr.zip', '') }}">
+    </div>
+</div>
+
+<!-- Row 4: Phone / Email / Two-state question -->
+<div class="f13c-personal-row f13c-personal-row--contact">
+    <div class="f13c-cell">
+        <span class="f13c-label">Your telephone number</span>
+        <input type="text" name="filer.phone" value="{{ p1.get('filer.phone', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Spouse's telephone number</span>
+        <input type="text" name="spouse.phone" value="{{ p1.get('spouse.phone', '') }}">
+    </div>
+    <div class="f13c-cell">
+        <span class="f13c-label">Email address (optional)</span>
+        <input type="text" name="filer.email" value="{{ p1.get('filer.email', '') }}">
+    </div>
+    <div class="f13c-cell f13c-cell--inline-q">
+        <span>Did you live or work in two or more states in 2025</span>
+        <div class="f13c-yn-group">
+            <label><input type="checkbox" name="two_states_yes"{% if p1.get('two_states_yes') %} checked{% endif %}> Yes</label>
+            <label><input type="checkbox" name="two_states_no"{% if p1.get('two_states_no') %} checked{% endif %}> No</label>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 5: "Can anyone else claim you" row
+     ============================================================ -->
+<div class="f13c-claim-row">
+    <span>Can anyone else claim you or your spouse on their tax return</span>
+    <div class="f13c-yn-group">
+        <label><input type="checkbox" name="claimable_yes"{% if p1.get('claimable_yes') %} checked{% endif %}> Yes</label>
+        <label><input type="checkbox" name="claimable_no"{% if p1.get('claimable_no') %} checked{% endif %}> No</label>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 6: Status questions (two-column)
+     ============================================================ -->
+<div class="f13c-status-block">
+    <div class="f13c-status-col">
+        <div class="f13c-status-heading">Check if you or your spouse were in 2025:</div>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">A U.S. citizen</span>
+            <label><input type="checkbox" name="filer.us_citizen"{% if p1.get('filer.us_citizen') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.us_citizen"{% if p1.get('spouse.us_citizen') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="citizen_no"{% if p1.get('citizen_no') %} checked{% endif %}> No</label>
+        </div>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">In the U.S. on a visa</span>
+            <label><input type="checkbox" name="filer.on_visa"{% if p1.get('filer.on_visa') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.on_visa"{% if p1.get('spouse.on_visa') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="visa_no"{% if p1.get('visa_no') %} checked{% endif %}> No</label>
+        </div>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">A full-time student</span>
+            <label><input type="checkbox" name="filer.full_time_student"{% if p1.get('filer.full_time_student') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.full_time_student"{% if p1.get('spouse.full_time_student') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="student_no"{% if p1.get('student_no') %} checked{% endif %}> No</label>
+        </div>
+    </div>
+    <div class="f13c-status-col">
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">Legally blind</span>
+            <label><input type="checkbox" name="filer.legally_blind"{% if p1.get('filer.legally_blind') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.legally_blind"{% if p1.get('spouse.legally_blind') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="blind_no"{% if p1.get('blind_no') %} checked{% endif %}> No</label>
+        </div>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">Totally and permanently disabled</span>
+            <label><input type="checkbox" name="filer.disabled"{% if p1.get('filer.disabled') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.disabled"{% if p1.get('spouse.disabled') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="disabled_no"{% if p1.get('disabled_no') %} checked{% endif %}> No</label>
+        </div>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">Issued an identity protection PIN (IPPIN)</span>
+            <label><input type="checkbox" name="filer.ippin"{% if p1.get('filer.ippin') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.ippin"{% if p1.get('spouse.ippin') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="ippin_no"{% if p1.get('ippin_no') %} checked{% endif %}> No</label>
+        </div>
+        <div class="f13c-status-row">
+            <span class="f13c-status-question">Owners or holders of any digital assets</span>
+            <label><input type="checkbox" name="filer.digital_assets"{% if p1.get('filer.digital_assets') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="spouse.digital_assets"{% if p1.get('spouse.digital_assets') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="digital_no"{% if p1.get('digital_no') %} checked{% endif %}> No</label>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 7: Refund / balance due
+     ============================================================ -->
+<div class="f13c-refund-block">
+    <div class="f13c-refund-col">
+        <strong>If due a refund, how would you like your refund</strong>
+        <div class="f13c-refund-options">
+            <label><input type="checkbox" name="refund.direct_deposit"{% if p1.get('refund.direct_deposit') %} checked{% endif %}> Direct deposit</label>
+            <label><input type="checkbox" name="refund.check"{% if p1.get('refund.check') %} checked{% endif %}> Check by mail</label>
+            <label><input type="checkbox" name="refund.split"{% if p1.get('refund.split') %} checked{% endif %}> Split refund between accounts</label>
+            <label><input type="checkbox" name="refund.other"{% if p1.get('refund.other') %} checked{% endif %}> Other</label>
+        </div>
+    </div>
+    <div class="f13c-refund-col">
+        <strong>If you have a balance due, how would you like to make your payment</strong>
+        <div class="f13c-refund-options">
+            <label><input type="checkbox" name="payment.bank"{% if p1.get('payment.bank') %} checked{% endif %}> Bank account</label>
+            <label><input type="checkbox" name="payment.irs_direct"{% if p1.get('payment.irs_direct') %} checked{% endif %}> IRS.gov Direct Pay</label>
+            <label><input type="checkbox" name="payment.installment"{% if p1.get('payment.installment') %} checked{% endif %}> Set up installment agreement</label>
+            <label><input type="checkbox" name="payment.mail"{% if p1.get('payment.mail') %} checked{% endif %}> Mail payment to IRS</label>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 8: Language preference
+     ============================================================ -->
+<div class="f13c-lang-block">
+    <div class="f13c-lang-line1">
+        <span class="f13c-lang-q">Would you like to receive written communications from the IRS in a language other than English</span>
+        <div class="f13c-yn-group">
+            <label><input type="checkbox" name="lang_pref_you"{% if p1.get('lang_pref_you') %} checked{% endif %}> You</label>
+            <label><input type="checkbox" name="lang_pref_spouse"{% if p1.get('lang_pref_spouse') %} checked{% endif %}> Spouse</label>
+            <label><input type="checkbox" name="lang_pref_no"{% if p1.get('lang_pref_no') %} checked{% endif %}> No</label>
+        </div>
+    </div>
+    <div class="f13c-lang-line2">
+        <span class="f13c-label">What language</span>
+        <input type="text" name="lang_pref_language" value="{{ p1.get('lang_pref_language', '') }}" style="flex:1;">
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 9: Presidential Election Campaign Fund
+     ============================================================ -->
+<div class="f13c-election-row">
+    <span class="f13c-election-q">Would you, or your spouse if married filing jointly, like $3 to go to the Presidential Election Campaign Fund</span>
+    <div class="f13c-yn-group">
+        <label><input type="checkbox" name="election.you"{% if p1.get('election.you') %} checked{% endif %}> You</label>
+        <label><input type="checkbox" name="election.spouse"{% if p1.get('election.spouse') %} checked{% endif %}> Spouse</label>
+        <label><input type="checkbox" name="election.no"{% if p1.get('election.no') %} checked{% endif %}> No</label>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 10: Marital status
+     ============================================================ -->
+<div class="f13c-marital">
+    <div class="f13c-marital-heading">As of December 31, 2025, what was your marital status</div>
+
+    <!-- Row 1: Never Married | Married | "If married..." Yes No -->
+    <div class="f13c-marital-row">
+        <div class="f13c-marital-col1"><label><input type="checkbox" name="marital.never_married"{% if p1.get('marital.never_married') %} checked{% endif %}> Never Married</label></div>
+        <div class="f13c-marital-col2">
+            <label><input type="checkbox" name="marital.married"{% if p1.get('marital.married') %} checked{% endif %}> Married</label>
+            <span class="f13c-marital-question">If married, were you married on the last day of the year</span>
+        </div>
+        <div class="f13c-marital-col3">
+            <label><input type="checkbox" name="marital.married_eoy"{% if p1.get('marital.married_eoy') %} checked{% endif %}> Yes</label>
+            <label><input type="checkbox" name="marital.married_eoy_no"{% if p1.get('marital.married_eoy_no') %} checked{% endif %}> No</label>
+        </div>
+    </div>
+
+    <!-- Row 2: (empty) | (empty) | "Did you and your spouse..." Yes No -->
+    <div class="f13c-marital-row">
+        <div class="f13c-marital-col1"></div>
+        <div class="f13c-marital-col2">
+            <span class="f13c-marital-question">Did you and your spouse live apart all of the last 6 months of the year</span>
+        </div>
+        <div class="f13c-marital-col3">
+            <label><input type="checkbox" name="marital.lived_apart_yes"{% if p1.get('marital.lived_apart_yes') %} checked{% endif %}> Yes</label>
+            <label><input type="checkbox" name="marital.lived_apart_no"{% if p1.get('marital.lived_apart_no') %} checked{% endif %}> No</label>
+        </div>
+    </div>
+
+    <!-- Row 3: Divorced | Legally Separated but not Divorced | Widowed -->
+    <div class="f13c-marital-row">
+        <div class="f13c-marital-col1"><label><input type="checkbox" name="marital.divorced"{% if p1.get('marital.divorced') %} checked{% endif %}> Divorced</label></div>
+        <div class="f13c-marital-col2">
+            <label><input type="checkbox" name="marital.separated"{% if p1.get('marital.separated') %} checked{% endif %}> Legally Separated but not Divorced</label>
+        </div>
+        <div class="f13c-marital-col3">
+            <label class="f13c-marital-widowed"><input type="checkbox" name="marital.widowed"{% if p1.get('marital.widowed') %} checked{% endif %}> Widowed</label>
+        </div>
+    </div>
+
+    <!-- Row 4: Date of final decree | Date of separate maintenance decree | Year of spouse's death -->
+    <div class="f13c-marital-row">
+        <div class="f13c-marital-col1">
+            <div class="f13c-marital-sub"><span>Date of final decree</span> <input type="text" name="marital.divorce_date" value="{{ p1.get('marital.divorce_date', '') }}"></div>
+        </div>
+        <div class="f13c-marital-col2">
+            <span class="f13c-marital-spacer"></span>
+            <div class="f13c-marital-sub"><span>Date of separate maintenance decree</span> <input type="text" name="marital.separation_date" value="{{ p1.get('marital.separation_date', '') }}"></div>
+        </div>
+        <div class="f13c-marital-col3">
+            <div class="f13c-marital-sub"><span>Year of spouse's death</span> <input type="text" name="marital.spouse_death_year" value="{{ p1.get('marital.spouse_death_year', '') }}"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     Section 11: Dependents grid
+     ============================================================ -->
+<div class="f13c-dependents">
+    <table class="f13c-dep-table">
+        <thead>
+            <!-- Intro banner row: 5 cols / 5 cols / 5 cols -->
+            <tr>
+                <th class="f13c-dep-intro--left" colspan="5">
+                    List the names below of everyone who lived with you last year (except your
+                    spouse) <strong>AND</strong> anyone you supported but did not live with you last year.
+                </th>
+                <th class="f13c-dep-intro--mid" colspan="5">Answer Yes or No (Y/N)</th>
+                <th class="f13c-dep-intro--right" colspan="5">
+                    To be completed by certified volunteer<br>(Yes, No, or N/A)
+                </th>
+            </tr>
+            <tr>
+                <!-- Client columns -->
+                <th class="f13c-dep-th--client" style="min-width:140px;">Name (first, last)</th>
+                <th class="f13c-dep-th--client" style="width:80px;">Date of birth<br>(mm/dd/yy)</th>
+                <th class="f13c-dep-th--client" style="width:85px;">Relationship to you<br>(child, parent, none, etc.)</th>
+                <th class="f13c-dep-th--client" style="width:70px;">Number of months lived in your home in 2025</th>
+                <th class="f13c-dep-th--client" style="width:60px;">Single or Married as of 12/31/2025<br>(S/M)</th>
+                <th class="f13c-dep-th--client" style="width:36px;">U.S. Citizen</th>
+                <th class="f13c-dep-th--client" style="width:50px;">Resident of U.S., Canada or Mexico</th>
+                <th class="f13c-dep-th--client" style="width:40px;">Full-time student</th>
+                <th class="f13c-dep-th--client" style="width:45px;">Totally and permanently disabled</th>
+                <th class="f13c-dep-th--client" style="width:36px;">Issued IPPIN</th>
+                <!-- Volunteer columns -->
+                <th class="f13c-dep-th--vol f13c-vol-col-ungraded" style="width:50px;">Qualifying child or relative of any other person<span class="f13c-vol-col-ungraded__label">Not graded</span></th>
+                <th class="f13c-dep-th--vol f13c-vol-col-ungraded" style="width:55px;">This person provided more than 50% of their own support<span class="f13c-vol-col-ungraded__label">Not graded</span></th>
+                <th class="f13c-dep-th--vol" style="width:50px;">This person had less than $5,200 of income</th>
+                <th class="f13c-dep-th--vol" style="width:55px;">Taxpayer(s) provided more than 50% of support for this person</th>
+                <th class="f13c-dep-th--vol" style="width:55px;">Taxpayer(s) paid more than half the cost of maintaining a home for this person</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in range(4) %}
+            <tr>
+                <td class="f13c-dep-name"><input type="text" name="dep.{{ i }}.name" value="{{ p1.get('dep.' ~ i ~ '.name', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.dob" value="{{ p1.get('dep.' ~ i ~ '.dob', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.relationship" value="{{ p1.get('dep.' ~ i ~ '.relationship', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.months" value="{{ p1.get('dep.' ~ i ~ '.months', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.marital_eoy" value="{{ p1.get('dep.' ~ i ~ '.marital_eoy', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.us_citizen" value="{{ p1.get('dep.' ~ i ~ '.us_citizen', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.resident" value="{{ p1.get('dep.' ~ i ~ '.resident', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.student" value="{{ p1.get('dep.' ~ i ~ '.student', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.disabled" value="{{ p1.get('dep.' ~ i ~ '.disabled', '') }}"></td>
+                <td><input type="text" name="dep.{{ i }}.ippin" value="{{ p1.get('dep.' ~ i ~ '.ippin', '') }}"></td>
+                <!-- Volunteer columns — completed by certified volunteer.
+                     vol_qc_other and vol_self_support are not graded in
+                     this version (see UNGRADED_FIELDS in form_fields.py). -->
+                <td class="f13c-vol-col-ungraded"><input type="text" name="dep.{{ i }}.vol_qc_other" value=""></td>
+                <td class="f13c-vol-col-ungraded"><input type="text" name="dep.{{ i }}.vol_self_support" value=""></td>
+                <td><input type="text" name="dep.{{ i }}.vol_income_under" value=""></td>
+                <td><input type="text" name="dep.{{ i }}.vol_support" value=""></td>
+                <td><input type="text" name="dep.{{ i }}.vol_home_cost" value=""></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- ============================================================
+     Footer
+     ============================================================ -->
+<div class="f13c-footer">
+    <span>Catalog Number 52121E</span>
+    <span>www.irs.gov</span>
+    <span class="f13c-footer-right">Form 13614-C (Rev. 10-2025)</span>
+</div>
+
+</div><!-- /.f13c-form -->
