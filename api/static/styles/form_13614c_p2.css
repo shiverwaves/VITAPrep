@@ -1,0 +1,259 @@
+/*
+ * Form 13614-C Page 2 — scoped styles (f13c-p2- prefix).
+ *
+ * Lifted from docs/mockups/13614c_page2.html. Only the page-2
+ * structural classes (.f13c-p2-*) live here; the shared root
+ * (.f13c-form, typography, custom checkboxes, .f13c-footer) is
+ * already defined in form_13614c_p1.css and the encounter view
+ * imports both stylesheets in order.
+ */
+
+/* ================================================================
+   Page indicator (top-right)
+   ================================================================ */
+
+.f13c-p2-page-indicator {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px 0;
+    border-bottom: 1.5px solid #000;
+}
+
+/* ================================================================
+   Section banner: "Income: Answer ..."
+   ================================================================ */
+
+.f13c-p2-banner {
+    padding: 5px 8px;
+    border-bottom: 0.5px solid #000;
+    font-size: 11px;
+}
+
+.f13c-p2-banner strong {
+    font-size: 11.5px;
+}
+
+/* ================================================================
+   Three-column income grid
+   ================================================================
+   The middle (volunteer) and right (notes) columns sit on a light
+   gray background to match the IRS form's visual demarcation of
+   the volunteer-completed area. */
+
+.f13c-p2-grid {
+    border-bottom: 1.5px solid #000;
+}
+
+/* Each row (header and content) is its own 3-column grid. Per-row
+   grids (rather than a single subgrid or display:contents approach)
+   keep the layout robust across rendering engines while still
+   aligning columns visually because every row uses the same column
+   template. */
+.f13c-p2-grid__head,
+.f13c-p2-row {
+    display: grid;
+    grid-template-columns: 42% 45% 13%;
+}
+
+.f13c-p2-grid__head > div {
+    background: #f0efea;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 8px;
+    border-bottom: 0.5px solid #000;
+    border-right: 0.5px solid #888;
+}
+
+.f13c-p2-grid__head > div:first-child {
+    background: #fff;
+}
+
+.f13c-p2-grid__head > div:last-child {
+    border-right: none;
+}
+
+/* ================================================================
+   Income rows
+   ================================================================ */
+
+.f13c-p2-row > .f13c-p2-cell {
+    border-bottom: 0.5px solid #888;
+    border-right: 0.5px solid #888;
+    padding: 4px 8px;
+    min-height: 28px;
+}
+
+.f13c-p2-row > .f13c-p2-cell:last-child {
+    border-right: none;
+}
+
+.f13c-p2-cell--client {
+    background: #fff;
+}
+
+.f13c-p2-cell--volunteer,
+.f13c-p2-cell--notes {
+    background: #f0efea;
+}
+
+/* Client cell content: primary checkbox label + optional sub-question
+   stacked beneath. */
+
+.f13c-p2-q {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    line-height: 1.35;
+}
+
+.f13c-p2-q label {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    cursor: pointer;
+    line-height: 1.35;
+}
+
+.f13c-p2-q label > input[type="checkbox"] {
+    margin-top: 2px;
+}
+
+.f13c-p2-subq {
+    /* Two-column grid: text in col 1, Y/N (or other tail content) in
+     * col 2. align-items: end pins the tail to the baseline of the
+     * row's last line — so when the text wraps, the Y/N stays with
+     * the *last* line, not on its own row underneath.
+     *
+     * padding-right pushes the Y/N column away from the cell's right
+     * edge so the [No] checkbox lands at a consistent x-position
+     * across rows. */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 6px;
+    align-items: end;
+    margin-top: 3px;
+    margin-left: 18px;
+    padding-right: 60px;
+    font-size: 10.5px;
+    color: #222;
+}
+
+.f13c-p2-subq input[type="text"] {
+    width: 100px;
+    justify-self: start;
+}
+
+/* Secondary sub-question (a separate question stacked under the
+   primary one, e.g. row 11's "renting personal property such as a
+   vehicle"). */
+.f13c-p2-q--secondary {
+    margin-top: 4px;
+}
+
+/* Inline Yes/No pair (used in both client sub-questions and
+   volunteer entries). margin-left: auto pushes the pair flush-right
+   in its parent flex container so Y/N pairs align at the cell's
+   right edge regardless of how long the preceding label is. */
+.f13c-p2-yn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+.f13c-p2-yn label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    min-width: 36px;
+}
+
+/* Volunteer cell content: one or more entries, each on its own line. */
+
+.f13c-p2-cell--volunteer {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.f13c-p2-vol-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1.35;
+}
+
+.f13c-p2-vol-entry > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+}
+
+.f13c-p2-vol-entry > label > input[type="checkbox"] {
+    flex-shrink: 0;
+}
+
+/* When a volunteer entry ends in a Y/N pair, hold the pair off the
+ * cell's right edge so the [No] checkbox lines up vertically with
+ * the "$" (or "#") prefix in the row above. */
+.f13c-p2-vol-entry > .f13c-p2-yn {
+    margin-right: 60px;
+}
+
+.f13c-p2-vol-prefix {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: 11px;
+    color: #444;
+}
+
+.f13c-p2-vol-input {
+    flex: 0 0 auto;
+    width: 80px;
+}
+
+/* Schedule C sub-rows are slightly indented inside the volunteer cell. */
+.f13c-p2-schedule-c-sub {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-left: 18px;
+    line-height: 1.35;
+}
+
+.f13c-p2-schedule-c-sub > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+}
+
+/* Notes cell — the per-row text input fills the cell and is rendered
+   without the default underline so the input visually melts into the
+   cell. The cell itself (gray-shaded background) is the visual frame;
+   the player just clicks anywhere in the cell to type. */
+
+.f13c-p2-cell--notes {
+    padding: 0;
+}
+
+.f13c-p2-notes-input {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: none !important;
+    background: transparent;
+}
+
+.f13c-p2-notes-input:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: -2px;
+}
