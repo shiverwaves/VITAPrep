@@ -104,23 +104,24 @@ class TestEncounterPage1Render:
         assert "f13c-vol-col-ungraded" in html
         assert "Not graded" in html
 
-    def test_page_2_keeps_legacy_layout(self, client: TestClient) -> None:
-        """Pages 2-4 still use the existing notes-driven sheet__row
-        layout — Phase 1D scope is Page 1 only."""
+    def test_page_2_uses_new_template(self, client: TestClient) -> None:
+        """Page 2 now uses the IRS-faithful Page 2 partial (Phase 3-D)
+        rather than the legacy notes-driven sheet__row layout."""
         sid = _make_scenario(client)
         html = client.get(f"/scenarios/{sid}").text
-        # Find page-2 region; require sheet__row to live inside it.
         page2_region = re.search(
             r'id="page-2"[^>]*data-page="2"[^>]*>(.*?)id="page-3"',
             html,
             re.DOTALL,
         )
         assert page2_region, "page 2 region not found"
-        # At least one sheet__row OR a sheet__empty-page placeholder
-        # must be present (means we're on the legacy code path).
         body = page2_region.group(1)
-        legacy_marker = "sheet__row" in body or "sheet__empty-page" in body
-        assert legacy_marker, "page 2 not using legacy layout"
+        # New template's three-column grid + the per-page-2 input
+        # namespace must appear; the legacy markers must not.
+        assert "f13c-p2-grid" in body, "page 2 not using new template"
+        assert 'name="income.wages"' in body
+        assert "sheet__row" not in body
+        assert "sheet__empty-page" not in body
 
     def test_no_legacy_you_namespace_in_page1(
         self, client: TestClient,

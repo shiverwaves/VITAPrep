@@ -726,9 +726,14 @@ async def page_exercise(
     # Page 1 client-column prefill — always (no mode gate). Reads the new
     # filer.* / dep.{i}.* namespace; the template partial reads from p1.
     p1: Dict[str, object] = {}
+    p2: Dict[str, object] = {}
     if scenario.household:
-        from training.form_populator import build_p1_field_values
+        from training.form_populator import (
+            build_p1_field_values,
+            build_p2_field_values,
+        )
         p1 = build_p1_field_values(scenario.household)
+        p2 = build_p2_field_values(scenario.household)
 
     # Document URL + label maps for the layout system's DocumentPane
     # (Phase 2). The keys are doc_ids; both maps share the same key
@@ -749,6 +754,7 @@ async def page_exercise(
         "category_labels": _CATEGORY_LABELS,
         "prefill": prefill,
         "p1": p1,
+        "p2": p2,
         "doc_urls": doc_urls,
         "doc_labels": doc_labels,
     })
