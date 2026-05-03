@@ -29,7 +29,16 @@
     display: grid;
     grid-template-columns: 1fr 0fr;
     grid-template-rows: 1fr;
-    height: 100%;
+    /* Fill the remaining vertical space inside .app-shell (a column
+     * flex container). `height: 100%` doesn't work here because flex
+     * children don't get a definite height from a percentage unless
+     * a parent constraint forces it; without flex:1 the .app-main
+     * grew with its content, pushing the form-pane's bottom (and its
+     * horizontal scroll bar) below the viewport. min-height: 0 lets
+     * the flex item shrink to the available space rather than its
+     * intrinsic content height. */
+    flex: 1 1 0;
+    min-height: 0;
     overflow: hidden;
 }
 
