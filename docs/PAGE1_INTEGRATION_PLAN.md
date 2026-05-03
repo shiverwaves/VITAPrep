@@ -527,7 +527,138 @@ available in the tab strip of any remaining pane).
 
 ---
 
+### Phase 2A: Pure logic — reducer + doc_labels helper
+
+Pure functions only. No DOM, no CSS, no markup. Nothing renders
+differently after this phase lands; this is foundation work that 2B
+builds on.
+
+**Files:**
+
+- `api/static/js/layout-reducer.js` (new, ~60 LOC) — exports a single
+  `reduce(state, action) → newState` function. Handles three action
+  types: `CYCLE_PANES`, `TOGGLE_CHAT`, `SELECT_DOC`. No dependencies,
+  no DOM access, no `document` references.
+- `api/routes/scenarios.py` — add `_build_doc_labels(scenario) →
+  dict[doc_id, str]` helper following the four-case rule from the
+  *Document tab labels* section. Built once in `page_exercise` next to
+  `doc_urls` and passed to the template (the template won't read it
+  until 2B, but the data is in place).
+- `tests/test_doc_labels.py` (new) — table-driven tests covering each
+  of the four cases (person-owned single, person-owned multiple,
+  household with issuer, household without).
+
+**Test approach for the reducer:** the reducer is JS; the test suite
+is Python. Two options considered:
+- *Option 1 (chosen):* skip JS unit tests for now. Phase 2C's
+  TestClient integration tests will exercise the reducer through
+  real state transitions in the rendered DOM; isolated unit tests
+  on a 60-LOC pure function add tooling overhead (`js2py` or a JS
+  test runner) for marginal benefit.
+- *Option 2 (deferred):* introduce a JS test runner if the reducer
+  grows in complexity past Part 2.
+
+**Verification:** `_build_doc_labels` covered by the new Python
+tests; reducer eyeballed and committed for use in 2B.
+
+**Why first:** the reducer is the brain of the layout system. If we
+get its semantics wrong, 2B paints over the bug with markup and CSS
+that's harder to dig out later. Landing it in isolation forces us to
+write down the state machine before we have anything to fudge it
+against.
+
+### Phase 2B: Wire it up
+
+The structural change. Workspace markup, CSS layouts, JS renderer,
+and titlebar buttons are interdependent — partial rewrites break the
+page — so this phase lands as one commit.
+
+**New files:**
+
+- `api/static/js/layout-render.js` (~150 LOC) — `applyState(state)`
+  that mutates the DOM in response to reducer output. Pane template
+  functions (`renderDocPane(paneIdx, docId, allDocs)`), event
+  delegation (`handleClick(e)`), and the `dispatch(action)` entry
+  point. Only this file touches the DOM; `applyState` is the single
+  render entry point.
+- `api/static/styles/layout.css` — the five CSS Grid configs as
+  `[data-layout="..."]` selectors on `#workspace`, plus `.app-main`
+  chat-1/3-or-0 grid template, plus `min-width:0; overflow:auto` on
+  `#form-pane`, `#doc-pane-0`, `#doc-pane-1`.
+
+**Modified files:**
+
+- `api/templates/encounter.html` — replace the existing `.workspace`
+  markup with the new pane structure. Add
+  `<script>window.SCENARIO_DOCS = {{ doc_urls|tojson }};</script>` and
+  `<script>window.SCENARIO_DOC_LABELS = {{ doc_labels|tojson }};</script>`.
+  The default `data-layout="form-only"` is baked in server-side so
+  the no-JS first paint is form-only-full-width (never half-hydrated).
+- `api/templates/components/titlebar.html` — two new SVG buttons:
+  pane-cycle (icon shows the next state per *Reducer behavior*), and
+  chat-toggle. The chat-toggle button doubles as the host for the
+  "1 doc hidden" indicator badge when `hiddenDocCache` is set.
+- `api/routes/scenarios.py` (`page_exercise`) — pass `doc_urls` and
+  `doc_labels` (built in 2A) to the template context.
+- `api/static/js/encounter.js` — re-test against the new pane
+  structure; page-tab switching inside the form pane should still
+  work since it's orthogonal to the layout system.
+
+**Deleted files:**
+
+- `api/static/js/sidebar.js` — replaced by the chat-toggle action in
+  `layout-render.js`. The `aside#sidebar` markup and its CSS go too.
+
+**SessionStorage hydration:** at the bottom of `layout-render.js`, on
+DOMContentLoaded, read `sessionStorage[scenarioId]` and call
+`applyState()` with the parsed snapshot. If absent, leave the
+server-rendered form-only default in place.
+
+**Visual change goes live in this phase.** From here on, scenarios
+load with the new chrome.
+
+### Phase 2C: Tests + polish
+
+Focused tests for the integration, plus any rough edges that surfaced
+during 2B.
+
+- `tests/test_encounter_layout_system.py` (FastAPI TestClient):
+  - GET `/scenarios/{id}` returns 200 with `data-layout="form-only"`
+    on `#workspace` (the server-rendered default).
+  - The pane-cycle and chat-toggle buttons are present in the
+    titlebar; `sidebar` markup is gone.
+  - `window.SCENARIO_DOCS` and `window.SCENARIO_DOC_LABELS` are
+    present in the rendered HTML and match the route's `doc_urls` /
+    `doc_labels`.
+  - Submitting the form post-rewrite still grades correctly
+    (regression check on Phase 1's submit path).
+- `tests/test_layout_doc_label_rendering.py`: per-case label
+  assertions against scenarios with single-W-2, multi-W-2, household
+  1098 with issuer.
+- Polish: any layout glitches or chat-toggle edge cases observed
+  while integrating in 2B (e.g., focus restoration when the cached
+  doc returns).
+
+**Out of scope for 2C:** browser-driven UI tests (Playwright /
+Selenium). The DOM-mutating code is exercised at integration time
+manually; automating the click-through is a separate effort.
+
+### Sequencing
+
+2A → 2B → 2C, all on the same branch. 2A is small enough (a few
+hours) that we can review and decide on test approach for the JS
+reducer before committing to 2B. 2B is the largest phase by far.
+2C lands as a follow-up to whatever broke or felt rough during 2B.
+
+Each phase is independently shippable in principle; in practice 2A
+ships behind a useless data-pipe (the doc_labels arrive but nothing
+reads them) and 2B ships the user-visible feature.
+
+---
+
 ## Suggested implementation order
+
+**Part 1 (form integration) — complete:**
 
 1. **Phase 1A** (model extensions) — additive, lands in isolation.
 2. **Phase 1B + 1F** (rename + migration) — atomic. Includes the startup
@@ -536,11 +667,24 @@ available in the tab strip of any remaining pane).
    key) — lands as one PR; testable end-to-end.
 4. **Phase 1G** (tests) — actually written in parallel with 1C/D/E, just
    listed last for narrative clarity.
-5. **Part 2** — layout reducer first (testable in isolation), then
-   renderer + CSS, then titlebar wiring, then chat toggle, then end-to-end.
 
-Each phase is independently shippable behind a feature flag (e.g.,
-`ENCOUNTER_V2=true` env var) until you're confident.
+**Part 2 (layout system) — three phases on one branch:**
+
+5. **Phase 2A** (pure logic) — `layout-reducer.js` plus
+   `_build_doc_labels` helper + tests. No UI change. Hours, not days.
+6. **Phase 2B** (wire it up) — workspace markup replacement, CSS
+   layouts, JS renderer, titlebar buttons, sessionStorage hydration.
+   The visual change goes live here. Lands as one commit since the
+   pieces are interdependent.
+7. **Phase 2C** (tests + polish) — TestClient integration tests for
+   the new chrome; per-case doc-label assertions; cleanup of any
+   rough edges from 2B.
+
+Phases of Part 1 each had distinct correctness concerns (migration
+atomicity, schema changes, etc.) so they were split fine-grained.
+Part 2 is one feature with no migration concerns and no atomicity
+requirements; phasing here is purely about review surface and
+bisect-ability — three phases is enough.
 
 ---
 
