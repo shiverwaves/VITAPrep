@@ -131,7 +131,7 @@ body {
 .f13c-p2-grid__head,
 .f13c-p2-row {
     display: grid;
-    grid-template-columns: 39% 47% 14%;
+    grid-template-columns: 42% 45% 13%;
 }
 
 /* Header row cells */
@@ -224,12 +224,18 @@ body {
     margin-top: 4px;
 }
 
-/* Inline Yes/No pair (used in client and volunteer sub-questions) */
+/* Inline Yes/No pair (used in both client sub-questions and
+   volunteer entries). margin-left: auto pushes the pair flush-right
+   in its parent flex container so Y/N pairs align at the cell's
+   right edge regardless of how long the preceding label is.
+   Each Y/N option also has a fixed min-width so the [Yes] and [No]
+   checkboxes themselves line up consistently across rows. */
 .f13c-p2-yn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-left: 4px;
+    gap: 6px;
+    margin-left: auto;
+    flex: 0 0 auto;
 }
 
 .f13c-p2-yn label {
@@ -237,6 +243,7 @@ body {
     align-items: center;
     gap: 3px;
     cursor: pointer;
+    min-width: 36px;
 }
 
 /* Volunteer cell content: one or more entries, each on its own line. */
