@@ -333,7 +333,7 @@ class TestGroundTruth:
         result = engine.generate_scenario(mode="encounter", difficulty="easy")
         fa = result.ground_truth.get("form_answers", {})
         assert len(fa) > 0
-        assert "you.first_name" in fa
+        assert "filer.first_name" in fa
 
     def test_ground_truth_computed_before_errors(
         self, engine: ExerciseEngine,
@@ -342,7 +342,7 @@ class TestGroundTruth:
             mode="verify", difficulty="easy", error_count=2,
         )
         fa = result.ground_truth.get("form_answers", {})
-        assert fa.get("you.first_name") == "Jane"
+        assert fa.get("filer.first_name") == "Jane"
 
     def test_ground_truth_has_filing_status(
         self, engine: ExerciseEngine,
@@ -365,20 +365,20 @@ class TestGroundTruth:
         from training.grader import Grader
         result = engine.generate_scenario(mode="encounter", difficulty="easy")
         grader = Grader()
-        sub = {"you.first_name": "Jane"}
+        sub = {"filer.first_name": "Jane"}
         grade = grader.grade_encounter(sub, result.ground_truth)
         correct = [f for f in grade.field_feedback
-                   if f["field"] == "you.first_name"]
+                   if f["field"] == "filer.first_name"]
         assert correct[0]["status"] == "correct"
 
     def test_grader_wrong_answer(self, engine: ExerciseEngine) -> None:
         from training.grader import Grader
         result = engine.generate_scenario(mode="encounter", difficulty="easy")
         grader = Grader()
-        sub = {"you.first_name": "WRONG"}
+        sub = {"filer.first_name": "WRONG"}
         grade = grader.grade_encounter(sub, result.ground_truth)
         wrong = [f for f in grade.field_feedback
-                 if f["field"] == "you.first_name"]
+                 if f["field"] == "filer.first_name"]
         assert wrong[0]["status"] == "incorrect"
 
 

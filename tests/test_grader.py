@@ -50,8 +50,7 @@ from training.form_fields import (
     CLAIMED_AS_DEPENDENT,
     DEP_DISABLED,
     DEP_DOB,
-    DEP_FIRST_NAME,
-    DEP_LAST_NAME,
+    DEP_NAME,
     DEP_MONTHS,
     DEP_RELATIONSHIP,
     DEP_STUDENT,
@@ -276,8 +275,7 @@ def _perfect_married_submission() -> Dict[str, str]:
         SPOUSE_SSN: "900-22-2222",
         FILING_STATUS: "married_filing_jointly",
         NOT_CLAIMED_AS_DEPENDENT: "Yes",
-        dep_field(0, DEP_FIRST_NAME): "Jake",
-        dep_field(0, DEP_LAST_NAME): "Smith",
+        dep_field(0, DEP_NAME): "Jake Smith",
         dep_field(0, DEP_DOB): "01/05/2012",
         dep_field(0, DEP_RELATIONSHIP): "Son/Daughter",
         dep_field(0, DEP_MONTHS): "12",
@@ -506,22 +504,22 @@ class TestGradeVerificationPerfect:
         actual = [
             InjectedError(
                 error_id="err-1", category="name",
-                field="you.first_name", person_id="p-01",
+                field="filer.first_name", person_id="p-01",
                 document="intake_form", correct_value="Jane",
                 erroneous_value="Janet", explanation="Misspelled",
                 difficulty="easy",
             ),
             InjectedError(
                 error_id="err-2", category="ssn",
-                field="you.ssn", person_id="p-01",
+                field="filer.ssn", person_id="p-01",
                 document="intake_form", correct_value="900-12-3456",
                 erroneous_value="900-12-3465", explanation="Transposed",
                 difficulty="easy",
             ),
         ]
         flagged = [
-            {"field": "you.first_name", "description": "Name is Janet not Jane"},
-            {"field": "you.ssn", "description": "SSN digits transposed"},
+            {"field": "filer.first_name", "description": "Name is Janet not Jane"},
+            {"field": "filer.ssn", "description": "SSN digits transposed"},
         ]
         result = grader.grade_verification(flagged, actual)
         assert result.score == 2
@@ -542,21 +540,21 @@ class TestGradeVerificationPartial:
         actual = [
             InjectedError(
                 error_id="err-1", category="name",
-                field="you.first_name", person_id="p-01",
+                field="filer.first_name", person_id="p-01",
                 document="intake_form", correct_value="Jane",
                 erroneous_value="Janet", explanation="Misspelled",
                 difficulty="easy",
             ),
             InjectedError(
                 error_id="err-2", category="ssn",
-                field="you.ssn", person_id="p-01",
+                field="filer.ssn", person_id="p-01",
                 document="intake_form", correct_value="900-12-3456",
                 erroneous_value="900-12-3465", explanation="Transposed",
                 difficulty="medium",
             ),
         ]
         flagged = [
-            {"field": "you.first_name", "description": "Name wrong"},
+            {"field": "filer.first_name", "description": "Name wrong"},
         ]
         result = grader.grade_verification(flagged, actual)
         assert result.score == 1
@@ -569,7 +567,7 @@ class TestGradeVerificationPartial:
         actual = [
             InjectedError(
                 error_id="err-1", category="ssn",
-                field="you.ssn", person_id="p-01",
+                field="filer.ssn", person_id="p-01",
                 document="intake_form", correct_value="900-12-3456",
                 erroneous_value="900-12-3465", explanation="Transposed",
                 difficulty="medium",
@@ -590,7 +588,7 @@ class TestGradeVerificationFalseFlags:
     def test_false_flag_counted(self, grader: Grader) -> None:
         actual: List[InjectedError] = []  # Error-free scenario
         flagged = [
-            {"field": "you.ssn", "description": "I think SSN is wrong"},
+            {"field": "filer.ssn", "description": "I think SSN is wrong"},
         ]
         result = grader.grade_verification(flagged, actual)
         assert result.score == 0
@@ -601,15 +599,15 @@ class TestGradeVerificationFalseFlags:
         actual = [
             InjectedError(
                 error_id="err-1", category="name",
-                field="you.first_name", person_id="p-01",
+                field="filer.first_name", person_id="p-01",
                 document="intake_form", correct_value="Jane",
                 erroneous_value="Janet", explanation="Misspelled",
                 difficulty="easy",
             ),
         ]
         flagged = [
-            {"field": "you.first_name", "description": "Name wrong"},
-            {"field": "you.dob", "description": "DOB looks off"},  # false
+            {"field": "filer.first_name", "description": "Name wrong"},
+            {"field": "filer.dob", "description": "DOB looks off"},  # false
         ]
         result = grader.grade_verification(flagged, actual)
         assert len(result.correct_flags) == 1
@@ -634,7 +632,7 @@ class TestGradeVerificationErrorFree:
     def test_no_errors_student_flags_something(self, grader: Grader) -> None:
         """Student incorrectly flags an error on a clean scenario."""
         flagged = [
-            {"field": "you.ssn", "description": "Looks wrong"},
+            {"field": "filer.ssn", "description": "Looks wrong"},
         ]
         result = grader.grade_verification(flagged, [])
         assert len(result.false_flags) == 1
@@ -654,7 +652,7 @@ class TestGradeVerificationFeedback:
         actual = [
             InjectedError(
                 error_id="err-1", category="name",
-                field="you.first_name", person_id="p-01",
+                field="filer.first_name", person_id="p-01",
                 document="intake_form", correct_value="Jane",
                 erroneous_value="Janet", explanation="Misspelled",
                 difficulty="easy",
@@ -1042,9 +1040,9 @@ class TestGradeIntakeGroundTruthValidation:
 
     def test_none_ground_truth_raises(self, grader: Grader) -> None:
         with pytest.raises(ValueError, match="no ground_truth"):
-            grader.grade_encounter({"you.first_name": "Jane"}, None)
+            grader.grade_encounter({"filer.first_name": "Jane"}, None)
 
     def test_missing_form_answers_grades_zero(self, grader: Grader) -> None:
         gt = {"schema_version": 1}
-        result = grader.grade_encounter({"you.first_name": "Jane"}, gt)
+        result = grader.grade_encounter({"filer.first_name": "Jane"}, gt)
         assert result.max_score == 0

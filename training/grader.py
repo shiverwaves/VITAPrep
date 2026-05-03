@@ -28,8 +28,7 @@ from training.form_fields import (
     DEDUCTION_TYPE_STANDARD,
     DEP_DISABLED,
     DEP_DOB,
-    DEP_FIRST_NAME,
-    DEP_LAST_NAME,
+    DEP_NAME,
     DEP_MONTHS,
     DEP_RELATIONSHIP,
     DEP_SINGLE_OR_MARRIED,
@@ -86,6 +85,38 @@ from training.form_fields import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Stored ground_truth keys that exist only in the pre-Phase-1B namespace.
+# Detecting any of these in a stored answer key means the scenario hasn't
+# been migrated to the new ``filer.*`` / ``dep.{i}.name`` namespace and
+# would silently zero-score Page 1. Run scripts/migrate_p1_field_names.py.
+_PRE_RENAME_KEY_INDICATORS: frozenset = frozenset({
+    "you.first_name",
+    "you.last_name",
+    "dep.0.first_name",
+    "dep.0.last_name",
+    "additional.claimed_as_dep",
+    "additional.not_claimed_as_dep",
+})
+
+
+def _check_form_answers_migrated(form_answers: Dict[str, str]) -> None:
+    """Refuse to grade a stored answer key that uses the old namespace.
+
+    Pre-Phase-1B scenarios have ``ground_truth.form_answers`` keyed by
+    ``you.*`` / split-name dependents / ``additional.*``. After 1B the
+    grader compares against the new namespace; without migration every
+    Page 1 field would silently fail to match. Fail loud instead.
+    """
+    legacy = _PRE_RENAME_KEY_INDICATORS & form_answers.keys()
+    if legacy:
+        sample = ", ".join(sorted(legacy)[:3])
+        raise ValueError(
+            "Stored scenario uses pre-Phase-1B field names "
+            f"(saw {sample}). Run scripts/migrate_p1_field_names.py "
+            "to regenerate ground_truth before grading."
+        )
+
 
 _DEPENDENT_RELATIONSHIPS: Dict[str, str] = {
     "biological_child": "Son/Daughter",
@@ -169,8 +200,7 @@ def build_form_answers(household: Household) -> Dict[str, str]:
     ]
     dependents.sort(key=lambda p: p.age, reverse=True)
     for i, dep in enumerate(dependents[:MAX_DEPENDENTS]):
-        key[dep_field(i, DEP_FIRST_NAME)] = dep.legal_first_name
-        key[dep_field(i, DEP_LAST_NAME)] = dep.legal_last_name
+        key[dep_field(i, DEP_NAME)] = dep.full_legal_name()
         key[dep_field(i, DEP_DOB)] = _format_dob(dep)
         rel = dep.relationship
         rel_val = rel.value if isinstance(rel, RelationshipType) else str(rel)
@@ -369,6 +399,7 @@ class Grader:
                 "Regenerate the scenario."
             )
         answer_key = dict(ground_truth.get("form_answers", {}))
+        _check_form_answers_migrated(answer_key)
         if fields is not None:
             allowed = set(fields)
             answer_key = {k: v for k, v in answer_key.items() if k in allowed}
