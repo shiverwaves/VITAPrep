@@ -273,18 +273,27 @@ a vertical split would squeeze it below readable width.
 
 The simplified system:
 
-| State | Layout |
-|---|---|
-| 1-pane (chat closed, **default on load**) | Form full screen |
-| 2-pane (chat closed) | Form top, one doc bottom |
-| 3-pane (chat closed) | Form top, two docs split side-by-side bottom |
-| 1-pane (chat open) | Form 2/3 left, chat 1/3 right |
-| 2-pane (chat open) | Form top + one doc bottom (in left 2/3) + chat 1/3 right |
+| State | Layout | Pane cycle |
+|---|---|---|
+| 1-pane (chat closed, **default on load**) | Form full screen | active |
+| 2-pane (chat closed) | Form top, one doc bottom | active |
+| 3-pane (chat closed) | Form top, two docs split side-by-side bottom | active |
+| 1-pane (chat open) | Form 2/3 left, chat 1/3 right | **disabled** |
+| 2-pane (chat open) | Form top + one doc bottom (in left 2/3) + chat 1/3 right | **disabled** |
+
+**Chat-open is a view mode.** While chat is open, pane structure is
+frozen — the pane-cycle button is disabled. To change pane count, the
+player closes chat, cycles, and re-opens.
+
+3 panes is forbidden in chat-open: two docs side-by-side at ~1/3 of
+the screen each is unreadable, so opening chat from a 3-pane state
+caches one doc and drops to 2-pane in the left 2/3.
 
 Two buttons in the chrome:
 
 1. **Pane cycle** — advances through `1 → 2 → 3 → 2 → 1`. Endpoints flip
    the cycle direction; that's all the state the icon needs to track.
+   Disabled while chat is open.
 2. **Chat toggle** — opens / closes the chat pane.
 
 What dropped vs. the original spec:
@@ -349,13 +358,36 @@ narrower they should scroll, not wrap).
 **Modified:**
 - `api/templates/encounter.html` — replace `.workspace` markup with new
   pane structure; add
-  `<script>window.SCENARIO_DOCS = {{ doc_urls|tojson }};</script>`; add
-  layout-control icons to titlebar.
+  `<script>window.SCENARIO_DOCS = {{ doc_urls|tojson }};</script>` and
+  `<script>window.SCENARIO_DOC_LABELS = {{ doc_labels|tojson }};</script>`;
+  add layout-control icons to titlebar.
 - `api/templates/components/titlebar.html` — two new buttons (pane
   cycle, chat toggle).
 - `api/routes/scenarios.py` (`page_exercise`) — pass the existing
   `doc_urls` map (currently built but unused) to the template; build a
-  `doc_labels` map for tab-strip readability.
+  `doc_labels` map for tab-strip readability per the rule below.
+
+### Document tab labels
+
+The tab strip on a `DocumentPane` shows readable labels, not the
+opaque `{type}_{person_id}_{idx}` keys used internally. The label rule
+leads with the most identifying piece of information for that document
+type:
+
+| Case | Format | Example |
+|---|---|---|
+| Person-owned, single of its type | `{Person}'s {Type}` | `Maria's W-2` |
+| Person-owned, multiple of same type | `{Person}'s {Type} ({n} of {total})` | `Maria's W-2 (1 of 2)` |
+| Household-owned, with issuer | `{Type} — {Issuer}` | `1098 — Bank of Hawaii` |
+| Household-owned, no issuer | `{Type}` | `1098` |
+
+The `(n of total)` disambiguator only fires when a single person owns
+multiple documents of the same type — Maria with one W-2 and one
+1099-INT gets `Maria's W-2` and `Maria's 1099-INT`, no disambiguator.
+
+`doc_labels` is built once in `page_exercise` alongside `doc_urls` and
+passed to the template as a `dict[doc_id, str]`. The renderer reads
+labels by id; no per-tab logic on the JS side.
 
 ### State shape
 
@@ -445,7 +477,7 @@ but that's deferred.
 
 ### Reducer behavior
 
-Pane-cycle click:
+Pane-cycle click (no-op while `chatOpen` is true):
 - From `panes: 1` (always `direction: expanding` here): go to
   `panes: 2, direction: expanding`.
 - From `panes: 2, direction: expanding`: go to
@@ -459,14 +491,24 @@ The icon shows the state the *next* click will produce. Endpoints flip
 the direction.
 
 Chat-toggle:
-- **Open from 3-pane**: cache `docSlots[1]` in `hiddenDocCache`, set
-  `panes = 2, chatOpen = true`. Show small "1 doc hidden" indicator near
-  the chat-toggle button.
-- **Open from 1- or 2-pane**: just set `chatOpen = true`. Pane count
-  unchanged.
-- **Close with cached doc**: restore `docSlots[1] = hiddenDocCache`,
-  `panes = 3, direction = contracting`, clear cache.
-- **Close without cache**: just `chatOpen = false`.
+- **Open from `panes:1`**: just set `chatOpen = true`. Workspace shrinks
+  to the left 2/3; form gets horizontal scroll if needed. No cache.
+- **Open from `panes:2`**: just set `chatOpen = true`. Both panes shrink
+  into the left 2/3; form and the one doc each scroll horizontally as
+  needed. No cache.
+- **Open from `panes:3`**: stash `docSlots[1]` in `hiddenDocCache`, set
+  `panes = 2`, `chatOpen = true`. The other doc remains visible in the
+  left 2/3. Show a small "1 doc hidden" indicator near the chat-toggle
+  button.
+- **Close with `hiddenDocCache` set**: restore `docSlots[1] =
+  hiddenDocCache`, `panes = 3`, `direction = contracting`, clear cache.
+- **Close without cache**: just `chatOpen = false`. Pane count and
+  docSlots are unchanged from before chat opened.
+
+The cache is a single `doc_id | null` — only the third doc that has to
+be shed when chat opens from a 3-pane state. Player's panes/docSlots
+state isn't snapshotted because it doesn't change while chat is open
+(pane cycle is disabled).
 
 ### State persistence
 
