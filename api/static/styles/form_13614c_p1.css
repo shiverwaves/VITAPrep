@@ -18,14 +18,25 @@
 
 .f13c-form-shell {
     background: #d0d0d0;
-    display: flex;
-    justify-content: center;
     padding: 24px 0;
-    overflow: auto;
+    /* Center the form via margin: 0 auto on the form itself (below)
+     * rather than flex justify-content: center, which would push the
+     * form's left edge past x=0 when the shell is narrower than the
+     * form — making the left side unreachable via horizontal scroll.
+     *
+     * min-width: max-content makes the shell grow to at least its
+     * content's width when the parent is narrower, so the gray
+     * backdrop extends across the whole horizontal-scroll region
+     * instead of stopping at the parent's edge.
+     *
+     * Scroll handling lives on #form-pane (layout.css); the shell is
+     * a styling wrapper only. */
+    min-width: max-content;
 }
 
 .f13c-form {
     width: 980px;
+    margin: 0 auto;
     background: #fff;
     border: 1px solid #000;
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
