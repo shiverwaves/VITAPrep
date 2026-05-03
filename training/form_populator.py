@@ -11,7 +11,7 @@ contract between this module, the HTML form, and the grader.
 
 import logging
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from generator.models import (
     FilingStatus,
@@ -26,14 +26,23 @@ from training.form_fields import (
     ADDR_STREET,
     ADDR_ZIP,
     CLAIMED_AS_DEPENDENT,
+    DEP_DISABLED,
     DEP_DOB,
-    DEP_NAME,
+    DEP_IPPIN,
+    DEP_MARITAL_EOY,
     DEP_MONTHS,
+    DEP_NAME,
     DEP_RELATIONSHIP,
+    DEP_RESIDENT,
     DEP_SINGLE_OR_MARRIED,
     DEP_STUDENT,
     DEP_US_CITIZEN,
-    DEP_DISABLED,
+    FILER_DIGITAL_ASSETS,
+    FILER_DISABLED,
+    FILER_FULL_TIME_STUDENT,
+    FILER_IPPIN,
+    FILER_LEGALLY_BLIND,
+    FILER_ON_VISA,
     FILING_STATUS,
     FS_HOH,
     FS_MFJ,
@@ -53,15 +62,44 @@ from training.form_fields import (
     INCOME_TOTAL,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
+    MARITAL_DIVORCE_DATE,
+    MARITAL_DIVORCED,
+    MARITAL_LIVED_APART_NO,
+    MARITAL_LIVED_APART_YES,
+    MARITAL_MARRIED,
+    MARITAL_MARRIED_EOY_NO,
+    MARITAL_MARRIED_EOY_YES,
+    MARITAL_NEVER_MARRIED,
+    MARITAL_SEPARATED,
+    MARITAL_SEPARATION_DATE,
+    MARITAL_SPOUSE_DEATH_YEAR,
+    MARITAL_WIDOWED,
     MAX_DEPENDENTS,
     NOT_CLAIMED_AS_DEPENDENT,
     NOT_PRIOR_YEAR_DEPENDENT,
+    SPOUSE_DIGITAL_ASSETS,
+    SPOUSE_DISABLED,
     SPOUSE_DOB,
     SPOUSE_FIRST_NAME,
+    SPOUSE_FULL_TIME_STUDENT,
+    SPOUSE_IPPIN,
     SPOUSE_JOB_TITLE,
     SPOUSE_LAST_NAME,
+    SPOUSE_LEGALLY_BLIND,
     SPOUSE_MIDDLE_INITIAL,
+    SPOUSE_ON_VISA,
+    SPOUSE_PHONE,
     SPOUSE_SSN,
+    SPOUSE_US_CITIZEN,
+    STATUS_BLIND_NO,
+    STATUS_CITIZEN_NO,
+    STATUS_DIGITAL_NO,
+    STATUS_DISABLED_NO,
+    STATUS_IPPIN_NO,
+    STATUS_STUDENT_NO,
+    STATUS_VISA_NO,
+    TWO_STATES_NO,
+    TWO_STATES_YES,
     YOU_DOB,
     YOU_EMAIL,
     YOU_FIRST_NAME,
@@ -150,6 +188,197 @@ def _get_dependents(household: Household) -> List[Person]:
     ]
     deps.sort(key=lambda p: p.age, reverse=True)
     return deps[:MAX_DEPENDENTS]
+
+
+def _yn(flag: bool) -> str:
+    """Render a one-letter Y/N value for a dependent text cell."""
+    return "Y" if flag else "N"
+
+
+def _yn_or_blank(flag: bool) -> str:
+    """Render Y when true, blank when false (template style for some cells)."""
+    return "Y" if flag else ""
+
+
+def build_p1_field_values(household: Household) -> Dict[str, Any]:
+    """Build a dict of {field_name: value} for the new Page 1 template.
+
+    Returns a mixed-type dict:
+    - **strings** for text inputs (names, dates, addresses, dependent
+      Y/N text cells).
+    - **booleans** for checkboxes (True == checked).
+
+    Different shape from :func:`build_field_values` (the legacy answer-key
+    builder), which emits strings everywhere. The new template's Jinja
+    partial reads booleans for checkboxes (``{% if p1.get('X') %}checked
+    {% endif %}``) and strings for text fields (``value="{{ p1.get('X',
+    '') }}"``); a string in a checkbox slot would always render as
+    ``checked`` regardless of value.
+
+    Player-input-only fields (refund/payment/language/election checkboxes,
+    the volunteer columns, the two-states question) are intentionally
+    *not* emitted — they default to unchecked / blank for the player to
+    fill in.
+
+    Args:
+        household: Household with PII fully populated.
+
+    Returns:
+        Dict keyed by the new template's input names, ready to pass into
+        the Jinja partial as ``p1=build_p1_field_values(scenario.household)``.
+    """
+    p1: Dict[str, Any] = {}
+    filer = household.get_householder()
+    spouse = household.get_spouse()
+    has_spouse = spouse is not None
+
+    # =================================================================
+    # Section 4: Filer / Spouse personal info, address, contact.
+    # =================================================================
+    if filer:
+        p1[YOU_FIRST_NAME] = filer.legal_first_name
+        p1[YOU_MIDDLE_INITIAL] = _middle_initial(filer.legal_middle_name)
+        p1[YOU_LAST_NAME] = filer.legal_last_name
+        p1[YOU_DOB] = _format_date(filer.dob)
+        p1[YOU_JOB_TITLE] = filer.occupation_title or ""
+        p1[YOU_PHONE] = filer.phone
+        p1[YOU_EMAIL] = filer.email
+
+    if has_spouse:
+        p1[SPOUSE_FIRST_NAME] = spouse.legal_first_name
+        p1[SPOUSE_MIDDLE_INITIAL] = _middle_initial(spouse.legal_middle_name)
+        p1[SPOUSE_LAST_NAME] = spouse.legal_last_name
+        p1[SPOUSE_DOB] = _format_date(spouse.dob)
+        p1[SPOUSE_JOB_TITLE] = spouse.occupation_title or ""
+        p1[SPOUSE_PHONE] = spouse.phone
+
+    if household.address:
+        addr = household.address
+        p1[ADDR_STREET] = addr.street
+        p1[ADDR_APT] = addr.apt or ""
+        p1[ADDR_CITY] = addr.city
+        p1[ADDR_STATE] = addr.state
+        p1[ADDR_ZIP] = addr.zip_code
+
+    # Two-states follow-up question — drive off the household flag
+    # (defaults to False, so two_states_no checks by default).
+    p1[TWO_STATES_YES] = household.lived_in_two_states
+    p1[TWO_STATES_NO] = not household.lived_in_two_states
+
+    # =================================================================
+    # Section 5: Can anyone else claim you?
+    # =================================================================
+    can_be_claimed = bool(filer and filer.can_be_claimed)
+    p1[CLAIMED_AS_DEPENDENT] = can_be_claimed
+    p1[NOT_CLAIMED_AS_DEPENDENT] = not can_be_claimed
+
+    # =================================================================
+    # Section 6: Status checkboxes (You / Spouse / No trios).
+    # The "no" cell is checked when neither person has the flag.
+    # =================================================================
+    def _trio(filer_field: str, spouse_field: str, no_field: str,
+              filer_flag: bool, spouse_flag: bool) -> None:
+        p1[filer_field] = filer_flag
+        p1[spouse_field] = has_spouse and spouse_flag
+        p1[no_field] = (not filer_flag) and not (has_spouse and spouse_flag)
+
+    f_citizen = bool(filer and filer.us_citizen)
+    s_citizen = bool(spouse and spouse.us_citizen)
+    _trio(YOU_US_CITIZEN, SPOUSE_US_CITIZEN, STATUS_CITIZEN_NO,
+          f_citizen, s_citizen)
+
+    _trio(FILER_ON_VISA, SPOUSE_ON_VISA, STATUS_VISA_NO,
+          bool(filer and filer.on_visa),
+          bool(spouse and spouse.on_visa))
+
+    _trio(FILER_FULL_TIME_STUDENT, SPOUSE_FULL_TIME_STUDENT, STATUS_STUDENT_NO,
+          bool(filer and filer.is_full_time_student),
+          bool(spouse and spouse.is_full_time_student))
+
+    _trio(FILER_LEGALLY_BLIND, SPOUSE_LEGALLY_BLIND, STATUS_BLIND_NO,
+          bool(filer and filer.legally_blind),
+          bool(spouse and spouse.legally_blind))
+
+    _trio(FILER_DISABLED, SPOUSE_DISABLED, STATUS_DISABLED_NO,
+          bool(filer and filer.has_disability),
+          bool(spouse and spouse.has_disability))
+
+    _trio(FILER_IPPIN, SPOUSE_IPPIN, STATUS_IPPIN_NO,
+          bool(filer and filer.has_ippin),
+          bool(spouse and spouse.has_ippin))
+
+    # Digital assets is a household-level flag (the question is "owners
+    # or holders of any digital assets"); attribute it to the filer
+    # primarily, mirror to spouse when present and the household has
+    # the flag.
+    digital = household.has_digital_assets
+    _trio(FILER_DIGITAL_ASSETS, SPOUSE_DIGITAL_ASSETS, STATUS_DIGITAL_NO,
+          digital, digital)
+
+    # =================================================================
+    # Section 7: Refund / payment preferences.
+    # Section 8: Language preference.
+    # Section 9: Presidential Election Campaign Fund.
+    # All player-input only — leave blank.
+    # =================================================================
+
+    # =================================================================
+    # Section 10: Marital status.
+    # Drives off household.is_married() and the filer's marital_history
+    # (added in Phase 1A). For most generated scenarios, marital_history
+    # is "" and we infer never-married vs married from is_married().
+    # =================================================================
+    is_married = household.is_married()
+    history = (filer.marital_history if filer else "").lower()
+
+    p1[MARITAL_MARRIED] = is_married
+    p1[MARITAL_NEVER_MARRIED] = (not is_married) and history in ("", "never")
+    p1[MARITAL_DIVORCED] = history == "divorced"
+    p1[MARITAL_SEPARATED] = history == "separated"
+    p1[MARITAL_WIDOWED] = history == "widowed"
+
+    # End-of-year follow-ups apply only when married. Default: still
+    # married on Dec 31, did not live apart for the last six months.
+    p1[MARITAL_MARRIED_EOY_YES] = is_married
+    p1[MARITAL_MARRIED_EOY_NO] = False
+    p1[MARITAL_LIVED_APART_YES] = is_married and household.spouses_lived_apart_h2
+    p1[MARITAL_LIVED_APART_NO] = is_married and not household.spouses_lived_apart_h2
+
+    p1[MARITAL_DIVORCE_DATE] = (
+        household.divorce_date.strftime("%m/%d/%Y")
+        if household.divorce_date else ""
+    )
+    p1[MARITAL_SEPARATION_DATE] = (
+        household.separation_date.strftime("%m/%d/%Y")
+        if household.separation_date else ""
+    )
+    p1[MARITAL_SPOUSE_DEATH_YEAR] = (
+        str(household.spouse_death_year)
+        if household.spouse_death_year else ""
+    )
+
+    # =================================================================
+    # Section 11: Dependents grid — client column only.
+    # The five "vol_*" volunteer columns are NOT emitted; the player
+    # fills them. Y/N/S/M cells render as text inputs with one-letter
+    # values to match the template hints.
+    # =================================================================
+    for i, dep in enumerate(_get_dependents(household)):
+        p1[dep_field(i, DEP_NAME)] = dep.full_legal_name()
+        p1[dep_field(i, DEP_DOB)] = _format_date(dep.dob)
+        p1[dep_field(i, DEP_RELATIONSHIP)] = _relationship_label(dep)
+        p1[dep_field(i, DEP_MONTHS)] = str(dep.months_in_home)
+        # Children are S; adult dependents could be M but the model
+        # doesn't distinguish today, so default S.
+        p1[dep_field(i, DEP_MARITAL_EOY)] = "S"
+        p1[dep_field(i, DEP_US_CITIZEN)] = _yn(dep.us_citizen)
+        # Resident of US/Canada/Mexico — model has no field, default Y.
+        p1[dep_field(i, DEP_RESIDENT)] = "Y"
+        p1[dep_field(i, DEP_STUDENT)] = _yn_or_blank(dep.is_full_time_student)
+        p1[dep_field(i, DEP_DISABLED)] = _yn_or_blank(dep.has_disability)
+        p1[dep_field(i, DEP_IPPIN)] = _yn_or_blank(dep.has_ippin)
+
+    return p1
 
 
 def build_field_values(household: Household) -> Dict[str, str]:

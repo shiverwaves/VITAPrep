@@ -53,6 +53,7 @@ SPOUSE_LAST_NAME = "spouse.last_name"
 SPOUSE_DOB = "spouse.dob"
 SPOUSE_SSN = "spouse.ssn"
 SPOUSE_JOB_TITLE = "spouse.job_title"
+SPOUSE_PHONE = "spouse.phone"
 
 # =========================================================================
 # Section D: Filing Status (radio group)
@@ -90,15 +91,31 @@ def dep_field(index: int, field_name: str) -> str:
 
 # Dependent sub-field names (used with dep_field()).
 # Page 1 of the new template uses a single combined name field per row
-# (``dep.{i}.name``); the prior split into first/last is gone.
+# (``dep.{i}.name``); the prior split into first/last is gone. The
+# Y/N/S/M cells render as text inputs in the new template (one-letter
+# values), not checkboxes — comments below reflect template reality.
 DEP_NAME = "name"
 DEP_DOB = "dob"
 DEP_RELATIONSHIP = "relationship"
 DEP_MONTHS = "months"
-DEP_SINGLE_OR_MARRIED = "single_or_married"  # radio: S / M
-DEP_US_CITIZEN = "us_citizen"  # checkbox
-DEP_STUDENT = "student"  # checkbox
-DEP_DISABLED = "disabled"  # checkbox
+DEP_SINGLE_OR_MARRIED = "single_or_married"  # text: S / M (legacy alias)
+DEP_MARITAL_EOY = "marital_eoy"              # text: S / M (template name)
+DEP_US_CITIZEN = "us_citizen"                # text: Y / N
+DEP_RESIDENT = "resident"                    # text: Y / N (US/Canada/Mexico)
+DEP_STUDENT = "student"                      # text: Y / N
+DEP_DISABLED = "disabled"                    # text: Y / N
+DEP_IPPIN = "ippin"                          # text: Y / N
+
+# Volunteer-completed columns on the dependents grid (Page 1, Section 11).
+# These are the gray-shaded "to be completed by certified volunteer"
+# columns; the player fills them. Three are scored against ground truth
+# (income_under, support, home_cost); the other two are listed in
+# UNGRADED_FIELDS and surfaced in the result UI as not-graded.
+DEP_VOL_QC_OTHER = "vol_qc_other"
+DEP_VOL_SELF_SUPPORT = "vol_self_support"
+DEP_VOL_INCOME_UNDER = "vol_income_under"
+DEP_VOL_SUPPORT = "vol_support"
+DEP_VOL_HOME_COST = "vol_home_cost"
 
 MAX_DEPENDENTS = 4
 
@@ -111,6 +128,101 @@ CLAIMED_AS_DEPENDENT = "claimable.yes"  # checkbox: yes
 NOT_CLAIMED_AS_DEPENDENT = "claimable.no"  # checkbox: no
 PRIOR_YEAR_DEPENDENT = "claimable.prior_year_yes"  # checkbox: yes
 NOT_PRIOR_YEAR_DEPENDENT = "claimable.prior_year_no"  # checkbox: no
+
+# =========================================================================
+# Section 4 follow-up: did you live or work in two or more states?
+# =========================================================================
+TWO_STATES_YES = "two_states_yes"
+TWO_STATES_NO = "two_states_no"
+
+# =========================================================================
+# Section 6: status checkboxes (You / Spouse / No trios)
+# =========================================================================
+# Each row is a trio: the filer field, the spouse field, and a single
+# "no" field that means neither person checks the box. ``YOU_US_CITIZEN``
+# already exists and stays as the filer-citizen checkbox; the rest of
+# the row is added here.
+
+# A U.S. citizen
+SPOUSE_US_CITIZEN = "spouse.us_citizen"
+STATUS_CITIZEN_NO = "citizen_no"
+
+# In the U.S. on a visa
+FILER_ON_VISA = "filer.on_visa"
+SPOUSE_ON_VISA = "spouse.on_visa"
+STATUS_VISA_NO = "visa_no"
+
+# A full-time student
+FILER_FULL_TIME_STUDENT = "filer.full_time_student"
+SPOUSE_FULL_TIME_STUDENT = "spouse.full_time_student"
+STATUS_STUDENT_NO = "student_no"
+
+# Legally blind
+FILER_LEGALLY_BLIND = "filer.legally_blind"
+SPOUSE_LEGALLY_BLIND = "spouse.legally_blind"
+STATUS_BLIND_NO = "blind_no"
+
+# Totally and permanently disabled
+FILER_DISABLED = "filer.disabled"
+SPOUSE_DISABLED = "spouse.disabled"
+STATUS_DISABLED_NO = "disabled_no"
+
+# Issued an identity protection PIN (IPPIN)
+FILER_IPPIN = "filer.ippin"
+SPOUSE_IPPIN = "spouse.ippin"
+STATUS_IPPIN_NO = "ippin_no"
+
+# Owners or holders of any digital assets
+FILER_DIGITAL_ASSETS = "filer.digital_assets"
+SPOUSE_DIGITAL_ASSETS = "spouse.digital_assets"
+STATUS_DIGITAL_NO = "digital_no"
+
+# =========================================================================
+# Section 7: refund / payment preferences
+# =========================================================================
+# All player-input only — nothing pre-fills, the grader doesn't score
+# them in this version (taxpayer-decision fields, not derivable from
+# the household).
+REFUND_DIRECT_DEPOSIT = "refund.direct_deposit"
+REFUND_CHECK = "refund.check"
+REFUND_SPLIT = "refund.split"
+REFUND_OTHER = "refund.other"
+
+PAYMENT_BANK = "payment.bank"
+PAYMENT_IRS_DIRECT = "payment.irs_direct"
+PAYMENT_INSTALLMENT = "payment.installment"
+PAYMENT_MAIL = "payment.mail"
+
+# =========================================================================
+# Section 8: language preference (You / Spouse / No)
+# =========================================================================
+LANG_PREF_YOU = "lang_pref_you"
+LANG_PREF_SPOUSE = "lang_pref_spouse"
+LANG_PREF_NO = "lang_pref_no"
+LANG_PREF_LANGUAGE = "lang_pref_language"  # text: language name
+
+# =========================================================================
+# Section 9: Presidential Election Campaign Fund (You / Spouse / No)
+# =========================================================================
+ELECTION_YOU = "election.you"
+ELECTION_SPOUSE = "election.spouse"
+ELECTION_NO = "election.no"
+
+# =========================================================================
+# Section 10: marital status
+# =========================================================================
+MARITAL_NEVER_MARRIED = "marital.never_married"
+MARITAL_MARRIED = "marital.married"
+MARITAL_MARRIED_EOY_YES = "marital.married_eoy"
+MARITAL_MARRIED_EOY_NO = "marital.married_eoy_no"
+MARITAL_LIVED_APART_YES = "marital.lived_apart_yes"
+MARITAL_LIVED_APART_NO = "marital.lived_apart_no"
+MARITAL_DIVORCED = "marital.divorced"
+MARITAL_SEPARATED = "marital.separated"
+MARITAL_WIDOWED = "marital.widowed"
+MARITAL_DIVORCE_DATE = "marital.divorce_date"
+MARITAL_SEPARATION_DATE = "marital.separation_date"
+MARITAL_SPOUSE_DEATH_YEAR = "marital.spouse_death_year"
 
 # =========================================================================
 # Part II — Income
@@ -253,26 +365,73 @@ TEXT_FIELDS: List[str] = [
     YOU_DOB, YOU_JOB_TITLE, YOU_PHONE, YOU_EMAIL,
     ADDR_STREET, ADDR_APT, ADDR_CITY, ADDR_STATE, ADDR_ZIP,
     SPOUSE_FIRST_NAME, SPOUSE_MIDDLE_INITIAL, SPOUSE_LAST_NAME,
-    SPOUSE_DOB, SPOUSE_JOB_TITLE,
+    SPOUSE_DOB, SPOUSE_JOB_TITLE, SPOUSE_PHONE,
+    LANG_PREF_LANGUAGE,
+    MARITAL_DIVORCE_DATE, MARITAL_SEPARATION_DATE,
+    MARITAL_SPOUSE_DEATH_YEAR,
 ]
 
-# Add dependent text fields for each row
+# Dependent text fields per row. The Y/N/S/M cells render as text
+# inputs in the new template (one-letter values), so they live here
+# rather than in CHECKBOX_FIELDS.
 for _i in range(MAX_DEPENDENTS):
-    for _sub in (DEP_NAME, DEP_DOB, DEP_RELATIONSHIP, DEP_MONTHS):
+    for _sub in (
+        DEP_NAME, DEP_DOB, DEP_RELATIONSHIP, DEP_MONTHS,
+        DEP_MARITAL_EOY,
+        DEP_US_CITIZEN, DEP_RESIDENT, DEP_STUDENT,
+        DEP_DISABLED, DEP_IPPIN,
+        DEP_VOL_QC_OTHER, DEP_VOL_SELF_SUPPORT,
+        DEP_VOL_INCOME_UNDER, DEP_VOL_SUPPORT, DEP_VOL_HOME_COST,
+    ):
         TEXT_FIELDS.append(dep_field(_i, _sub))
 
-# All checkbox fields
+# All checkbox fields (booleans in the form: checked / unchecked).
 CHECKBOX_FIELDS: List[str] = [
-    YOU_US_CITIZEN, YOU_NOT_US_CITIZEN,
+    # Section 4 follow-up
+    TWO_STATES_YES, TWO_STATES_NO,
+    # Section 5 (Can anyone else claim you)
     CLAIMED_AS_DEPENDENT, NOT_CLAIMED_AS_DEPENDENT,
     PRIOR_YEAR_DEPENDENT, NOT_PRIOR_YEAR_DEPENDENT,
+    # Section 6 status trios
+    YOU_US_CITIZEN, SPOUSE_US_CITIZEN, STATUS_CITIZEN_NO,
+    FILER_ON_VISA, SPOUSE_ON_VISA, STATUS_VISA_NO,
+    FILER_FULL_TIME_STUDENT, SPOUSE_FULL_TIME_STUDENT, STATUS_STUDENT_NO,
+    FILER_LEGALLY_BLIND, SPOUSE_LEGALLY_BLIND, STATUS_BLIND_NO,
+    FILER_DISABLED, SPOUSE_DISABLED, STATUS_DISABLED_NO,
+    FILER_IPPIN, SPOUSE_IPPIN, STATUS_IPPIN_NO,
+    FILER_DIGITAL_ASSETS, SPOUSE_DIGITAL_ASSETS, STATUS_DIGITAL_NO,
+    # Section 7 refund / payment options
+    REFUND_DIRECT_DEPOSIT, REFUND_CHECK, REFUND_SPLIT, REFUND_OTHER,
+    PAYMENT_BANK, PAYMENT_IRS_DIRECT,
+    PAYMENT_INSTALLMENT, PAYMENT_MAIL,
+    # Section 8 language preference
+    LANG_PREF_YOU, LANG_PREF_SPOUSE, LANG_PREF_NO,
+    # Section 9 Presidential Election Campaign Fund
+    ELECTION_YOU, ELECTION_SPOUSE, ELECTION_NO,
+    # Section 10 marital status (rows 1 and 3 are checkboxes;
+    # rows 2 and 4 are date / year text inputs handled above).
+    MARITAL_NEVER_MARRIED, MARITAL_MARRIED,
+    MARITAL_MARRIED_EOY_YES, MARITAL_MARRIED_EOY_NO,
+    MARITAL_LIVED_APART_YES, MARITAL_LIVED_APART_NO,
+    MARITAL_DIVORCED, MARITAL_SEPARATED, MARITAL_WIDOWED,
+    # Legacy filer-not-citizen flag (kept for back-compat; the new
+    # template uses STATUS_CITIZEN_NO instead).
+    YOU_NOT_US_CITIZEN,
 ]
 
+# Per-dependent radio (single/married) — legacy alias for the new
+# DEP_MARITAL_EOY text field, kept so existing callers don't break.
 for _i in range(MAX_DEPENDENTS):
-    for _sub in (DEP_US_CITIZEN, DEP_STUDENT, DEP_DISABLED):
-        CHECKBOX_FIELDS.append(dep_field(_i, _sub))
-    # single/married radio per dependent
     CHECKBOX_FIELDS.append(dep_field(_i, DEP_SINGLE_OR_MARRIED))
+
+# Volunteer columns the grader does NOT score in this version. The
+# form still renders them; the result UI surfaces them with a
+# "Not graded in this version" label so players don't form a wrong
+# mental model from silent passes.
+UNGRADED_FIELDS: List[str] = []
+for _i in range(MAX_DEPENDENTS):
+    UNGRADED_FIELDS.append(dep_field(_i, DEP_VOL_QC_OTHER))
+    UNGRADED_FIELDS.append(dep_field(_i, DEP_VOL_SELF_SUPPORT))
 
 # Part I fields only (Sections A–F: personal info, address, spouse, dependents)
 PART1_FIELDS: List[str] = TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
