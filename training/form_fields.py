@@ -282,6 +282,248 @@ INCOME_AMOUNT_FIELDS: List[str] = [
 ]
 
 # =========================================================================
+# Part II — Income (Page 2 new template)
+# =========================================================================
+# Constants for the new IRS-faithful Page 2 mockup. The legacy
+# INCOME_*_AMOUNT pairs above remain for back-compat with the old
+# render path; the new template uses three columns:
+#   - Client column: 14 primary Y checkboxes + 4 sub-questions
+#   - Volunteer column: per-row entries with count / amount / Y/N pairs
+#   - Notes column: 14 free-form per-row notes (ungraded)
+#
+# Naming follows the input ``name`` attributes in
+# ``docs/mockups/13614c_page2.html`` so the populator and grader can
+# cross-reference them directly.
+
+# --- Client column primary checkboxes (one per row) ---------------------
+# Row 1 (wages) reuses the existing ``INCOME_WAGES`` constant.
+INCOME_TIPS = "income.tips"
+# Row 3 (retirement / 1099-R) reuses ``INCOME_RETIREMENT``.
+INCOME_DISABILITY = "income.disability"
+INCOME_SS = "income.ss"
+INCOME_UNEMPLOYMENT = "income.unemployment"
+INCOME_STATE_REFUND = "income.state_refund"
+# Row 8 combines interest + dividends into one client checkbox; the
+# legacy ``INCOME_INTEREST`` / ``INCOME_DIVIDENDS`` constants stay
+# available for callers that still split them.
+INCOME_INTEREST_DIVIDENDS = "income.interest_dividends"
+INCOME_STOCK_SALE = "income.stock_sale"
+INCOME_ALIMONY = "income.alimony"
+INCOME_RENTAL = "income.rental"
+INCOME_PERSONAL_PROPERTY_RENTAL = "income.personal_property_rental"
+# Row 12 (self-employment) reuses ``INCOME_SELF_EMPLOYMENT``.
+INCOME_GAMBLING = "income.gambling"
+INCOME_OTHER = "income.other"
+
+# --- Client column sub-questions ----------------------------------------
+# Row 1: free-form text noting jobs when there are more than five W-2s.
+INCOME_WAGES_JOBS = "income.wages.jobs"
+# Row 9: prior-year capital loss Y/N pair.
+INCOME_STOCK_SALE_PRIOR_LOSS_YES = "income.stock_sale.prior_loss.yes"
+INCOME_STOCK_SALE_PRIOR_LOSS_NO = "income.stock_sale.prior_loss.no"
+# Row 11: rented out personal residence Y/N pair.
+INCOME_RENTAL_SHORT_PERSONAL_RESIDENCE_YES = "income.rental.short_personal_residence.yes"
+INCOME_RENTAL_SHORT_PERSONAL_RESIDENCE_NO = "income.rental.short_personal_residence.no"
+# Row 12: prior-year self-employment loss Y/N pair.
+INCOME_SELF_EMPLOYMENT_PRIOR_LOSS_YES = "income.self_employment.prior_loss.yes"
+INCOME_SELF_EMPLOYMENT_PRIOR_LOSS_NO = "income.self_employment.prior_loss.no"
+
+# --- Volunteer column entries -------------------------------------------
+# Row 1 — wages
+VOL_INCOME_W2 = "vol.income.w2"
+VOL_INCOME_W2_COUNT = "vol.income.w2.count"
+# Row 2 — tips (no count/amount entry; just the checkbox)
+VOL_INCOME_TIPS = "vol.income.tips"
+# Row 3 — retirement (1099-R + QCD amount)
+VOL_INCOME_1099R = "vol.income.1099r"
+VOL_INCOME_1099R_COUNT = "vol.income.1099r.count"
+VOL_INCOME_QCD = "vol.income.qcd"
+VOL_INCOME_QCD_AMOUNT = "vol.income.qcd.amount"
+# Row 4 — disability
+VOL_INCOME_DISABILITY = "vol.income.disability"
+VOL_INCOME_DISABILITY_COUNT = "vol.income.disability.count"
+# Row 5 — Social Security (SSA-1099)
+VOL_INCOME_SSA = "vol.income.ssa"
+VOL_INCOME_SSA_COUNT = "vol.income.ssa.count"
+# Row 6 — unemployment (1099-G)
+VOL_INCOME_1099G = "vol.income.1099g"
+VOL_INCOME_1099G_COUNT = "vol.income.1099g.count"
+# Row 7 — state refund + itemized-last-year Y/N
+VOL_INCOME_STATE_REFUND = "vol.income.state_refund"
+VOL_INCOME_STATE_REFUND_AMOUNT = "vol.income.state_refund.amount"
+VOL_INCOME_ITEMIZED_LAST_YEAR = "vol.income.itemized_last_year"
+VOL_INCOME_ITEMIZED_LAST_YEAR_YES = "vol.income.itemized_last_year.yes"
+VOL_INCOME_ITEMIZED_LAST_YEAR_NO = "vol.income.itemized_last_year.no"
+# Row 8 — interest + dividends (1099-INT, 1099-DIV)
+VOL_INCOME_1099INT = "vol.income.1099int"
+VOL_INCOME_1099INT_COUNT = "vol.income.1099int.count"
+VOL_INCOME_1099DIV = "vol.income.1099div"
+VOL_INCOME_1099DIV_COUNT = "vol.income.1099div.count"
+# Row 9 — stock sale (1099-B + capital-loss carryover Y/N)
+VOL_INCOME_1099B = "vol.income.1099b"
+VOL_INCOME_1099B_COUNT = "vol.income.1099b.count"
+VOL_INCOME_CAPITAL_LOSS_CARRYOVER = "vol.income.capital_loss_carryover"
+VOL_INCOME_CAPITAL_LOSS_CARRYOVER_YES = "vol.income.capital_loss_carryover.yes"
+VOL_INCOME_CAPITAL_LOSS_CARRYOVER_NO = "vol.income.capital_loss_carryover.no"
+# Row 10 — alimony (received + spouse-excluded Y/N)
+VOL_INCOME_ALIMONY = "vol.income.alimony"
+VOL_INCOME_ALIMONY_AMOUNT = "vol.income.alimony.amount"
+VOL_INCOME_ALIMONY_EXCLUDED = "vol.income.alimony_excluded"
+VOL_INCOME_ALIMONY_EXCLUDED_YES = "vol.income.alimony_excluded.yes"
+VOL_INCOME_ALIMONY_EXCLUDED_NO = "vol.income.alimony_excluded.no"
+# Row 11 — rental (real + personal property — shared row)
+VOL_INCOME_RENTAL = "vol.income.rental"
+VOL_INCOME_RENTAL_EXPENSE = "vol.income.rental_expense"
+VOL_INCOME_RENTAL_EXPENSE_AMOUNT = "vol.income.rental_expense.amount"
+# Row 13 — gambling (W-2G)
+VOL_INCOME_W2G = "vol.income.w2g"
+VOL_INCOME_W2G_COUNT = "vol.income.w2g.count"
+# Row 12 — self-employment (Schedule C + 1099 family + Schedule C expenses)
+VOL_INCOME_SCHEDULE_C = "vol.income.schedule_c"
+VOL_INCOME_1099MISC = "vol.income.1099misc"
+VOL_INCOME_1099MISC_COUNT = "vol.income.1099misc.count"
+VOL_INCOME_1099NEC = "vol.income.1099nec"
+VOL_INCOME_1099NEC_COUNT = "vol.income.1099nec.count"
+VOL_INCOME_1099K = "vol.income.1099k"
+VOL_INCOME_1099K_COUNT = "vol.income.1099k.count"
+VOL_INCOME_OTHER_REPORTED_ELSEWHERE = "vol.income.other_reported_elsewhere"
+VOL_INCOME_SCHEDULE_C_EXPENSES = "vol.income.schedule_c_expenses"
+VOL_INCOME_SCHEDULE_C_EXPENSES_AMOUNT = "vol.income.schedule_c_expenses.amount"
+# Row 14 — other
+VOL_INCOME_OTHER = "vol.income.other"
+
+# --- Notes column (one per row, free-form, ungraded) --------------------
+INCOME_NOTE_WAGES = "income.note.wages"
+INCOME_NOTE_TIPS = "income.note.tips"
+INCOME_NOTE_RETIREMENT = "income.note.retirement"
+INCOME_NOTE_DISABILITY = "income.note.disability"
+INCOME_NOTE_SS = "income.note.ss"
+INCOME_NOTE_UNEMPLOYMENT = "income.note.unemployment"
+INCOME_NOTE_STATE_REFUND = "income.note.state_refund"
+INCOME_NOTE_INTEREST_DIVIDENDS = "income.note.interest_dividends"
+INCOME_NOTE_STOCK_SALE = "income.note.stock_sale"
+INCOME_NOTE_ALIMONY = "income.note.alimony"
+INCOME_NOTE_RENTAL = "income.note.rental"
+INCOME_NOTE_SELF_EMPLOYMENT = "income.note.self_employment"
+INCOME_NOTE_GAMBLING = "income.note.gambling"
+INCOME_NOTE_OTHER = "income.note.other"
+
+# --- Aggregations -------------------------------------------------------
+# Client-column primary checkboxes for Page 2 (one per row).
+P2_CLIENT_CHECKBOX_FIELDS: List[str] = [
+    INCOME_WAGES,
+    INCOME_TIPS,
+    INCOME_RETIREMENT,
+    INCOME_DISABILITY,
+    INCOME_SS,
+    INCOME_UNEMPLOYMENT,
+    INCOME_STATE_REFUND,
+    INCOME_INTEREST_DIVIDENDS,
+    INCOME_STOCK_SALE,
+    INCOME_ALIMONY,
+    INCOME_RENTAL,
+    INCOME_PERSONAL_PROPERTY_RENTAL,
+    INCOME_SELF_EMPLOYMENT,
+    INCOME_GAMBLING,
+    INCOME_OTHER,
+]
+
+# Client-column sub-question Y/N checkbox pairs for Page 2.
+P2_CLIENT_SUBQ_FIELDS: List[str] = [
+    INCOME_STOCK_SALE_PRIOR_LOSS_YES,
+    INCOME_STOCK_SALE_PRIOR_LOSS_NO,
+    INCOME_RENTAL_SHORT_PERSONAL_RESIDENCE_YES,
+    INCOME_RENTAL_SHORT_PERSONAL_RESIDENCE_NO,
+    INCOME_SELF_EMPLOYMENT_PRIOR_LOSS_YES,
+    INCOME_SELF_EMPLOYMENT_PRIOR_LOSS_NO,
+]
+
+# Volunteer-column primary checkbox fields for Page 2.
+P2_VOL_CHECKBOX_FIELDS: List[str] = [
+    VOL_INCOME_W2,
+    VOL_INCOME_TIPS,
+    VOL_INCOME_1099R,
+    VOL_INCOME_QCD,
+    VOL_INCOME_DISABILITY,
+    VOL_INCOME_SSA,
+    VOL_INCOME_1099G,
+    VOL_INCOME_STATE_REFUND,
+    VOL_INCOME_ITEMIZED_LAST_YEAR,
+    VOL_INCOME_ITEMIZED_LAST_YEAR_YES,
+    VOL_INCOME_ITEMIZED_LAST_YEAR_NO,
+    VOL_INCOME_1099INT,
+    VOL_INCOME_1099DIV,
+    VOL_INCOME_1099B,
+    VOL_INCOME_CAPITAL_LOSS_CARRYOVER,
+    VOL_INCOME_CAPITAL_LOSS_CARRYOVER_YES,
+    VOL_INCOME_CAPITAL_LOSS_CARRYOVER_NO,
+    VOL_INCOME_ALIMONY,
+    VOL_INCOME_ALIMONY_EXCLUDED,
+    VOL_INCOME_ALIMONY_EXCLUDED_YES,
+    VOL_INCOME_ALIMONY_EXCLUDED_NO,
+    VOL_INCOME_RENTAL,
+    VOL_INCOME_RENTAL_EXPENSE,
+    VOL_INCOME_W2G,
+    VOL_INCOME_SCHEDULE_C,
+    VOL_INCOME_1099MISC,
+    VOL_INCOME_1099NEC,
+    VOL_INCOME_1099K,
+    VOL_INCOME_OTHER_REPORTED_ELSEWHERE,
+    VOL_INCOME_SCHEDULE_C_EXPENSES,
+    VOL_INCOME_OTHER,
+]
+
+# Volunteer-column count / amount / sub text fields for Page 2.
+P2_VOL_TEXT_FIELDS: List[str] = [
+    VOL_INCOME_W2_COUNT,
+    VOL_INCOME_1099R_COUNT,
+    VOL_INCOME_QCD_AMOUNT,
+    VOL_INCOME_DISABILITY_COUNT,
+    VOL_INCOME_SSA_COUNT,
+    VOL_INCOME_1099G_COUNT,
+    VOL_INCOME_STATE_REFUND_AMOUNT,
+    VOL_INCOME_1099INT_COUNT,
+    VOL_INCOME_1099DIV_COUNT,
+    VOL_INCOME_1099B_COUNT,
+    VOL_INCOME_ALIMONY_AMOUNT,
+    VOL_INCOME_RENTAL_EXPENSE_AMOUNT,
+    VOL_INCOME_W2G_COUNT,
+    VOL_INCOME_1099MISC_COUNT,
+    VOL_INCOME_1099NEC_COUNT,
+    VOL_INCOME_1099K_COUNT,
+    VOL_INCOME_SCHEDULE_C_EXPENSES_AMOUNT,
+    INCOME_WAGES_JOBS,
+]
+
+# Notes column (free-form text, one per row).
+P2_NOTE_FIELDS: List[str] = [
+    INCOME_NOTE_WAGES,
+    INCOME_NOTE_TIPS,
+    INCOME_NOTE_RETIREMENT,
+    INCOME_NOTE_DISABILITY,
+    INCOME_NOTE_SS,
+    INCOME_NOTE_UNEMPLOYMENT,
+    INCOME_NOTE_STATE_REFUND,
+    INCOME_NOTE_INTEREST_DIVIDENDS,
+    INCOME_NOTE_STOCK_SALE,
+    INCOME_NOTE_ALIMONY,
+    INCOME_NOTE_RENTAL,
+    INCOME_NOTE_SELF_EMPLOYMENT,
+    INCOME_NOTE_GAMBLING,
+    INCOME_NOTE_OTHER,
+]
+
+# All Page 2 fields (used by the submit handler to enumerate which
+# inputs to harvest from the form post).
+P2_ALL_FIELDS: List[str] = (
+    P2_CLIENT_CHECKBOX_FIELDS
+    + P2_CLIENT_SUBQ_FIELDS
+    + P2_VOL_CHECKBOX_FIELDS
+    + P2_VOL_TEXT_FIELDS
+    + P2_NOTE_FIELDS
+)
+
+# =========================================================================
 # Part III — Expenses, Deductions & Credits
 # =========================================================================
 # Form 13614-C Part III (Page 3) has a two-column layout: client questions
@@ -433,11 +675,43 @@ for _i in range(MAX_DEPENDENTS):
     UNGRADED_FIELDS.append(dep_field(_i, DEP_VOL_QC_OTHER))
     UNGRADED_FIELDS.append(dep_field(_i, DEP_VOL_SELF_SUPPORT))
 
+# Page 2 — notes column is free-form (no ground truth), and the
+# sub-question Y/N pairs aren't modeled in the household generator yet
+# (prior-year capital loss, short-term residence rental, prior-year
+# self-employment loss, alimony spouse-excluded, capital-loss carryover,
+# itemized-last-year). They render so the form is complete; they're
+# surfaced as ungraded until the model catches up.
+UNGRADED_FIELDS.extend(P2_NOTE_FIELDS)
+UNGRADED_FIELDS.extend([
+    INCOME_WAGES_JOBS,
+    INCOME_STOCK_SALE_PRIOR_LOSS_YES,
+    INCOME_STOCK_SALE_PRIOR_LOSS_NO,
+    INCOME_RENTAL_SHORT_PERSONAL_RESIDENCE_YES,
+    INCOME_RENTAL_SHORT_PERSONAL_RESIDENCE_NO,
+    INCOME_SELF_EMPLOYMENT_PRIOR_LOSS_YES,
+    INCOME_SELF_EMPLOYMENT_PRIOR_LOSS_NO,
+    VOL_INCOME_ITEMIZED_LAST_YEAR,
+    VOL_INCOME_ITEMIZED_LAST_YEAR_YES,
+    VOL_INCOME_ITEMIZED_LAST_YEAR_NO,
+    VOL_INCOME_CAPITAL_LOSS_CARRYOVER,
+    VOL_INCOME_CAPITAL_LOSS_CARRYOVER_YES,
+    VOL_INCOME_CAPITAL_LOSS_CARRYOVER_NO,
+    VOL_INCOME_ALIMONY_EXCLUDED,
+    VOL_INCOME_ALIMONY_EXCLUDED_YES,
+    VOL_INCOME_ALIMONY_EXCLUDED_NO,
+    VOL_INCOME_OTHER_REPORTED_ELSEWHERE,
+])
+
 # Part I fields only (Sections A–F: personal info, address, spouse, dependents)
 PART1_FIELDS: List[str] = TEXT_FIELDS + CHECKBOX_FIELDS + [FILING_STATUS]
 
-# Part II fields only (income checkboxes + amounts)
-PART2_FIELDS: List[str] = INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS
+# Part II fields only. Includes both the legacy INCOME_*_AMOUNT pairs
+# (still referenced by old render paths and grader logic) and the
+# Page 2 new-template namespace; deduplicated via dict.fromkeys to
+# preserve order while dropping shared identifiers (e.g. INCOME_WAGES).
+PART2_FIELDS: List[str] = list(dict.fromkeys(
+    INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS + P2_ALL_FIELDS
+))
 
 # Part III fields only (expense checkboxes + amounts + deduction type)
 PART3_FIELDS: List[str] = (
