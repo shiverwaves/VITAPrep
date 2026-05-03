@@ -216,6 +216,14 @@ body {
     width: 100px;
 }
 
+/* Secondary sub-question (a separate question stacked under the
+   primary one, e.g. row 11's "renting personal property such as a
+   vehicle" — the IRS form groups it visually with the rental row
+   but as its own checkbox question, not a clarifier). */
+.f13c-p2-q--secondary {
+    margin-top: 4px;
+}
+
 /* Inline Yes/No pair (used in client and volunteer sub-questions) */
 .f13c-p2-yn {
     display: inline-flex;
@@ -287,11 +295,28 @@ body {
     cursor: pointer;
 }
 
-/* Notes cell — a single per-row text input that fills the cell. */
+/* Notes cell — the per-row text input fills the cell and is rendered
+   without the default underline so the input visually melts into the
+   cell. The cell itself (gray-shaded background) is the visual frame;
+   the player just clicks anywhere in the cell to type. */
+
+.f13c-p2-cell--notes {
+    padding: 0;
+}
 
 .f13c-p2-notes-input {
+    display: block;
     width: 100%;
-    border-bottom-color: #aaa !important;
+    height: 100%;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: none !important;
+    background: transparent;
+}
+
+.f13c-p2-notes-input:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: -2px;
 }
 
 /* ================================================================
@@ -601,7 +626,9 @@ body {
         </div>
     </div>
 
-    <!-- Row 11: Rental income (real property) -->
+    <!-- Row 11: Rental income (real property + personal property)
+         Per the IRS form, the personal-property-rental question is a
+         continuation of the rental row, not its own row. -->
     <div class="f13c-p2-row">
         <div class="f13c-p2-cell f13c-p2-cell--client">
             <div class="f13c-p2-q">
@@ -616,6 +643,12 @@ body {
                     <label><input type="checkbox" name="income.rental.short_personal_residence.yes"> Yes</label>
                     <label><input type="checkbox" name="income.rental.short_personal_residence.no"> No</label>
                 </span>
+            </div>
+            <div class="f13c-p2-q f13c-p2-q--secondary">
+                <label>
+                    <input type="checkbox" name="income.personal_property_rental">
+                    <span>Income from renting personal property such as a vehicle</span>
+                </label>
             </div>
         </div>
         <div class="f13c-p2-cell f13c-p2-cell--volunteer">
@@ -633,23 +666,7 @@ body {
         </div>
     </div>
 
-    <!-- Row 12: Renting personal property (no letter classification) -->
-    <div class="f13c-p2-row">
-        <div class="f13c-p2-cell f13c-p2-cell--client">
-            <div class="f13c-p2-q">
-                <label>
-                    <input type="checkbox" name="income.personal_property_rental">
-                    <span>Income from renting personal property such as a vehicle</span>
-                </label>
-            </div>
-        </div>
-        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
-            <!-- No volunteer entry on this row in the IRS form. -->
-        </div>
-        <div class="f13c-p2-cell f13c-p2-cell--notes">
-            <input type="text" name="income.note.personal_property_rental" class="f13c-p2-notes-input" value="">
-        </div>
-    </div>
+    <!-- Row 12 (was a separate row): merged into row 11 above. -->
 
     <!-- Row 13: Gambling winnings -->
     <div class="f13c-p2-row">
