@@ -596,6 +596,13 @@ async def page_exercise(
         from training.form_populator import build_field_values
         prefill = build_field_values(scenario.household)
 
+    # Page 1 client-column prefill — always (no mode gate). Reads the new
+    # filer.* / dep.{i}.* namespace; the template partial reads from p1.
+    p1: Dict[str, object] = {}
+    if scenario.household:
+        from training.form_populator import build_p1_field_values
+        p1 = build_p1_field_values(scenario.household)
+
     return templates.TemplateResponse(request, "encounter.html", {
         "scenario_id": scenario_id,
         "mode": scenario.mode,
@@ -605,6 +612,7 @@ async def page_exercise(
         "notes_by_page": notes_by_page,
         "category_labels": _CATEGORY_LABELS,
         "prefill": prefill,
+        "p1": p1,
     })
 
 

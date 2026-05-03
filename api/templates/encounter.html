@@ -3,6 +3,7 @@
 {% block title %}Scenario {{ scenario_id[:12] }} — VITAPrep{% endblock %}
 
 {% block head %}
+<link rel="stylesheet" href="/app-static/styles/form_13614c_p1.css">
 <style>
 /* Full-viewport app shell */
 html, body { height: 100%; overflow: hidden; }
@@ -17,6 +18,15 @@ html, body { height: 100%; overflow: hidden; }
     flex: 1;
     display: flex;
     overflow: hidden;
+}
+
+/* Page 1 of the new 13614-C template uses its own f13c-* styles and
+   wants a gray paper backdrop. Make the page container scroll its
+   contents and remove the encounter sheet's default padding so the
+   partial controls its own width. */
+.sheet__page--p1 {
+    padding: 0;
+    overflow: auto;
 }
 </style>
 {% endblock %}
@@ -66,11 +76,14 @@ html, body { height: 100%; overflow: hidden; }
 
                     {# Page content panels — switched by encounter.js #}
                     {% for tab in page_tabs %}
-                    <div class="sheet__page{% if tab.active %} sheet__page--active{% endif %}"
+                    <div class="sheet__page{% if tab.active %} sheet__page--active{% endif %}{% if tab.page == 1 %} sheet__page--p1{% endif %}"
                          id="page-{{ tab.page }}"
                          data-page="{{ tab.page }}">
 
-                        {# Grade badge (preserves test compatibility) #}
+                        {# Grade badge (preserves test compatibility).
+                           Pages 2-4 use the legacy notes-driven layout
+                           and keep the badge at top. Page 1 surfaces the
+                           badge above the new mockup partial. #}
                         <div class="form-card" data-section="{{ tab.section }}">
                             <span class="card-title">{{ tab.card_title }}</span>
                             {% if section_grades[tab.section] %}
@@ -83,48 +96,59 @@ html, body { height: 100%; overflow: hidden; }
                             {% endif %}
                         </div>
 
-                        {# Client column rows grouped by category #}
-                        {% set page_notes = notes_by_page.get(tab.page, []) %}
-                        {% set current_cat = namespace(value="") %}
-                        {% for note in page_notes %}
-                            {# Section head when category changes #}
-                            {% if note.category != current_cat.value %}
-                                {% set current_cat.value = note.category %}
-                                <div class="sheet__section-head">
-                                    {{ category_labels.get(note.category, note.category) }}
-                                </div>
-                            {% endif %}
-
-                            <div class="sheet__row">
-                                <div class="sheet__client-cell">
-                                    {% if note.answer in ("Yes", "No") %}
-                                        <span class="sheet__checkbox">{{ "■" if note.answer == "Yes" else "□" }}</span>
-                                        <span class="sheet__question">{{ note.question }}</span>
-                                    {% else %}
-                                        <span class="sheet__checkbox">&nbsp;</span>
-                                        <span class="sheet__question">
-                                            {{ note.question }}
-                                            <span class="sheet__followup">{{ note.answer }}</span>
-                                        </span>
-                                    {% endif %}
-                                </div>
-                                <div class="sheet__volunteer-cell{% if mode == 'verify' and note.field %} sheet__volunteer-cell--prefilled{% endif %}">
-                                    {% if note.hint %}
-                                        <span class="sheet__hint">{{ note.hint }}</span>
-                                    {% endif %}
-                                    {% if note.field %}
-                                        <input class="sheet__input{% if mode == 'verify' %} sheet__input--readonly{% endif %}"
-                                               type="text"
-                                               data-field="{{ note.field }}"
-                                               value="{{ prefill.get(note.field, '') }}"
-                                               {% if mode == 'verify' %}readonly{% endif %}>
-                                    {% endif %}
-                                </div>
+                        {% if tab.page == 1 %}
+                            {# Page 1 — new IRS-faithful template driven
+                               by build_p1_field_values(). Always pre-fills
+                               (no mode gate); player fills the volunteer
+                               columns and the player-input checkboxes
+                               (refund/payment/language/election). #}
+                            <div class="f13c-form-shell">
+                                {% include "components/form_13614c_p1.html" %}
                             </div>
-                        {% endfor %}
+                        {% else %}
+                            {# Pages 2-4 — legacy notes-driven layout. #}
+                            {% set page_notes = notes_by_page.get(tab.page, []) %}
+                            {% set current_cat = namespace(value="") %}
+                            {% for note in page_notes %}
+                                {# Section head when category changes #}
+                                {% if note.category != current_cat.value %}
+                                    {% set current_cat.value = note.category %}
+                                    <div class="sheet__section-head">
+                                        {{ category_labels.get(note.category, note.category) }}
+                                    </div>
+                                {% endif %}
 
-                        {% if not page_notes %}
-                        <div class="sheet__empty-page">No interview notes for this section.</div>
+                                <div class="sheet__row">
+                                    <div class="sheet__client-cell">
+                                        {% if note.answer in ("Yes", "No") %}
+                                            <span class="sheet__checkbox">{{ "■" if note.answer == "Yes" else "□" }}</span>
+                                            <span class="sheet__question">{{ note.question }}</span>
+                                        {% else %}
+                                            <span class="sheet__checkbox">&nbsp;</span>
+                                            <span class="sheet__question">
+                                                {{ note.question }}
+                                                <span class="sheet__followup">{{ note.answer }}</span>
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="sheet__volunteer-cell{% if mode == 'verify' and note.field %} sheet__volunteer-cell--prefilled{% endif %}">
+                                        {% if note.hint %}
+                                            <span class="sheet__hint">{{ note.hint }}</span>
+                                        {% endif %}
+                                        {% if note.field %}
+                                            <input class="sheet__input{% if mode == 'verify' %} sheet__input--readonly{% endif %}"
+                                                   type="text"
+                                                   data-field="{{ note.field }}"
+                                                   value="{{ prefill.get(note.field, '') }}"
+                                                   {% if mode == 'verify' %}readonly{% endif %}>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+
+                            {% if not page_notes %}
+                            <div class="sheet__empty-page">No interview notes for this section.</div>
+                            {% endif %}
                         {% endif %}
                     </div>
                     {% endfor %}
