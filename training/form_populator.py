@@ -53,15 +53,35 @@ from training.form_fields import (
     INCOME_DIVIDENDS_AMOUNT,
     INCOME_INTEREST,
     INCOME_INTEREST_AMOUNT,
+    INCOME_INTEREST_DIVIDENDS,
+    INCOME_OTHER,
     INCOME_RETIREMENT,
     INCOME_RETIREMENT_AMOUNT,
     INCOME_SELF_EMPLOYMENT,
     INCOME_SELF_EMPLOYMENT_AMOUNT,
     INCOME_SOCIAL_SECURITY,
     INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_SS,
     INCOME_TOTAL,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
+    VOL_INCOME_1099B,
+    VOL_INCOME_1099DIV,
+    VOL_INCOME_1099DIV_COUNT,
+    VOL_INCOME_1099G,
+    VOL_INCOME_1099INT,
+    VOL_INCOME_1099INT_COUNT,
+    VOL_INCOME_1099K,
+    VOL_INCOME_1099MISC,
+    VOL_INCOME_1099NEC,
+    VOL_INCOME_1099NEC_COUNT,
+    VOL_INCOME_1099R,
+    VOL_INCOME_1099R_COUNT,
+    VOL_INCOME_SCHEDULE_C,
+    VOL_INCOME_SSA,
+    VOL_INCOME_SSA_COUNT,
+    VOL_INCOME_W2,
+    VOL_INCOME_W2_COUNT,
     MARITAL_DIVORCE_DATE,
     MARITAL_DIVORCED,
     MARITAL_LIVED_APART_NO,
@@ -379,6 +399,125 @@ def build_p1_field_values(household: Household) -> Dict[str, Any]:
         p1[dep_field(i, DEP_IPPIN)] = _yn_or_blank(dep.has_ippin)
 
     return p1
+
+
+def build_p2_field_values(household: Household) -> Dict[str, Any]:
+    """Build a dict of {field_name: value} for the new Page 2 template.
+
+    Same shape as :func:`build_p1_field_values`: booleans for checkboxes,
+    strings for text inputs (counts, amounts). Only the rows whose
+    underlying data is actually modeled today get populated; the rest
+    (tips, separate disability $, unemployment, state refund, stock
+    sale, alimony, rental, gambling) are left out so the player fills
+    them in. Notes-column fields are always blank (free-form, ungraded).
+
+    Income is aggregated across the filer + spouse — dependents' income
+    doesn't roll up onto Part II of the joint return.
+
+    Args:
+        household: Household with income documents populated.
+
+    Returns:
+        Dict keyed by Page 2 input names, ready to pass into the Jinja
+        partial as ``p2=build_p2_field_values(scenario.household)``.
+    """
+    p2: Dict[str, Any] = {}
+
+    filers: List[Person] = []
+    filer = household.get_householder()
+    spouse = household.get_spouse()
+    if filer:
+        filers.append(filer)
+    if spouse:
+        filers.append(spouse)
+
+    # ---- Aggregate amounts and document counts across filers ----------
+    total_wages = sum(p.wage_income for p in filers)
+    total_interest = sum(p.interest_income for p in filers)
+    total_dividends = sum(p.dividend_income for p in filers)
+    total_ss = sum(p.social_security_income for p in filers)
+    total_retirement = sum(p.retirement_income for p in filers)
+    total_se = sum(p.self_employment_income for p in filers)
+    total_other = sum(p.other_income for p in filers)
+
+    w2_count = sum(len(p.w2s) for p in filers)
+    int_count = sum(len(p.form_1099_ints) for p in filers)
+    div_count = sum(len(p.form_1099_divs) for p in filers)
+    r_count = sum(len(p.form_1099_rs) for p in filers)
+    nec_count = sum(len(p.form_1099_necs) for p in filers)
+    ssa_count = sum(1 for p in filers if p.ssa_1099 is not None)
+
+    # ---- Row 1: wages -------------------------------------------------
+    has_wages = total_wages > 0
+    p2[INCOME_WAGES] = has_wages
+    p2[VOL_INCOME_W2] = has_wages
+    p2[VOL_INCOME_W2_COUNT] = str(w2_count) if w2_count else ""
+
+    # ---- Row 3: retirement (1099-R) -----------------------------------
+    has_retirement = total_retirement > 0
+    p2[INCOME_RETIREMENT] = has_retirement
+    p2[VOL_INCOME_1099R] = has_retirement
+    p2[VOL_INCOME_1099R_COUNT] = str(r_count) if r_count else ""
+
+    # ---- Row 5: Social Security (SSA-1099) ----------------------------
+    has_ss = total_ss > 0
+    p2[INCOME_SS] = has_ss
+    p2[VOL_INCOME_SSA] = has_ss
+    p2[VOL_INCOME_SSA_COUNT] = str(ssa_count) if ssa_count else ""
+
+    # ---- Row 8: interest + dividends (combined client checkbox) -------
+    has_int_div = total_interest > 0 or total_dividends > 0
+    p2[INCOME_INTEREST_DIVIDENDS] = has_int_div
+    # Keep the legacy split flags in sync so callers reading either
+    # namespace see the same answer key.
+    p2[INCOME_INTEREST] = total_interest > 0
+    p2[INCOME_DIVIDENDS] = total_dividends > 0
+    p2[VOL_INCOME_1099INT] = total_interest > 0
+    p2[VOL_INCOME_1099INT_COUNT] = str(int_count) if int_count else ""
+    p2[VOL_INCOME_1099DIV] = total_dividends > 0
+    p2[VOL_INCOME_1099DIV_COUNT] = str(div_count) if div_count else ""
+
+    # ---- Row 9: stock sale (1099-B) ----------------------------------
+    # No 1099-B model yet; leave the volunteer 1099-B checkbox alone
+    # (player input). Listed here for completeness so future model work
+    # has an obvious place to land.
+    p2[VOL_INCOME_1099B] = False
+
+    # ---- Row 12: self-employment (Schedule C + 1099-NEC family) -------
+    has_se = total_se > 0
+    p2[INCOME_SELF_EMPLOYMENT] = has_se
+    p2[VOL_INCOME_SCHEDULE_C] = has_se
+    p2[VOL_INCOME_1099NEC] = has_se and nec_count > 0
+    p2[VOL_INCOME_1099NEC_COUNT] = str(nec_count) if nec_count else ""
+    # 1099-MISC and 1099-K aren't modeled; leave unchecked.
+    p2[VOL_INCOME_1099MISC] = False
+    p2[VOL_INCOME_1099K] = False
+
+    # ---- Row 6: unemployment (1099-G) — not modeled, leave unchecked --
+    p2[VOL_INCOME_1099G] = False
+
+    # ---- Row 14: other ------------------------------------------------
+    p2[INCOME_OTHER] = total_other > 0
+
+    # Legacy SOCIAL_SECURITY identifier kept in sync for callers that
+    # still read it (the new template's INCOME_SS supersedes it).
+    p2[INCOME_SOCIAL_SECURITY] = has_ss
+
+    # Optional aggregate total (legacy field; kept for callers/grader
+    # paths that read it).
+    grand_total = (
+        total_wages + total_interest + total_dividends
+        + total_ss + total_retirement + total_se + total_other
+    )
+    if grand_total > 0:
+        p2[INCOME_TOTAL] = str(grand_total)
+
+    # Volunteer count/amount fields whose source isn't modeled (tips,
+    # disability $, state refund $, alimony $, rental $, etc.) and the
+    # 14 free-form notes are intentionally not emitted — they default
+    # to blank in the template so the player fills them in.
+
+    return p2
 
 
 def build_field_values(household: Household) -> Dict[str, str]:
