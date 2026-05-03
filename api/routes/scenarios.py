@@ -81,6 +81,8 @@ from training.form_fields import (
     P2_CLIENT_CHECKBOX_FIELDS,
     P2_CLIENT_SUBQ_FIELDS,
     P2_VOL_CHECKBOX_FIELDS,
+    P3_CLIENT_CHECKBOX_FIELDS,
+    P3_VOL_CHECKBOX_FIELDS,
     PART1_FIELDS,
     PART2_FIELDS,
     PART3_FIELDS,
@@ -730,13 +732,16 @@ async def page_exercise(
     # filer.* / dep.{i}.* namespace; the template partial reads from p1.
     p1: Dict[str, object] = {}
     p2: Dict[str, object] = {}
+    p3: Dict[str, object] = {}
     if scenario.household:
         from training.form_populator import (
             build_p1_field_values,
             build_p2_field_values,
+            build_p3_field_values,
         )
         p1 = build_p1_field_values(scenario.household)
         p2 = build_p2_field_values(scenario.household)
+        p3 = build_p3_field_values(scenario.household)
 
     # Document URL + label maps for the layout system's DocumentPane
     # (Phase 2). The keys are doc_ids; both maps share the same key
@@ -758,6 +763,7 @@ async def page_exercise(
         "prefill": prefill,
         "p1": p1,
         "p2": p2,
+        "p3": p3,
         "doc_urls": doc_urls,
         "doc_labels": doc_labels,
     })
@@ -1272,7 +1278,7 @@ async def page_submit(
     # Submit button posts the entire form across all pages; the
     # grader scopes via fields= so other pages' inputs are ignored
     # until their grader plumbing lands.
-    graded_fields = PART1_FIELDS + PART2_FIELDS
+    graded_fields = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
     # Checkboxes that are unchecked don't appear in form_data; the
     # answer key has them as "No". Translate the absence into an
     # explicit "No" before grading so the strict _values_match
@@ -1287,6 +1293,8 @@ async def page_submit(
         | set(P2_CLIENT_CHECKBOX_FIELDS)
         | set(P2_CLIENT_SUBQ_FIELDS)
         | set(P2_VOL_CHECKBOX_FIELDS)
+        | set(P3_CLIENT_CHECKBOX_FIELDS)
+        | set(P3_VOL_CHECKBOX_FIELDS)
     ) - ungraded_set
     form_data = await request.form()
     submission: Dict[str, str] = {}

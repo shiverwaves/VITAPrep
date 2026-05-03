@@ -233,14 +233,14 @@ class TestIncomeSubmission:
 # =========================================================================
 
 class TestIntakeSubmissionScoped:
-    """Test Part I submission scope.
+    """Test full-form submission scope.
 
-    Phase 3-E expanded /submit to grade Part I + Part II together
-    (single Submit button posts the whole form across all pages).
-    Part III is still excluded until Phase 4-E lands.
+    Phase 3-E added Part II to /submit; Phase 4-E adds Part III. The
+    single Submit button posts the whole form across all pages and
+    grades Parts I, II, and III together.
     """
 
-    def test_submit_encounter_includes_income(self):
+    def test_submit_encounter_includes_income_and_expenses(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             resp = client.post(
@@ -249,10 +249,10 @@ class TestIntakeSubmissionScoped:
             )
             assert resp.status_code == 200
             html = resp.text
-            # Part II income fields are now graded alongside Part I.
+            # Part II income fields are graded alongside Part I.
             assert "income.wages" in html
-            # Part III expense fields are still out-of-scope.
-            assert "expense.mortgage" not in html
+            # Part III expense fields are now graded too.
+            assert "expense.mortgage" in html or "expense.medical" in html
 
     def test_submit_encounter_shows_part1_label(self):
         with TestClient(app) as client:
@@ -663,7 +663,13 @@ class TestGraderFieldsFilter:
 
         part3_result = grader.grade_encounter({}, _gt_dict(hh), fields=PART3_FIELDS)
         p3_fields = {fb["field"] for fb in part3_result.field_feedback}
-        assert all(f.startswith("expense.") for f in p3_fields)
+        # Part III spans both the legacy ``expense.*`` namespace and
+        # the Page 3 template's ``vol.expense.*`` volunteer-column
+        # namespace.
+        assert all(
+            f.startswith("expense.") or f.startswith("vol.expense.")
+            for f in p3_fields
+        )
         # Should not have personal or income fields
         assert not any(f.startswith("filer.") for f in p3_fields)
         assert not any(f.startswith("income.") for f in p3_fields)

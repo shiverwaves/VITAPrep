@@ -451,6 +451,53 @@ def _build_expense_key(key: Dict[str, str], household: Household) -> None:
     else:
         key[EXPENSE_EDUCATION] = "No"
 
+    # New Page 3 namespace — written alongside the legacy keys above so
+    # the encounter form (which posts the new-namespace inputs for
+    # Page 3) can be graded directly. Mirrors form_populator's
+    # build_p3_field_values: only modeled rows get scored; the
+    # unmodeled Tax Related Events section + the rows whose source
+    # data isn't in the model stay out of the answer key.
+    from training.form_fields import (
+        EXPENSE_TAXES_NEW,
+        VOL_EXPENSE_1098,
+        VOL_EXPENSE_1098_COUNT,
+        VOL_EXPENSE_1098E,
+        VOL_EXPENSE_CHILD_CARE_CREDIT,
+        VOL_EXPENSE_EDUCATOR,
+        VOL_EXPENSE_EDUCATOR_AMOUNT,
+        VOL_EXPENSE_IRA,
+        VOL_EXPENSE_ITEMIZED_DEDUCTION,
+        VOL_EXPENSE_STANDARD_DEDUCTION,
+    )
+
+    has_taxes = (
+        household.property_taxes > 0
+        or household.state_income_tax > 0
+    )
+    has_mortgage = household.mortgage_interest > 0
+
+    # Itemize section
+    key[EXPENSE_TAXES_NEW] = "Yes" if has_taxes else "No"
+    key[VOL_EXPENSE_1098] = "Yes" if has_mortgage else "No"
+    if has_mortgage:
+        key[VOL_EXPENSE_1098_COUNT] = "1"
+    key[VOL_EXPENSE_STANDARD_DEDUCTION] = (
+        "Yes" if household.uses_standard_deduction else "No"
+    )
+    key[VOL_EXPENSE_ITEMIZED_DEDUCTION] = (
+        "No" if household.uses_standard_deduction else "Yes"
+    )
+
+    # Other Expenses section
+    key[VOL_EXPENSE_CHILD_CARE_CREDIT] = (
+        "Yes" if household.child_care_expenses > 0 else "No"
+    )
+    key[VOL_EXPENSE_EDUCATOR] = "Yes" if total_educator > 0 else "No"
+    if total_educator > 0:
+        key[VOL_EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+    key[VOL_EXPENSE_IRA] = "Yes" if total_ira > 0 else "No"
+    key[VOL_EXPENSE_1098E] = "Yes" if total_student_loan > 0 else "No"
+
 
 # =========================================================================
 # Grader

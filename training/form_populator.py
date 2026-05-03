@@ -958,3 +958,46 @@ def _populate_expense_fields(
         values[EXPENSE_EDUCATION_AMOUNT] = str(household.education_expenses)
     else:
         values[EXPENSE_EDUCATION] = "No"
+
+    # Mirror the grader's new Page 3 namespace entries so a submission
+    # built from this populator (used as a "perfect submission" in
+    # tests) still grades 100% against the extended answer key.
+    from training.form_fields import (
+        EXPENSE_TAXES_NEW,
+        VOL_EXPENSE_1098,
+        VOL_EXPENSE_1098_COUNT,
+        VOL_EXPENSE_1098E,
+        VOL_EXPENSE_CHILD_CARE_CREDIT,
+        VOL_EXPENSE_EDUCATOR,
+        VOL_EXPENSE_EDUCATOR_AMOUNT,
+        VOL_EXPENSE_IRA,
+        VOL_EXPENSE_ITEMIZED_DEDUCTION,
+        VOL_EXPENSE_STANDARD_DEDUCTION,
+    )
+    has_taxes = (
+        household.property_taxes > 0
+        or household.state_income_tax > 0
+    )
+    has_mortgage = household.mortgage_interest > 0
+    total_educator = sum(p.educator_expenses for p in filers)
+    total_ira = sum(p.ira_contributions for p in filers)
+    total_student_loan = sum(p.student_loan_interest for p in filers)
+
+    values[EXPENSE_TAXES_NEW] = "Yes" if has_taxes else "No"
+    values[VOL_EXPENSE_1098] = "Yes" if has_mortgage else "No"
+    if has_mortgage:
+        values[VOL_EXPENSE_1098_COUNT] = "1"
+    values[VOL_EXPENSE_STANDARD_DEDUCTION] = (
+        "Yes" if household.uses_standard_deduction else "No"
+    )
+    values[VOL_EXPENSE_ITEMIZED_DEDUCTION] = (
+        "No" if household.uses_standard_deduction else "Yes"
+    )
+    values[VOL_EXPENSE_CHILD_CARE_CREDIT] = (
+        "Yes" if household.child_care_expenses > 0 else "No"
+    )
+    values[VOL_EXPENSE_EDUCATOR] = "Yes" if total_educator > 0 else "No"
+    if total_educator > 0:
+        values[VOL_EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+    values[VOL_EXPENSE_IRA] = "Yes" if total_ira > 0 else "No"
+    values[VOL_EXPENSE_1098E] = "Yes" if total_student_loan > 0 else "No"
