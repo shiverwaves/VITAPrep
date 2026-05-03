@@ -686,6 +686,44 @@ Part 2 is one feature with no migration concerns and no atomicity
 requirements; phasing here is purely about review surface and
 bisect-ability — three phases is enough.
 
+**Part 3 (Page 2 — Income) — sequential phases mirroring Part 1:**
+
+8. **Phase 3-Mockup** ✓ — `docs/mockups/13614c_page2.html`.
+9. **Phase 3-A** — `form_fields.py` constants + `UNGRADED_FIELDS`
+   additions for Page 2.
+10. **Phase 3-B** — `build_p2_field_values` populator function.
+11. **Phase 3-C** — Jinja partial + lifted CSS.
+12. **Phase 3-D** — wire into `encounter.html` (Page 2 tab → new
+    partial). Page 3 / 4 stay legacy.
+13. **Phase 3-E** — grader answer-key entries for the six scoreable
+    counts.
+14. **Phase 3-G** — tests (form_populator_p2, encounter_p2_render,
+    encounter_submit_p2).
+
+**Part 4 (Page 3 — Expenses & Tax Related Events) — same phase
+shape as Part 3, executed *after* Page 2 ships and validates in a
+real browser:**
+
+15. **Phase 4-Mockup** ✓ — `docs/mockups/13614c_page3.html`.
+16. **Phase 4-A** — `form_fields.py` constants for Page 3 (reuse
+    legacy `EXPENSE_*` constants where possible; new `EVENT_*` set
+    for Section 3).
+17. **Phase 4-B** — `build_p3_field_values` populator function.
+18. **Phase 4-C** — Jinja partial + lifted CSS.
+19. **Phase 4-D** — wire into `encounter.html` (Page 3 tab → new
+    partial).
+20. **Phase 4-E** — grader answer-key entries for the modeled rows
+    (most already exist from legacy form work).
+21. **Phase 4-G** — tests (form_populator_p3, encounter_p3_render,
+    encounter_submit_p3).
+
+Parts 3 and 4 are sequential rather than combined — Page 2 acts as
+the canary that proves the page-integration pattern before applying
+it to the bigger Page 3. Decisions that apply to both (legacy
+constant reuse, no rename, additive-only changes, per-row notes
+unscored, UNGRADED_FIELDS for unmodeled rows) are pinned upfront so
+no re-deciding mid-sprint.
+
 ---
 
 ## Open questions still on the table
@@ -974,15 +1012,247 @@ migration), so the suite stays green throughout.
 
 ---
 
+## Part 4 — Page 3 (Expenses & Tax Related Events) integration
+
+Page 3 of the 13614-C is Part III — Expenses, Deductions & Credits +
+"Tax Related Events". Same three-column structure as Page 2 (client /
+volunteer / notes), but bigger: ~21 rows split across three sections
+under their own banners. Mockup at `docs/mockups/13614c_page3.html`.
+
+The shape of the work is identical to Part 3 (Page 2). Decisions
+pinned during the cross-sprint planning discussion apply here too:
+
+- **Reuse legacy constants** in `form_fields.py` where the new
+  template's field maps cleanly to one (e.g. `EXPENSE_MORTGAGE_INTEREST`
+  already exists from the legacy form work). No rename this time —
+  the wire format already matches the mockup naming.
+- **`PART3_FIELDS` exists** from earlier work; we extend rather than
+  reset.
+- **Section headers inline in cells** (the pattern landed in the
+  mockup): the partial uses `<div class="f13c-p3-cell-header">` at
+  the top of each section-start cell. Structural HTML, no data
+  binding required.
+- **Per-row notes**: free-text scratchpad, never pre-filled, never
+  scored. Same as Page 2.
+- **`UNGRADED_FIELDS`**: append page-3 unmodeled fields to the
+  existing list. Result UI handles them automatically.
+
+### Layout structure
+
+Three sections, each opens with its own bordered cell containing the
+section header inline at top:
+
+| Section | Header | Rows | Notes |
+|---|---|---|---|
+| 1 | Paid any of the following expenses to itemize in 2025? | 1 (single tall row, 4 stacked client items) | Volunteer cell has 1098 # + Standard / Itemized two-up |
+| 2 | Paid any of these expenses in 2025? | 5 | Student loan / Child care / Retirement / Educator / Alimony paid |
+| 3 | Did any of the following happen during 2025? | 12 | Tax-related events (sale of home, HSA, marketplace, etc.) |
+
+### Field inventory
+
+| Section | Row | Letter | Client checkbox | Volunteer entries | Modeled? |
+|---|---|---|---|---|---|
+| 1 | (single row) | A | Mortgage Interest | `(A) 1098 #` | **Yes** — `Household.mortgage_interest`, `len(form_1098s)` |
+| 1 | | A | Taxes: state, local, real estate, sales | (no specific volunteer entry — Standard / Itemized choice covers section) | **Yes** — `Household.property_taxes`, `state_income_tax` |
+| 1 | | A | Medical, dental, prescription expenses | — | **Yes** — `Household.medical_expenses` |
+| 1 | | A | Charitable contributions | — | **Yes** — `Household.charitable_contributions` |
+| 1 | (volunteer area) | B / A | — | Standard deduction / Itemized deduction | **Yes** — `Household.uses_standard_deduction` |
+| 2 | 1 | B | Student loan interest | `(B) 1098-E` | **Yes** — `Person.student_loan_interest`, `len(form_1098_es)` |
+| 2 | 2 | B | Child and dependent care | `(B) Child and dependent care credit` | **Yes** — `Household.child_care_expenses` |
+| 2 | 3 | B/A | Contributions to a retirement account | `(B/A) IRA (Basic if a Roth IRA or 401K)` | **Yes** — `Person.ira_contributions`, `ira_type` |
+| 2 | 4 | B | School supplies (educator) | `(B) Educator expenses deduction $` | **Yes** — `Person.educator_expenses` |
+| 2 | 5 | B | Alimony payments (do not include child support) | `(B) Alimony payments with spouse's SSN $` + Adjustment to income Y/N | **No** — alimony PAID not modeled (Page 2 had alimony received in deferred catalog) |
+| 3 | 1 | B | Educational classes | `(B) Taxable scholarship income` / `(B) 1098-T` / `(B) Education credit or tuition and fees deduction` | **Partial** — `Household.education_expenses`, `len(form_1098_ts)` modeled; taxable scholarship not |
+| 3 | 2 | A | Sell a home | `(A) Sale of home (1099-S)` | **No** |
+| 3 | 3 | A | HSA | `(A) HSA contributions` / `(A) HSA distributions` | **No** |
+| 3 | 4 | A | Purchase health insurance through Marketplace | `(A) 1095-A` | **No** |
+| 3 | 5 | A | Energy-efficient home items | `(A) Energy efficient home improvement credit (Form 5695, Part II only)` | **No** |
+| 3 | 6 | A | Other (vehicle, etc.) | `VIN #` text | **No** |
+| 3 | 7 | A | Debt cancelled/forgiven | `(A) 1099-C` | **No** |
+| 3 | 8 | A | Federal disaster area loss | `(A) 1099-A` / `Disaster relief impacts return` | **No** |
+| 3 | 9 | B | Tax credit disallowed (EITC/CTC/AOTC/HOH) | `(B) EITC, CTC, AOTC or HOH disallowed in a previous year` + `Year disallowed ___ Reason ___` | **No** |
+| 3 | 10 | — | Receive any letter or bill from the IRS | `Eligible for Low Income Taxpayer Clinic referral` | **No** |
+| 3 | 11 | B | Make estimated tax payments / apply prior refund | `(B) Estimated tax payments` `___` / `(B) Last year's refund applied to this year` `___` | **No** |
+| 3 | 12 | — | Brought last year's return | `Last year's return available` | **No** (just a flag if we want it) |
+
+**Rough tally:** 9 fully-modeled + 1 partial + 11 unmodeled rows.
+
+### Deferred model extensions for Page 3
+
+Same forward-compatibility catalog approach as Part 3. None of these
+block Page 3's mockup integration — the affected fields just stay
+ungraded until the model lands.
+
+#### New `Person` fields
+
+| Field | Type | What it represents |
+|---|---|---|
+| `alimony_paid` | `int` | Alimony paid (Section 2 row 5) |
+| `alimony_paid_excluded_from_income` | `bool` | Adjustment-to-income flag for post-2018 agreements |
+| `taxable_scholarship_income` | `int` | Scholarship income above qualified expenses (Section 3 row 1) |
+| `hsa_contributions` | `int` | HSA contributions (Section 3 row 3) |
+| `hsa_distributions` | `int` | HSA distributions |
+| `marketplace_premium_tax_credit` | `int` | Premium tax credit reconciliation from 1095-A |
+| `cancelled_debt_amount` | `int` | Forgiven debt income (1099-C; Section 3 row 7) |
+| `disaster_loss_amount` | `int` | Federal disaster loss (Section 3 row 8) |
+| `estimated_tax_payments` | `int` | Estimated tax payments made (Section 3 row 11) |
+| `prior_year_refund_applied_amount` | `int` | Prior-year refund applied to this year |
+
+#### New `Household` fields
+
+| Field | Type | What it represents |
+|---|---|---|
+| `sold_home` | `bool` | Sold a home this year (Section 3 row 2) |
+| `home_sale_proceeds` | `int` | Sale of home (1099-S) gross proceeds |
+| `energy_efficient_home_credit` | `int` | Form 5695 Part II credit amount (Section 3 row 5) |
+| `purchased_vehicle_vin` | `str` | VIN if a new vehicle was purchased (Section 3 row 6) |
+| `prior_year_credit_disallowed` | `str` | "EITC" / "CTC" / "AOTC" / "HOH" / null (Section 3 row 9) |
+| `prior_year_credit_disallowed_year` | `int` | Year of disallowance |
+| `prior_year_credit_disallowed_reason` | `str` | Free-text reason |
+| `received_irs_letter` | `bool` | Received any letter or bill from IRS (Section 3 row 10) |
+| `litc_eligible` | `bool` | Volunteer-determined LITC referral eligibility |
+| `brought_prior_year_return` | `bool` | Player brought last year's return (Section 3 row 12) |
+
+#### New document dataclasses
+
+| Dataclass | Replaces / Adds |
+|---|---|
+| `Form1099S` | Sale of home (Section 3 row 2) |
+| `Form1099C` | Cancellation of debt (Section 3 row 7) |
+| `Form1099A` | Acquisition or abandonment of secured property (Section 3 row 8) |
+| `Form1095A` | Health Insurance Marketplace Statement (Section 3 row 4) |
+| `Form1098_HSA` | HSA-related document (or extend existing 1099-SA / 5498-SA) |
+| `Form5695` | Residential energy efficient credit (Section 3 row 5) |
+
+#### Predicates / computations needed
+
+These belong in `tax_core/` once the data is in place:
+
+- **Home sale exclusion** — Section 121 capital-gains exclusion ($250k single / $500k MFJ) for primary residence.
+- **HSA deduction limit** — annual contribution caps; distribution taxability for non-qualified expenses (20% additional tax).
+- **Premium Tax Credit reconciliation** — 1095-A → Form 8962. Excess PTC repayment vs. additional PTC owed.
+- **Energy efficient home credit** — Form 5695 Part II caps and qualifications.
+- **Cancelled debt income** — when 1099-C income is excludable (insolvency, principal residence indebtedness, etc.).
+- **Disaster relief impacts** — special tax treatment for federally declared disaster losses (casualty deduction, retirement plan distributions, etc.).
+- **Disallowed credit recertification** — Form 8862 required for re-claiming previously disallowed credits.
+- **Estimated tax payment tracking** — apply estimated payments + prior-year refund to current-year liability.
+- **Alimony paid deduction** — pre-2019 vs post-2018 split (mirrors Page 2's alimony-received treatment).
+
+#### Concept-catalog candidates
+
+Worth registering in `docs/CONCEPT_CATALOG.md`:
+
+- `home_sale_section_121_exclusion`
+- `hsa_contribution_deduction`
+- `hsa_distribution_taxability`
+- `premium_tax_credit_reconciliation`
+- `energy_efficient_home_credit`
+- `cancelled_debt_exclusion`
+- `disaster_loss_treatment`
+- `disallowed_credit_recertification`
+- `alimony_paid_deduction_split` (pre-2019 vs. post-2018, paired with the Page 2 received-side concept)
+
+### Phased approach
+
+Mirrors Part 3 phase-for-phase. Phase identifiers prefixed `4-` to
+distinguish from Part 3's `3-` phases.
+
+#### Phase 4-Mockup: Static HTML mockup
+✓ **Complete.** `docs/mockups/13614c_page3.html` is the locked-down
+mockup after iterations on section-header inlining, Y/N alignment,
+and VIN row caption proximity.
+
+#### Phase 4-A: form_fields constants
+Extend `training/form_fields.py` with Page-3-specific constants.
+Reuse legacy `EXPENSE_*` constants where they map cleanly:
+
+- `EXPENSE_MORTGAGE_INTEREST` (legacy, reuse for Section 1 row 1)
+- `EXPENSE_PROPERTY_TAXES` (legacy, reuse — also covers Section 1
+  row 2's "Taxes")
+- `EXPENSE_MEDICAL` (legacy, reuse)
+- `EXPENSE_CHARITABLE` (legacy, reuse)
+- `EXPENSE_DEDUCTION_TYPE` (legacy, reuse for Standard / Itemized)
+- `EXPENSE_STUDENT_LOAN` / `_AMOUNT` (legacy, reuse)
+- `EXPENSE_CHILD_CARE` / `_AMOUNT` (legacy, reuse)
+- `EXPENSE_IRA` / `_AMOUNT` (legacy, reuse)
+- `EXPENSE_EDUCATOR` / `_AMOUNT` (legacy, reuse)
+- `EXPENSE_EDUCATION` / `_AMOUNT` (legacy, reuse)
+
+New constants needed (not in legacy `PART3_FIELDS`):
+
+- Section 1: `VOL_EXPENSE_1098_COUNT`, `EXPENSE_NOTE_ITEMIZE`
+- Section 2: `EXPENSE_ALIMONY_PAID`, `VOL_EXPENSE_ALIMONY_PAID_AMOUNT`,
+  `VOL_EXPENSE_ALIMONY_ADJUSTMENT_YES/NO`, `EXPENSE_NOTE_<source>` per row
+- Section 3: ~30 new constants under the `EVENT_*` / `VOL_EVENT_*` /
+  `EVENT_NOTE_*` namespace (12 rows × ~3 fields each).
+
+Add Page 3 entries to `UNGRADED_FIELDS`: every volunteer-area field
+whose source isn't modeled today (most of Section 3 + Section 2 row 5).
+
+#### Phase 4-B: build_p3_field_values populator
+New function in `training/form_populator.py`:
+
+```
+def build_p3_field_values(household: Household) -> Dict[str, str | bool]:
+    ...
+```
+
+Mirrors `build_p2_field_values` (which exists from Phase 1B):
+strings for text inputs, booleans for checkboxes. Pre-fills:
+
+- Section 1: client checkboxes for itemize categories driven by
+  `Household.mortgage_interest > 0`, etc. Volunteer's 1098 count =
+  `len(filer.form_1098s) + len(spouse.form_1098s)`. Standard /
+  Itemized choice from `Household.uses_standard_deduction`.
+- Section 2: client + volunteer checkboxes / amounts for the modeled
+  expenses (rows 1-4). Row 5 (alimony paid) left blank.
+- Section 3: only "Educational classes" client checkbox + 1098-T
+  count is pre-fillable. Everything else stays blank.
+
+#### Phase 4-C: Jinja partial + CSS
+Convert `docs/mockups/13614c_page3.html` to
+`api/templates/components/form_13614c_p3.html`. Lift styles to
+`api/static/styles/form_13614c_p3.css`. Use `f13c-p3-` prefix.
+Preserve the inline-section-header pattern from the mockup; mark
+ungraded volunteer cells with `f13c-vol-col-ungraded` (or a Page-3
+equivalent) per the existing convention.
+
+#### Phase 4-D: Wire into encounter view
+Extend the per-page branch in `encounter.html`: add a `tab.page == 3`
+case that renders the new partial. Pages 2 and 4 stay legacy until
+their own integration sprints land.
+
+#### Phase 4-E: Answer-key + grader updates
+`grader.build_form_answers` already iterates `PART3_FIELDS` for the
+existing legacy expense page. Add per-source answer-key entries for
+the modeled rows (mortgage interest amount, child care amount,
+educator amount, etc. — most already exist). The unmodeled fields
+remain in `UNGRADED_FIELDS` and stay out of the answer key.
+
+#### Phase 4-G: Tests
+Mirror Part 3's test files:
+
+- `tests/test_form_populator_p3.py`
+- `tests/test_encounter_p3_render.py`
+- `tests/test_encounter_submit_p3.py`
+
+### Sequencing
+
+4-A → 4-B → 4-C → 4-D → 4-E → 4-G. Same risk profile as Part 3 —
+purely additive, no rename or migration, suite stays green throughout.
+
+---
+
 ## What's deferred
 
-- Pages 3, 4 of the form (Page 2 is now planned in Part 3 above; each
-  remaining page gets its own template + wiring task).
-- Model extensions for Page 2's unmodeled income sources — the full
-  catalog of new `Person` / `Household` fields, document dataclasses,
-  and predicates is in Part 3 → Deferred model extensions for Page 2.
-  None of it blocks the Page 2 mockup integration; the affected
-  fields just stay ungraded until the model lands.
+- Page 4 of the form (Pages 2 and 3 are now planned in Parts 3 and
+  4 above; Page 4 will need its own mockup before integration can
+  be planned).
+- Model extensions for Pages 2 and 3's unmodeled fields — full
+  catalogs in Part 3 → "Deferred model extensions for Page 2" and
+  Part 4 → "Deferred model extensions for Page 3". None of it
+  blocks the page integrations; the affected fields just stay
+  ungraded until the model lands.
 - Right-click context menu on form fields.
 - Probe interaction in the chat pane.
 - Verify mode (different right-click verbs, different submission flow).
