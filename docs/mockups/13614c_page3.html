@@ -118,8 +118,11 @@ body {
 }
 
 /* ================================================================
-   Section header rows — one per section, repeated as the section
-   banner. Three columns matching the body grid.
+   Section header rows — bold prologue at the top of each section.
+   The header sits visually *inside* the same bordered cell as the
+   content row below: heavier top border marks the section break,
+   no bottom border so the header text reads as the top of one
+   tall box rather than its own discrete row.
    ================================================================ */
 
 .f13c-p3-section-head {
@@ -131,9 +134,8 @@ body {
     background: #fff;
     font-size: 11px;
     font-weight: 700;
-    padding: 5px 8px;
+    padding: 5px 8px 3px;
     border-top: 1.5px solid #000;
-    border-bottom: 0.5px solid #000;
     border-right: 0.5px solid #888;
     line-height: 1.3;
 }
@@ -146,6 +148,12 @@ body {
 .f13c-p3-section-head > div:last-child {
     border-right: none;
 }
+
+/* The content row that immediately follows a section head has no
+   top padding adjustment needed; padding/border come from the row
+   itself. The visual merge happens because section-head's children
+   have no border-bottom — the cell appears continuous with the row
+   below. */
 
 /* ================================================================
    Body rows — same three-column grid as Page 2.
