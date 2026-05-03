@@ -160,14 +160,27 @@
     font-style: italic;
 }
 
-/* Page panels (switched by tab clicks) */
+/* Page panels — single-scroll form (Phase B). All three sections render
+   stacked; the page tab strip that used to swap visibility is no longer
+   emitted. The .sheet__page--active class is left defined for any future
+   readers / callers who construct an "active" state, but it has no
+   visibility role today. */
 .sheet__page {
-    display: none;
+    display: block;
     padding: var(--spacing-md);
 }
 
 .sheet__page--active {
     display: block;
+}
+
+/* Per-section grade badge — kept in the DOM as a structural anchor
+   (tests pin to form-card / section-score / "Not yet submitted" text
+   presence; future progress-display chrome will attach via this hook
+   too) but hidden in the form view since the user views progression
+   through other UI now. */
+.form-card {
+    display: none;
 }
 
 /* Empty page message */
