@@ -118,42 +118,26 @@ body {
 }
 
 /* ================================================================
-   Section header rows — bold prologue at the top of each section.
-   The header sits visually *inside* the same bordered cell as the
-   content row below: heavier top border marks the section break,
-   no bottom border so the header text reads as the top of one
-   tall box rather than its own discrete row.
+   Section headers — bold prologue at the top of each section. The
+   header is rendered *inline inside* the first cell of the section,
+   not as a separate row, so there's no horizontal seam, padding
+   gap, or apparent underline between header text and the content
+   below it.
    ================================================================ */
 
-.f13c-p3-section-head {
-    display: grid;
-    grid-template-columns: 42% 45% 13%;
-}
-
-.f13c-p3-section-head > div {
-    background: #fff;
-    font-size: 11px;
+.f13c-p3-cell-header {
     font-weight: 700;
-    padding: 5px 8px 3px;
-    border-top: 1.5px solid #000;
-    border-right: 0.5px solid #888;
+    font-size: 11px;
     line-height: 1.3;
+    margin-bottom: 6px;
 }
 
-.f13c-p3-section-head > div:nth-child(2),
-.f13c-p3-section-head > div:nth-child(3) {
-    background: #f0efea;
-}
+/* Section divider — heavier top border on the cells of the row
+   that starts a new section. */
 
-.f13c-p3-section-head > div:last-child {
-    border-right: none;
+.f13c-p3-row--section-start > .f13c-p3-cell {
+    border-top: 1.5px solid #000;
 }
-
-/* The content row that immediately follows a section head has no
-   top padding adjustment needed; padding/border come from the row
-   itself. The visual merge happens because section-head's children
-   have no border-bottom — the cell appears continuous with the row
-   below. */
 
 /* ================================================================
    Body rows — same three-column grid as Page 2.
@@ -334,16 +318,25 @@ body {
     width: 80px;
 }
 
-/* Notes cell — fills the cell, no input underline. */
+/* Notes cell — fills the cell, no input underline. Cell uses
+   padding: 0 + flex column so the input can fill the cell when
+   alone, or sit below an inline cell-header on section-start rows. */
 
 .f13c-p3-cell--notes {
     padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.f13c-p3-cell--notes .f13c-p3-cell-header {
+    padding: 4px 8px 0;
+    margin-bottom: 4px;
 }
 
 .f13c-p3-notes-input {
     display: block;
     width: 100%;
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 28px;
     padding: 4px 8px;
     border: none !important;
@@ -394,19 +387,13 @@ body {
 
 <!-- ============================================================
      SECTION 1 — Itemize Deductions
-     A single tall row with stacked items in each cell:
-       - 4 client checkboxes (Mortgage / Taxes / Medical / Charitable)
-       - 3 volunteer entries (1098, then Standard / Itemized two-up)
-       - one notes input
+     A single tall row with stacked items in each cell. Section
+     headers are inline inside each cell at the top — no separate
+     header row above.
      ============================================================ -->
-<div class="f13c-p3-section-head">
-    <div>Paid any of the following expenses to itemize in 2025?</div>
-    <div>(To be completed by certified volunteer) Standard or Itemized Deductions</div>
-    <div>Notes/Comments</div>
-</div>
-
-<div class="f13c-p3-row">
+<div class="f13c-p3-row f13c-p3-row--section-start">
     <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-cell-header">Paid any of the following expenses to itemize in 2025?</div>
         <div class="f13c-p3-q">
             <label><input type="checkbox" name="expense.mortgage_interest"> <span><strong>(A)</strong> Mortgage Interest</span></label>
         </div>
@@ -421,6 +408,7 @@ body {
         </div>
     </div>
     <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-cell-header">(To be completed by certified volunteer) Standard or Itemized Deductions</div>
         <div class="f13c-p3-vol-entry">
             <label><input type="checkbox" name="vol.expense.1098"> <strong>(A)</strong> 1098</label>
             <span class="f13c-p3-vol-prefix">#</span>
@@ -432,32 +420,32 @@ body {
         </div>
     </div>
     <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <div class="f13c-p3-cell-header">Notes/Comments</div>
         <input type="text" name="expense.note.itemize" class="f13c-p3-notes-input" value="">
     </div>
 </div>
 
 <!-- ============================================================
-     SECTION 2 — Other expenses (5 rows)
+     SECTION 2 — Other expenses (5 rows). Section header is inline
+     in the first row's cells; subsequent rows have only content.
      ============================================================ -->
-<div class="f13c-p3-section-head">
-    <div>Paid any of these expenses in 2025?</div>
-    <div>(To be completed by certified volunteer) Expenses to report</div>
-    <div>Notes/Comments</div>
-</div>
 
-<!-- Row: Student loan interest -->
-<div class="f13c-p3-row">
+<!-- Row: Student loan interest (section start) -->
+<div class="f13c-p3-row f13c-p3-row--section-start">
     <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-cell-header">Paid any of these expenses in 2025?</div>
         <div class="f13c-p3-q">
             <label><input type="checkbox" name="expense.student_loan"> <span><strong>(B)</strong> Student loan interest</span></label>
         </div>
     </div>
     <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-cell-header">(To be completed by certified volunteer) Expenses to report</div>
         <div class="f13c-p3-vol-entry">
             <label><input type="checkbox" name="vol.expense.1098e"> <strong>(B)</strong> 1098-E</label>
         </div>
     </div>
     <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <div class="f13c-p3-cell-header">Notes/Comments</div>
         <input type="text" name="expense.note.student_loan" class="f13c-p3-notes-input" value="">
     </div>
 </div>
@@ -542,22 +530,20 @@ body {
 </div>
 
 <!-- ============================================================
-     SECTION 3 — Tax Related Events (12 rows)
+     SECTION 3 — Tax Related Events (12 rows). Section header is
+     inline in the first row's cells.
      ============================================================ -->
-<div class="f13c-p3-section-head">
-    <div>Did any of the following happen during 2025?</div>
-    <div>(To be completed by certified volunteer) Information to report</div>
-    <div>Notes/Comments</div>
-</div>
 
-<!-- Row: Educational classes -->
-<div class="f13c-p3-row">
+<!-- Row: Educational classes (section start) -->
+<div class="f13c-p3-row f13c-p3-row--section-start">
     <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-cell-header">Did any of the following happen during 2025?</div>
         <div class="f13c-p3-q">
             <label><input type="checkbox" name="event.education"> <span><strong>(B)</strong> You or someone in your family took educational classes (technical school, college, job related, etc.)</span></label>
         </div>
     </div>
     <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-cell-header">(To be completed by certified volunteer) Information to report</div>
         <div class="f13c-p3-vol-entry">
             <label><input type="checkbox" name="vol.event.taxable_scholarship"> <strong>(B)</strong> Taxable scholarship income</label>
         </div>
@@ -569,6 +555,7 @@ body {
         </div>
     </div>
     <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <div class="f13c-p3-cell-header">Notes/Comments</div>
         <input type="text" name="event.note.education" class="f13c-p3-notes-input" value="">
     </div>
 </div>
