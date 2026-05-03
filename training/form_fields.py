@@ -20,16 +20,18 @@ from typing import Dict, List
 # Section A: About You
 # =========================================================================
 
-YOU_FIRST_NAME = "you.first_name"
-YOU_MIDDLE_INITIAL = "you.middle_initial"
-YOU_LAST_NAME = "you.last_name"
-YOU_DOB = "you.dob"
-YOU_SSN = "you.ssn"
-YOU_JOB_TITLE = "you.job_title"
-YOU_US_CITIZEN = "you.us_citizen"  # checkbox: yes
-YOU_NOT_US_CITIZEN = "you.not_us_citizen"  # checkbox: no
-YOU_PHONE = "you.phone"
-YOU_EMAIL = "you.email"
+# Identifiers stay YOU_* (no import churn); wire-format values are filer.*.
+# Aligns with the new Form 13614-C Page 1 mockup.
+YOU_FIRST_NAME = "filer.first_name"
+YOU_MIDDLE_INITIAL = "filer.middle_initial"
+YOU_LAST_NAME = "filer.last_name"
+YOU_DOB = "filer.dob"
+YOU_SSN = "filer.ssn"
+YOU_JOB_TITLE = "filer.job_title"
+YOU_US_CITIZEN = "filer.us_citizen"  # checkbox: yes
+YOU_NOT_US_CITIZEN = "filer.not_us_citizen"  # checkbox: no
+YOU_PHONE = "filer.phone"
+YOU_EMAIL = "filer.email"
 
 # =========================================================================
 # Section B: Mailing Address
@@ -86,9 +88,10 @@ def dep_field(index: int, field_name: str) -> str:
     return f"dep.{index}.{field_name}"
 
 
-# Dependent sub-field names (used with dep_field())
-DEP_FIRST_NAME = "first_name"
-DEP_LAST_NAME = "last_name"
+# Dependent sub-field names (used with dep_field()).
+# Page 1 of the new template uses a single combined name field per row
+# (``dep.{i}.name``); the prior split into first/last is gone.
+DEP_NAME = "name"
 DEP_DOB = "dob"
 DEP_RELATIONSHIP = "relationship"
 DEP_MONTHS = "months"
@@ -103,10 +106,11 @@ MAX_DEPENDENTS = 4
 # Section F: Additional Questions
 # =========================================================================
 
-CLAIMED_AS_DEPENDENT = "additional.claimed_as_dep"  # checkbox: yes
-NOT_CLAIMED_AS_DEPENDENT = "additional.not_claimed_as_dep"  # checkbox: no
-PRIOR_YEAR_DEPENDENT = "additional.prior_year_dep"  # checkbox: yes
-NOT_PRIOR_YEAR_DEPENDENT = "additional.not_prior_year_dep"  # checkbox: no
+# Form 13614-C "Can anyone else claim you" row (Page 1, Section 5).
+CLAIMED_AS_DEPENDENT = "claimable.yes"  # checkbox: yes
+NOT_CLAIMED_AS_DEPENDENT = "claimable.no"  # checkbox: no
+PRIOR_YEAR_DEPENDENT = "claimable.prior_year_yes"  # checkbox: yes
+NOT_PRIOR_YEAR_DEPENDENT = "claimable.prior_year_no"  # checkbox: no
 
 # =========================================================================
 # Part II — Income
@@ -239,19 +243,22 @@ EXPENSE_AMOUNT_FIELDS: List[str] = [
 # Helpers — enumerate all fields
 # =========================================================================
 
-# All text fields (for iteration / validation)
+# All text fields (for iteration / validation).
+# YOU_SSN / SPOUSE_SSN are intentionally absent: Page 1 of the new
+# 13614-C template does not have SSN inputs (SSN appears on a later
+# page). The constants are kept so legacy code that still references
+# them by identifier doesn't break.
 TEXT_FIELDS: List[str] = [
     YOU_FIRST_NAME, YOU_MIDDLE_INITIAL, YOU_LAST_NAME,
-    YOU_DOB, YOU_SSN, YOU_JOB_TITLE, YOU_PHONE, YOU_EMAIL,
+    YOU_DOB, YOU_JOB_TITLE, YOU_PHONE, YOU_EMAIL,
     ADDR_STREET, ADDR_APT, ADDR_CITY, ADDR_STATE, ADDR_ZIP,
     SPOUSE_FIRST_NAME, SPOUSE_MIDDLE_INITIAL, SPOUSE_LAST_NAME,
-    SPOUSE_DOB, SPOUSE_SSN, SPOUSE_JOB_TITLE,
+    SPOUSE_DOB, SPOUSE_JOB_TITLE,
 ]
 
 # Add dependent text fields for each row
 for _i in range(MAX_DEPENDENTS):
-    for _sub in (DEP_FIRST_NAME, DEP_LAST_NAME, DEP_DOB,
-                 DEP_RELATIONSHIP, DEP_MONTHS):
+    for _sub in (DEP_NAME, DEP_DOB, DEP_RELATIONSHIP, DEP_MONTHS):
         TEXT_FIELDS.append(dep_field(_i, _sub))
 
 # All checkbox fields

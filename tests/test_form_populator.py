@@ -65,8 +65,7 @@ from training.form_fields import (
     YOU_US_CITIZEN,
     dep_field,
     DEP_DOB,
-    DEP_FIRST_NAME,
-    DEP_LAST_NAME,
+    DEP_NAME,
     DEP_MONTHS,
     DEP_RELATIONSHIP,
     DEP_US_CITIZEN,
@@ -371,7 +370,7 @@ class TestBuildFieldValues:
         self, single_adult_household: Household,
     ) -> None:
         vals = build_field_values(single_adult_household)
-        assert dep_field(0, DEP_FIRST_NAME) not in vals
+        assert dep_field(0, DEP_NAME) not in vals
 
     def test_married_spouse_fields(
         self, married_household: Household,
@@ -392,9 +391,9 @@ class TestBuildFieldValues:
         self, married_household: Household,
     ) -> None:
         vals = build_field_values(married_household)
-        # First row = Emma (older)
-        assert vals[dep_field(0, DEP_FIRST_NAME)] == "Emma"
-        assert vals[dep_field(0, DEP_LAST_NAME)] == "Smith"
+        # First row = Emma (older). Page 1 uses a single combined name
+        # field (full legal name as it appears on the SSN card).
+        assert vals[dep_field(0, DEP_NAME)] == "Emma Rose Smith"
         assert vals[dep_field(0, DEP_DOB)] == "09/18/2007"
         assert vals[dep_field(0, DEP_RELATIONSHIP)] == "Son/Daughter"
         assert vals[dep_field(0, DEP_MONTHS)] == "12"
@@ -402,7 +401,7 @@ class TestBuildFieldValues:
         assert vals[dep_field(0, DEP_STUDENT)] == "Yes"
 
         # Second row = Jake (younger)
-        assert vals[dep_field(1, DEP_FIRST_NAME)] == "Jake"
+        assert vals[dep_field(1, DEP_NAME)] == "Jake Smith"
         assert vals[dep_field(1, DEP_STUDENT)] == "No"
 
     def test_hoh_filing_status(
@@ -471,7 +470,7 @@ class TestBuildFieldValues:
         self, single_adult_household: Household,
     ) -> None:
         vals = build_field_values(single_adult_household)
-        assert vals.get("you.job_title") == "Teacher"
+        assert vals.get("filer.job_title") == "Teacher"
 
     def test_apt_empty_when_none(self, married_household: Household) -> None:
         vals = build_field_values(married_household)

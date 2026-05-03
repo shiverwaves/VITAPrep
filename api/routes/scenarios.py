@@ -123,14 +123,28 @@ from training.form_fields import (
     SPOUSE_JOB_TITLE,
     MAX_DEPENDENTS,
     dep_field,
-    DEP_FIRST_NAME,
-    DEP_LAST_NAME,
+    DEP_NAME,
     DEP_DOB,
     DEP_RELATIONSHIP,
     DEP_MONTHS,
     DEP_US_CITIZEN,
     DEP_STUDENT,
     DEP_DISABLED,
+    YOU_FIRST_NAME,
+    YOU_MIDDLE_INITIAL,
+    YOU_LAST_NAME,
+    YOU_DOB,
+    YOU_SSN,
+    SPOUSE_FIRST_NAME,
+    SPOUSE_MIDDLE_INITIAL,
+    SPOUSE_LAST_NAME,
+    SPOUSE_DOB,
+    SPOUSE_SSN,
+    ADDR_STREET,
+    ADDR_APT,
+    ADDR_CITY,
+    ADDR_STATE,
+    ADDR_ZIP,
 )
 
 logger = logging.getLogger(__name__)
@@ -1345,18 +1359,18 @@ def _build_encounter_form_html(
             f'</label>'
         )
 
-    # Build dependent rows
+    # Build dependent rows. The new 13614-C Page 1 template uses a single
+    # combined name field per dependent row (dep.{i}.name); this legacy
+    # form follows the same shape.
     dep_rows = ""
     for i in range(MAX_DEPENDENTS):
-        fn = dep_field(i, DEP_FIRST_NAME)
-        ln = dep_field(i, DEP_LAST_NAME)
+        nm = dep_field(i, DEP_NAME)
         dob = dep_field(i, DEP_DOB)
         rel = dep_field(i, DEP_RELATIONSHIP)
         months = dep_field(i, DEP_MONTHS)
         dep_rows += f"""\
 <tr>
-    <td><input type="text" name="{fn}" value="{prefill.get(fn, "")}"></td>
-    <td><input type="text" name="{ln}" value="{prefill.get(ln, "")}"></td>
+    <td><input type="text" name="{nm}" value="{prefill.get(nm, "")}"></td>
     <td><input type="text" name="{dob}" value="{prefill.get(dob, "")}" placeholder="MM/DD/YYYY"></td>
     <td><input type="text" name="{rel}" value="{prefill.get(rel, "")}"></td>
     <td><input type="text" name="{months}" value="{prefill.get(months, "")}" style="width:60px"></td>
@@ -1418,39 +1432,39 @@ td input {{ width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3p
 
 <h2>Section A: About You</h2>
 <div class="row">
-    {_input("you.first_name", "First Name")}
-    {_input("you.middle_initial", "M.I.", "60px")}
-    {_input("you.last_name", "Last Name")}
+    {_input(YOU_FIRST_NAME, "First Name")}
+    {_input(YOU_MIDDLE_INITIAL, "M.I.", "60px")}
+    {_input(YOU_LAST_NAME, "Last Name")}
 </div>
 <div class="row">
-    {_input("you.dob", "Date of Birth (MM/DD/YYYY)")}
-    {_input("you.ssn", "Social Security Number")}
+    {_input(YOU_DOB, "Date of Birth (MM/DD/YYYY)")}
+    {_input(YOU_SSN, "Social Security Number")}
 </div>
 <div class="row">
-    {_input("you.phone", "Daytime Phone")}
-    {_input("you.email", "Email Address")}
+    {_input(YOU_PHONE, "Daytime Phone")}
+    {_input(YOU_EMAIL, "Email Address")}
 </div>
 
 <h2>Section B: Mailing Address</h2>
 <div class="row">
-    {_input("addr.street", "Street Address")}
-    {_input("addr.apt", "Apt/Unit", "120px")}
+    {_input(ADDR_STREET, "Street Address")}
+    {_input(ADDR_APT, "Apt/Unit", "120px")}
 </div>
 <div class="row">
-    {_input("addr.city", "City")}
-    {_input("addr.state", "State", "80px")}
-    {_input("addr.zip", "ZIP Code", "120px")}
+    {_input(ADDR_CITY, "City")}
+    {_input(ADDR_STATE, "State", "80px")}
+    {_input(ADDR_ZIP, "ZIP Code", "120px")}
 </div>
 
 <h2>Section C: About Your Spouse</h2>
 <div class="row">
-    {_input("spouse.first_name", "Spouse First Name")}
-    {_input("spouse.middle_initial", "M.I.", "60px")}
-    {_input("spouse.last_name", "Spouse Last Name")}
+    {_input(SPOUSE_FIRST_NAME, "Spouse First Name")}
+    {_input(SPOUSE_MIDDLE_INITIAL, "M.I.", "60px")}
+    {_input(SPOUSE_LAST_NAME, "Spouse Last Name")}
 </div>
 <div class="row">
-    {_input("spouse.dob", "Spouse DOB (MM/DD/YYYY)")}
-    {_input("spouse.ssn", "Spouse SSN")}
+    {_input(SPOUSE_DOB, "Spouse DOB (MM/DD/YYYY)")}
+    {_input(SPOUSE_SSN, "Spouse SSN")}
 </div>
 
 <h2>Section D: Filing Status</h2>
@@ -1465,7 +1479,7 @@ td input {{ width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 3p
 <h2>Section E: Dependents</h2>
 <table>
 <thead>
-<tr><th>First Name</th><th>Last Name</th><th>DOB</th><th>Relationship</th><th>Months</th></tr>
+<tr><th>Name (first, last)</th><th>DOB</th><th>Relationship</th><th>Months</th></tr>
 </thead>
 <tbody>
 {dep_rows}

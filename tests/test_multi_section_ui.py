@@ -224,7 +224,7 @@ class TestIncomeSubmission:
             )
             html = resp.text
             # Should not contain Part I field names in feedback
-            assert "you.first_name" not in html
+            assert "filer.first_name" not in html
             assert "addr.street" not in html
 
 
@@ -240,7 +240,7 @@ class TestIntakeSubmissionScoped:
             sid = _create_scenario(client)
             resp = client.post(
                 f"/scenarios/{sid}/submit",
-                data={"you.first_name": "Test", "you.last_name": "User"},
+                data={"filer.first_name": "Test", "filer.last_name": "User"},
             )
             assert resp.status_code == 200
             html = resp.text
@@ -253,7 +253,7 @@ class TestIntakeSubmissionScoped:
             sid = _create_scenario(client)
             resp = client.post(
                 f"/scenarios/{sid}/submit",
-                data={"you.first_name": "Test"},
+                data={"filer.first_name": "Test"},
             )
             assert "Part I" in resp.text
 
@@ -286,7 +286,7 @@ class TestLandingPageGrades:
             # Submit Part I
             client.post(
                 f"/scenarios/{sid}/submit",
-                data={"you.first_name": "Test"},
+                data={"filer.first_name": "Test"},
             )
             resp = client.get(f"/scenarios/{sid}")
             html = resp.text
@@ -300,7 +300,7 @@ class TestLandingPageGrades:
             # Submit all three sections
             client.post(
                 f"/scenarios/{sid}/submit",
-                data={"you.first_name": "Test"},
+                data={"filer.first_name": "Test"},
             )
             client.post(
                 f"/scenarios/{sid}/submit/income",
@@ -364,8 +364,10 @@ class TestFieldLists:
         assert overlap == set()
 
     def test_part1_has_personal_fields(self):
-        assert "you.first_name" in PART1_FIELDS
-        assert "you.ssn" in PART1_FIELDS
+        assert "filer.first_name" in PART1_FIELDS
+        # SSN is intentionally NOT on Page 1 of the new 13614-C template;
+        # it appears on a later page that is graded separately.
+        assert "filer.ssn" not in PART1_FIELDS
         assert "filing_status" in PART1_FIELDS
 
     def test_part2_has_income_fields(self):
@@ -383,11 +385,11 @@ class TestFieldLists:
         assert INCOME_TOTAL not in PART1_FIELDS
 
     def test_part2_excludes_personal(self):
-        assert "you.first_name" not in PART2_FIELDS
+        assert "filer.first_name" not in PART2_FIELDS
         assert "filing_status" not in PART2_FIELDS
 
     def test_part3_excludes_personal_and_income(self):
-        assert "you.first_name" not in PART3_FIELDS
+        assert "filer.first_name" not in PART3_FIELDS
         assert INCOME_WAGES not in PART3_FIELDS
 
 
@@ -404,7 +406,7 @@ class TestSectionGradeStorage:
             # Grade all three sections
             client.post(
                 f"/scenarios/{sid}/submit",
-                data={"you.first_name": "Test"},
+                data={"filer.first_name": "Test"},
             )
             client.post(
                 f"/scenarios/{sid}/submit/income",
@@ -518,7 +520,7 @@ class TestExpenseSubmission:
                 data={EXPENSE_DEDUCTION_TYPE: "standard"},
             )
             html = resp.text
-            assert "you.first_name" not in html
+            assert "filer.first_name" not in html
             assert "income.wages" not in html
 
     def test_expense_grade_stored_as_section(self):
@@ -552,7 +554,7 @@ class TestLandingPageAllSections:
             sid = _create_scenario(client)
             client.post(
                 f"/scenarios/{sid}/submit",
-                data={"you.first_name": "Test"},
+                data={"filer.first_name": "Test"},
             )
             client.post(
                 f"/scenarios/{sid}/submit/income",
@@ -651,7 +653,7 @@ class TestGraderFieldsFilter:
         p3_fields = {fb["field"] for fb in part3_result.field_feedback}
         assert all(f.startswith("expense.") for f in p3_fields)
         # Should not have personal or income fields
-        assert not any(f.startswith("you.") for f in p3_fields)
+        assert not any(f.startswith("filer.") for f in p3_fields)
         assert not any(f.startswith("income.") for f in p3_fields)
 
     def test_grade_part3_excludes_from_part1(self):

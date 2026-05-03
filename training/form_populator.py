@@ -27,8 +27,7 @@ from training.form_fields import (
     ADDR_ZIP,
     CLAIMED_AS_DEPENDENT,
     DEP_DOB,
-    DEP_FIRST_NAME,
-    DEP_LAST_NAME,
+    DEP_NAME,
     DEP_MONTHS,
     DEP_RELATIONSHIP,
     DEP_SINGLE_OR_MARRIED,
@@ -221,8 +220,7 @@ def build_field_values(household: Household) -> Dict[str, str]:
     # =================================================================
     dependents = _get_dependents(household)
     for i, dep in enumerate(dependents):
-        values[dep_field(i, DEP_FIRST_NAME)] = dep.legal_first_name
-        values[dep_field(i, DEP_LAST_NAME)] = dep.legal_last_name
+        values[dep_field(i, DEP_NAME)] = dep.full_legal_name()
         values[dep_field(i, DEP_DOB)] = _format_date(dep.dob)
         values[dep_field(i, DEP_RELATIONSHIP)] = _relationship_label(dep)
         values[dep_field(i, DEP_MONTHS)] = str(dep.months_in_home)
