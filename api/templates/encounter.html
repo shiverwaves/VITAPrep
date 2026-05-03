@@ -17,13 +17,28 @@ html, body { height: 100%; overflow: hidden; }
 
 /* .app-main and the workspace inside it are managed by layout.css. */
 
-/* Page 1 of the new 13614-C template uses its own f13c-* styles and
-   wants a gray paper backdrop. Make the page container scroll its
-   contents and remove the encounter sheet's default padding so the
-   partial controls its own width. */
+/* Lift horizontal-scroll responsibility from the deeply nested
+   .sheet__page--p1 (where the bar would sit at the bottom of the
+   page panel — buried below the form, requiring a vertical scroll
+   to even reveal it) up to #form-pane. The form-pane's overflow:auto
+   (layout.css) renders the bar at the form-pane's bottom edge, which
+   is sticky to the visible viewport — always reachable on demand
+   without vertical-scrolling first.
+
+   To make this work the .sheet wrapper has to grow with its widest
+   content (the new Page 1 partial is 980px wide) instead of clipping
+   it; sheet.css defaults to overflow:hidden which would chop the
+   form's right side off otherwise. .sheet__page--p1 drops its own
+   overflow:auto for the same reason — it would re-create the inner
+   scroll container we're getting rid of. */
+.sheet {
+    overflow: visible;
+    min-width: max-content;
+}
+
 .sheet__page--p1 {
     padding: 0;
-    overflow: auto;
+    overflow: visible;
 }
 </style>
 {% endblock %}
