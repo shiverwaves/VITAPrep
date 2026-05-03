@@ -131,7 +131,7 @@ body {
 .f13c-p2-grid__head,
 .f13c-p2-row {
     display: grid;
-    grid-template-columns: 39% 47% 14%;
+    grid-template-columns: 42% 45% 13%;
 }
 
 /* Header row cells */
@@ -201,19 +201,29 @@ body {
 }
 
 .f13c-p2-subq {
+    /* Two-column grid: text in col 1, Y/N (or other tail content) in
+     * col 2. align-items: end pins the tail to the baseline of the
+     * row's last line — so when the text wraps, the Y/N stays with
+     * the *last* line, not on its own row underneath.
+     *
+     * padding-right pushes the Y/N column away from the cell's right
+     * edge so the [No] checkbox lands at a consistent x-position
+     * across rows (matches the IRS reference's "$ above" alignment
+     * with the client column's sub-question Y/N pairs). */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 6px;
+    align-items: end;
     margin-top: 3px;
     margin-left: 18px;
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
+    padding-right: 60px;
     font-size: 10.5px;
     color: #222;
-    flex-wrap: wrap;
 }
 
 .f13c-p2-subq input[type="text"] {
-    flex: 0 0 auto;
     width: 100px;
+    justify-self: start;
 }
 
 /* Secondary sub-question (a separate question stacked under the
@@ -224,12 +234,18 @@ body {
     margin-top: 4px;
 }
 
-/* Inline Yes/No pair (used in client and volunteer sub-questions) */
+/* Inline Yes/No pair (used in both client sub-questions and
+   volunteer entries). margin-left: auto pushes the pair flush-right
+   in its parent flex container so Y/N pairs align at the cell's
+   right edge regardless of how long the preceding label is.
+   Each Y/N option also has a fixed min-width so the [Yes] and [No]
+   checkboxes themselves line up consistently across rows. */
 .f13c-p2-yn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-left: 4px;
+    gap: 6px;
+    margin-left: auto;
+    flex: 0 0 auto;
 }
 
 .f13c-p2-yn label {
@@ -237,6 +253,7 @@ body {
     align-items: center;
     gap: 3px;
     cursor: pointer;
+    min-width: 36px;
 }
 
 /* Volunteer cell content: one or more entries, each on its own line. */
@@ -264,6 +281,15 @@ body {
 
 .f13c-p2-vol-entry > label > input[type="checkbox"] {
     flex-shrink: 0;
+}
+
+/* When a volunteer entry ends in a Y/N pair, hold the pair off the
+ * cell's right edge so the [No] checkbox lines up vertically with the
+ * "$" (or "#") prefix in the row above (which sits just before the
+ * 80px input). 60px right-margin places [No]'s checkbox at roughly
+ * the same x as the prefix marker. */
+.f13c-p2-vol-entry > .f13c-p2-yn {
+    margin-right: 60px;
 }
 
 .f13c-p2-vol-prefix {
