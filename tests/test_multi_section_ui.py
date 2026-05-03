@@ -233,9 +233,14 @@ class TestIncomeSubmission:
 # =========================================================================
 
 class TestIntakeSubmissionScoped:
-    """Test Part I submission grades only Part I fields, not income."""
+    """Test Part I submission scope.
 
-    def test_submit_encounter_excludes_income(self):
+    Phase 3-E expanded /submit to grade Part I + Part II together
+    (single Submit button posts the whole form across all pages).
+    Part III is still excluded until Phase 4-E lands.
+    """
+
+    def test_submit_encounter_includes_income(self):
         with TestClient(app) as client:
             sid = _create_scenario(client)
             resp = client.post(
@@ -244,9 +249,10 @@ class TestIntakeSubmissionScoped:
             )
             assert resp.status_code == 200
             html = resp.text
-            # Should not contain income field names in feedback
-            assert "income.wages" not in html
-            assert "income.total" not in html
+            # Part II income fields are now graded alongside Part I.
+            assert "income.wages" in html
+            # Part III expense fields are still out-of-scope.
+            assert "expense.mortgage" not in html
 
     def test_submit_encounter_shows_part1_label(self):
         with TestClient(app) as client:
@@ -618,24 +624,30 @@ class TestGraderFieldsFilter:
 
         part2_result = grader.grade_encounter({}, _gt_dict(hh), fields=PART2_FIELDS)
         p2_fields = {fb["field"] for fb in part2_result.field_feedback}
-        assert all(f.startswith("income.") for f in p2_fields)
+        # Part II spans both the legacy ``income.*`` namespace and the
+        # Page 2 template's ``vol.income.*`` volunteer-column namespace.
+        assert all(
+            f.startswith("income.") or f.startswith("vol.income.")
+            for f in p2_fields
+        )
 
     def test_grade_part2_correct_submission(self):
         from training.grader import Grader
+        from training.form_populator import build_field_values
         hh = _make_household()
         grader = Grader()
 
-        submission = {
+        # Build a perfect submission off the populator so the new
+        # Page 2 namespace defaults (vol.income.*: No) come along
+        # for free, and override the income-positive rows.
+        submission = build_field_values(hh)
+        submission.update({
             INCOME_WAGES: "Yes",
             INCOME_WAGES_AMOUNT: "45000",
             INCOME_INTEREST: "Yes",
             INCOME_INTEREST_AMOUNT: "350",
-            INCOME_DIVIDENDS: "No",
-            INCOME_SOCIAL_SECURITY: "No",
-            INCOME_RETIREMENT: "No",
-            INCOME_SELF_EMPLOYMENT: "No",
             INCOME_TOTAL: "45350",
-        }
+        })
         result = grader.grade_encounter(submission, _gt_dict(hh), fields=PART2_FIELDS)
         assert result.accuracy == 1.0
 

@@ -722,6 +722,60 @@ def _populate_income_fields(
     if total > 0:
         values[INCOME_TOTAL] = str(total)
 
+    # Mirror the grader's new Page 2 namespace entries so a submission
+    # built from this populator (used as a "perfect submission" in
+    # tests) still grades 100% against the extended answer key.
+    w2_count = sum(len(p.w2s) for p in filers)
+    int_count = sum(len(p.form_1099_ints) for p in filers)
+    div_count = sum(len(p.form_1099_divs) for p in filers)
+    r_count = sum(len(p.form_1099_rs) for p in filers)
+    nec_count = sum(len(p.form_1099_necs) for p in filers)
+    ssa_count = sum(1 for p in filers if p.ssa_1099 is not None)
+    total_other = sum(p.other_income for p in filers)
+
+    from training.form_fields import (
+        INCOME_INTEREST_DIVIDENDS,
+        INCOME_OTHER,
+        INCOME_SS,
+        VOL_INCOME_1099DIV,
+        VOL_INCOME_1099DIV_COUNT,
+        VOL_INCOME_1099INT,
+        VOL_INCOME_1099INT_COUNT,
+        VOL_INCOME_1099NEC,
+        VOL_INCOME_1099NEC_COUNT,
+        VOL_INCOME_1099R,
+        VOL_INCOME_1099R_COUNT,
+        VOL_INCOME_SCHEDULE_C,
+        VOL_INCOME_SSA,
+        VOL_INCOME_SSA_COUNT,
+        VOL_INCOME_W2,
+        VOL_INCOME_W2_COUNT,
+    )
+    values[INCOME_WAGES] = "Yes" if total_wages > 0 else "No"
+    values[VOL_INCOME_W2] = "Yes" if total_wages > 0 else "No"
+    if w2_count:
+        values[VOL_INCOME_W2_COUNT] = str(w2_count)
+    values[VOL_INCOME_1099R] = "Yes" if total_retirement > 0 else "No"
+    if r_count:
+        values[VOL_INCOME_1099R_COUNT] = str(r_count)
+    values[INCOME_SS] = "Yes" if total_ss > 0 else "No"
+    values[VOL_INCOME_SSA] = "Yes" if total_ss > 0 else "No"
+    if ssa_count:
+        values[VOL_INCOME_SSA_COUNT] = str(ssa_count)
+    has_int_div = total_interest > 0 or total_dividends > 0
+    values[INCOME_INTEREST_DIVIDENDS] = "Yes" if has_int_div else "No"
+    values[VOL_INCOME_1099INT] = "Yes" if total_interest > 0 else "No"
+    values[VOL_INCOME_1099DIV] = "Yes" if total_dividends > 0 else "No"
+    if int_count:
+        values[VOL_INCOME_1099INT_COUNT] = str(int_count)
+    if div_count:
+        values[VOL_INCOME_1099DIV_COUNT] = str(div_count)
+    values[VOL_INCOME_SCHEDULE_C] = "Yes" if total_se > 0 else "No"
+    values[VOL_INCOME_1099NEC] = "Yes" if (total_se > 0 and nec_count > 0) else "No"
+    if nec_count:
+        values[VOL_INCOME_1099NEC_COUNT] = str(nec_count)
+    values[INCOME_OTHER] = "Yes" if total_other > 0 else "No"
+
 
 def _populate_expense_fields(
     values: Dict[str, str], household: Household,

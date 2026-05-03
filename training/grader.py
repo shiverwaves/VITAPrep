@@ -61,15 +61,31 @@ from training.form_fields import (
     INCOME_DIVIDENDS_AMOUNT,
     INCOME_INTEREST,
     INCOME_INTEREST_AMOUNT,
+    INCOME_INTEREST_DIVIDENDS,
+    INCOME_OTHER,
     INCOME_RETIREMENT,
     INCOME_RETIREMENT_AMOUNT,
     INCOME_SELF_EMPLOYMENT,
     INCOME_SELF_EMPLOYMENT_AMOUNT,
     INCOME_SOCIAL_SECURITY,
     INCOME_SOCIAL_SECURITY_AMOUNT,
+    INCOME_SS,
     INCOME_TOTAL,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
+    VOL_INCOME_1099DIV,
+    VOL_INCOME_1099DIV_COUNT,
+    VOL_INCOME_1099INT,
+    VOL_INCOME_1099INT_COUNT,
+    VOL_INCOME_1099NEC,
+    VOL_INCOME_1099NEC_COUNT,
+    VOL_INCOME_1099R,
+    VOL_INCOME_1099R_COUNT,
+    VOL_INCOME_SCHEDULE_C,
+    VOL_INCOME_SSA,
+    VOL_INCOME_SSA_COUNT,
+    VOL_INCOME_W2,
+    VOL_INCOME_W2_COUNT,
     MAX_DEPENDENTS,
     NOT_CLAIMED_AS_DEPENDENT,
     SPOUSE_DOB,
@@ -306,6 +322,57 @@ def _build_income_key(key: Dict[str, str], household: Household) -> None:
     total = total_wages + total_interest + total_dividends + total_ss + total_retirement + total_se
     if total > 0:
         key[INCOME_TOTAL] = str(total)
+
+    # New Page 2 namespace — written alongside the legacy keys above so
+    # the encounter form (which posts the new-namespace inputs) can be
+    # graded directly. Only the rows whose source data the household
+    # model carries today get scored; the rest stay out of the answer
+    # key so unmodeled rows don't penalize the player. Document counts
+    # come from the per-person doc lists.
+    w2_count = sum(len(p.w2s) for p in filers)
+    int_count = sum(len(p.form_1099_ints) for p in filers)
+    div_count = sum(len(p.form_1099_divs) for p in filers)
+    r_count = sum(len(p.form_1099_rs) for p in filers)
+    nec_count = sum(len(p.form_1099_necs) for p in filers)
+    ssa_count = sum(1 for p in filers if p.ssa_1099 is not None)
+    total_other = sum(p.other_income for p in filers)
+
+    # Row 1: wages
+    key[INCOME_WAGES] = "Yes" if total_wages > 0 else "No"
+    key[VOL_INCOME_W2] = "Yes" if total_wages > 0 else "No"
+    if w2_count:
+        key[VOL_INCOME_W2_COUNT] = str(w2_count)
+
+    # Row 3: retirement
+    key[VOL_INCOME_1099R] = "Yes" if total_retirement > 0 else "No"
+    if r_count:
+        key[VOL_INCOME_1099R_COUNT] = str(r_count)
+
+    # Row 5: Social Security
+    key[INCOME_SS] = "Yes" if total_ss > 0 else "No"
+    key[VOL_INCOME_SSA] = "Yes" if total_ss > 0 else "No"
+    if ssa_count:
+        key[VOL_INCOME_SSA_COUNT] = str(ssa_count)
+
+    # Row 8: combined interest + dividends client checkbox; volunteer
+    # column splits them across 1099-INT and 1099-DIV.
+    has_int_div = total_interest > 0 or total_dividends > 0
+    key[INCOME_INTEREST_DIVIDENDS] = "Yes" if has_int_div else "No"
+    key[VOL_INCOME_1099INT] = "Yes" if total_interest > 0 else "No"
+    key[VOL_INCOME_1099DIV] = "Yes" if total_dividends > 0 else "No"
+    if int_count:
+        key[VOL_INCOME_1099INT_COUNT] = str(int_count)
+    if div_count:
+        key[VOL_INCOME_1099DIV_COUNT] = str(div_count)
+
+    # Row 12: self-employment
+    key[VOL_INCOME_SCHEDULE_C] = "Yes" if total_se > 0 else "No"
+    key[VOL_INCOME_1099NEC] = "Yes" if total_se > 0 and nec_count > 0 else "No"
+    if nec_count:
+        key[VOL_INCOME_1099NEC_COUNT] = str(nec_count)
+
+    # Row 14: other money
+    key[INCOME_OTHER] = "Yes" if total_other > 0 else "No"
 
 
 def _build_expense_key(key: Dict[str, str], household: Household) -> None:
@@ -616,6 +683,16 @@ def _values_match(submitted: str, expected: str) -> bool:
     s = submitted.strip()
     e = expected.strip()
 
+    # Yes/No equivalence sets — also catch the HTML form-post "on"
+    # default that checkboxes without an explicit value= post as
+    # their submitted value when checked. Unchecked checkboxes are
+    # absent from form_data; the submit handler is responsible for
+    # translating them to "No" before grading, which keeps the
+    # grader's match logic strict (a literal empty submission is
+    # not equivalent to "No").
+    yes_set = {"y", "yes", "on", "true"}
+    no_set = {"n", "no", "false"}
+
     if not s and not e:
         return True
     if not s or not e:
@@ -650,9 +727,9 @@ def _values_match(submitted: str, expected: str) -> bool:
     # volunteer columns hint at one-letter answers; the legacy answer
     # key emits "Yes" / "No". Treat both conventions as equivalent so
     # a player who keeps the pre-filled "Y" isn't marked wrong against
-    # an expected "Yes".
-    yes_set = {"y", "yes"}
-    no_set = {"n", "no"}
+    # an expected "Yes". Also handles "on" (HTML default checkbox
+    # post value) ↔ "Yes" so checkboxes posting from the new
+    # Page 1 / Page 2 templates grade against a "Yes" answer key.
     sl, el = s.lower(), e.lower()
     if sl in yes_set and el in yes_set:
         return True
