@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Form 13614-C Page 2 — Mockup</title>
+<style>
+/* ================================================================
+   13614-C Page 2 — Income (Part II) — Scoped styles (f13c- prefix)
+   ================================================================
+   Reuses the typography and checkbox styles from Page 1 verbatim
+   (same .f13c-form root) plus page-2-specific structural classes
+   under the .f13c-p2 namespace for the three-column income grid.
+   ================================================================ */
+
+/* --- Reset & base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: #d0d0d0;
+    display: flex;
+    justify-content: center;
+    padding: 24px 0;
+}
+
+.f13c-form {
+    width: 980px;
+    background: #fff;
+    border: 1px solid #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11px;
+    color: #000;
+    line-height: 1.3;
+}
+
+/* --- Typography --- */
+.f13c-form input[type="text"] {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    color: #000;
+    border: none;
+    border-bottom: 1px solid #888;
+    background: transparent;
+    padding: 1px 2px;
+    outline: none;
+    line-height: 1.3;
+}
+
+.f13c-form input[type="text"]:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: 1px;
+    border-bottom-color: #e87a2e;
+}
+
+/* --- Custom checkboxes --- */
+.f13c-form input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border: 1px solid #000;
+    border-radius: 0;
+    background: #fff;
+    cursor: pointer;
+    vertical-align: middle;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.f13c-form input[type="checkbox"]:checked { background: #222; }
+
+.f13c-form input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: 3px;
+    width: 3px;
+    height: 6px;
+    border: solid #fff;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+}
+
+.f13c-form input[type="checkbox"]:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: 1px;
+}
+
+/* ================================================================
+   Page indicator (top-right)
+   ================================================================ */
+
+.f13c-p2-page-indicator {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px 0;
+    border-bottom: 1.5px solid #000;
+}
+
+/* ================================================================
+   Section banner: "Income: Answer ..."
+   ================================================================ */
+
+.f13c-p2-banner {
+    padding: 5px 8px;
+    border-bottom: 0.5px solid #000;
+    font-size: 11px;
+}
+
+.f13c-p2-banner strong {
+    font-size: 11.5px;
+}
+
+/* ================================================================
+   Three-column header row
+   ================================================================
+   The income grid is a CSS grid with three columns. The middle
+   (volunteer) and right (notes) columns sit on a light gray
+   background to match the IRS form's visual demarcation of the
+   volunteer-completed area. */
+
+.f13c-p2-grid {
+    border-bottom: 1.5px solid #000;
+}
+
+/* Each row (header and content) is its own 3-column grid. Using
+   per-row grids (rather than a single subgrid or display:contents
+   approach) keeps the layout robust across rendering engines while
+   still aligning columns visually because every row uses the same
+   column template. */
+.f13c-p2-grid__head,
+.f13c-p2-row {
+    display: grid;
+    grid-template-columns: 39% 47% 14%;
+}
+
+/* Header row cells */
+.f13c-p2-grid__head > div {
+    background: #f0efea;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 8px;
+    border-bottom: 0.5px solid #000;
+    border-right: 0.5px solid #888;
+}
+
+.f13c-p2-grid__head > div:first-child {
+    background: #fff;
+}
+
+.f13c-p2-grid__head > div:last-child {
+    border-right: none;
+}
+
+/* ================================================================
+   Income rows
+   ================================================================
+   Each row is its own 3-column grid (see above). Cells are
+   direct children. */
+
+.f13c-p2-row > .f13c-p2-cell {
+    border-bottom: 0.5px solid #888;
+    border-right: 0.5px solid #888;
+    padding: 4px 8px;
+    min-height: 28px;
+}
+
+.f13c-p2-row > .f13c-p2-cell:last-child {
+    border-right: none;
+}
+
+.f13c-p2-cell--client {
+    background: #fff;
+}
+
+.f13c-p2-cell--volunteer,
+.f13c-p2-cell--notes {
+    background: #f0efea;
+}
+
+/* Client cell content: primary checkbox label + optional sub-question
+   stacked beneath. */
+
+.f13c-p2-q {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    line-height: 1.35;
+}
+
+.f13c-p2-q label {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    cursor: pointer;
+    line-height: 1.35;
+}
+
+.f13c-p2-q label > input[type="checkbox"] {
+    margin-top: 2px;
+}
+
+.f13c-p2-subq {
+    margin-top: 3px;
+    margin-left: 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 10.5px;
+    color: #222;
+    flex-wrap: wrap;
+}
+
+.f13c-p2-subq input[type="text"] {
+    flex: 0 0 auto;
+    width: 100px;
+}
+
+/* Secondary sub-question (a separate question stacked under the
+   primary one, e.g. row 11's "renting personal property such as a
+   vehicle" — the IRS form groups it visually with the rental row
+   but as its own checkbox question, not a clarifier). */
+.f13c-p2-q--secondary {
+    margin-top: 4px;
+}
+
+/* Inline Yes/No pair (used in client and volunteer sub-questions) */
+.f13c-p2-yn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 4px;
+}
+
+.f13c-p2-yn label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+}
+
+/* Volunteer cell content: one or more entries, each on its own line. */
+
+.f13c-p2-cell--volunteer {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.f13c-p2-vol-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1.35;
+}
+
+.f13c-p2-vol-entry > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+}
+
+.f13c-p2-vol-entry > label > input[type="checkbox"] {
+    flex-shrink: 0;
+}
+
+.f13c-p2-vol-prefix {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: 11px;
+    color: #444;
+}
+
+.f13c-p2-vol-input {
+    flex: 0 0 auto;
+    width: 80px;
+}
+
+/* Schedule C sub-rows are slightly indented inside the volunteer cell. */
+.f13c-p2-schedule-c-sub {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-left: 18px;
+    line-height: 1.35;
+}
+
+.f13c-p2-schedule-c-sub > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+}
+
+/* Notes cell — the per-row text input fills the cell and is rendered
+   without the default underline so the input visually melts into the
+   cell. The cell itself (gray-shaded background) is the visual frame;
+   the player just clicks anywhere in the cell to type. */
+
+.f13c-p2-cell--notes {
+    padding: 0;
+}
+
+.f13c-p2-notes-input {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: none !important;
+    background: transparent;
+}
+
+.f13c-p2-notes-input:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: -2px;
+}
+
+/* ================================================================
+   Footer (catalog number / URL / form rev)
+   ================================================================ */
+
+.f13c-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    font-size: 9px;
+    color: #444;
+}
+
+.f13c-footer-right {
+    font-size: 10px;
+    font-weight: 700;
+    color: #000;
+}
+
+</style>
+</head>
+<body>
+
+<div class="f13c-form">
+
+<!-- ============================================================
+     Page indicator
+     ============================================================ -->
+<div class="f13c-p2-page-indicator">Page 2</div>
+
+<!-- ============================================================
+     Section banner
+     ============================================================ -->
+<div class="f13c-p2-banner">
+    <strong>Income:</strong> Answer the following questions on the left side of this page. Check only the boxes that apply to you and/or your spouse.
+</div>
+
+<!-- ============================================================
+     Three-column income grid
+     ============================================================ -->
+<div class="f13c-p2-grid">
+
+    <!-- Column header row -->
+    <div class="f13c-p2-grid__head">
+        <div>Received money from any of the following in 2025:</div>
+        <div>(To be completed by certified volunteer) Income to be included</div>
+        <div>Notes/Comments</div>
+    </div>
+
+    <!-- Row 1: Wages -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.wages" checked>
+                    <span><strong>(B)</strong> Wages as a part-time or full-time employee</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>How many jobs</span>
+                <input type="text" name="income.wages.jobs" value="2">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.w2"> <strong>(B)</strong> W-2s</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.w2.count" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.wages" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 2: Tips -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.tips">
+                    <span><strong>(B/A)</strong> Tips</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.tips"> <strong>(B/A)</strong> Tips (Basic when reported on W2)</label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.tips" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 3: Retirement -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.retirement">
+                    <span><strong>(B/A)</strong> Retirement account, pension or annuity proceeds</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099r"> <strong>(B/A)</strong> 1099-R (Basic when taxable amount is reported)</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099r.count" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.qcd"> <strong>(A)</strong> Qualified Charitable Distribution From 1099-R</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.qcd.amount" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.retirement" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 4: Disability benefits -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.disability">
+                    <span><strong>(B)</strong> Disability benefits (such as payments from insurance and worker's compensation)</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.disability"> <strong>(B)</strong> Disability benefits on 1099-R or W-2</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.disability.count" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.disability" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 5: Social Security / Railroad Retirement -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.ss">
+                    <span><strong>(B)</strong> Social Security or Railroad Retirement Benefits</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.ssa"> <strong>(B)</strong> SSA-1099, RRB-1099</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.ssa.count" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.ss" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 6: Unemployment -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.unemployment">
+                    <span><strong>(B)</strong> Unemployment benefits</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099g"> <strong>(B)</strong> 1099-G</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099g.count" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.unemployment" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 7: State refund -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.state_refund">
+                    <span><strong>(B)</strong> Refund of state or local income tax</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.state_refund"> <strong>(B)</strong> Refund</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.state_refund.amount" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.itemized_last_year"> <strong>(B)</strong> Itemized last year</label>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="vol.income.itemized_last_year.yes"> Yes</label>
+                    <label><input type="checkbox" name="vol.income.itemized_last_year.no"> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.state_refund" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 8: Interest / Dividends -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.interest_dividends">
+                    <span><strong>(B)</strong> Interest or dividends (bank account, bonds, etc.)</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099int"> <strong>(B)</strong> 1099-INT</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099int.count" class="f13c-p2-vol-input" value="">
+                <label><input type="checkbox" name="vol.income.1099div"> <strong>(B)</strong> 1099-DIV</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099div.count" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.interest_dividends" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 9: Sale of stocks / bonds / RE -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.stock_sale">
+                    <span><strong>(A)</strong> Sale of stocks, bonds or real estate</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>Did you report a loss on last year's return</span>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="income.stock_sale.prior_loss.yes"> Yes</label>
+                    <label><input type="checkbox" name="income.stock_sale.prior_loss.no"> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099b"> <strong>(A)</strong> 1099-B (include brokerage statement)</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099b.count" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.capital_loss_carryover"> Capital loss carryover</label>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="vol.income.capital_loss_carryover.yes"> Yes</label>
+                    <label><input type="checkbox" name="vol.income.capital_loss_carryover.no"> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.stock_sale" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 10: Alimony -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.alimony">
+                    <span><strong>(B)</strong> Alimony</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.alimony"> <strong>(B)</strong> Alimony</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.alimony.amount" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.alimony_excluded"> Excluded from income</label>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="vol.income.alimony_excluded.yes"> Yes</label>
+                    <label><input type="checkbox" name="vol.income.alimony_excluded.no"> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.alimony" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 11: Rental income (real property + personal property)
+         Per the IRS form, the personal-property-rental question is a
+         continuation of the rental row, not its own row. -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.rental">
+                    <span><strong>(A/M)</strong> Income from renting out your house or a room in your house</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>If yes, did you use the dwelling unit as a personal residence and rent it for fewer than 15 days</span>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="income.rental.short_personal_residence.yes"> Yes</label>
+                    <label><input type="checkbox" name="income.rental.short_personal_residence.no"> No</label>
+                </span>
+            </div>
+            <div class="f13c-p2-q f13c-p2-q--secondary">
+                <label>
+                    <input type="checkbox" name="income.personal_property_rental">
+                    <span>Income from renting personal property such as a vehicle</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.rental"> <strong>(A/M)</strong> Rental income (Advanced when the dwelling is a personal residence and rented for fewer than 15 days)</label>
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.rental_expense"> Rental expense</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.rental_expense.amount" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.rental" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 12 (was a separate row): merged into row 11 above. -->
+
+    <!-- Row 13: Gambling winnings -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.gambling">
+                    <span><strong>(B)</strong> Gambling winnings, including lottery</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.w2g"> <strong>(B)</strong> W-2G or other gambling winnings (list losses below if taxpayer can itemize deductions)</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.w2g.count" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.gambling" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 14: Self-employment / Schedule C -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.self_employment">
+                    <span><strong>(A)</strong> Payments for contract or self-employment work</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>Did you report a loss on last year's return</span>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="income.self_employment.prior_loss.yes"> Yes</label>
+                    <label><input type="checkbox" name="income.self_employment.prior_loss.no"> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.schedule_c"> <strong>(A)</strong> Schedule C</label>
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.1099misc"> 1099-MISC</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099misc.count" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.1099nec"> 1099-NEC</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099nec.count" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.1099k"> 1099-K</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099k.count" class="f13c-p2-vol-input" value="">
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.other_reported_elsewhere"> Other income reported elsewhere</label>
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.schedule_c_expenses"> Schedule C expenses</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.schedule_c_expenses.amount" class="f13c-p2-vol-input" value="">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.self_employment" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+    <!-- Row 15: Any other money -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.other">
+                    <span>Any other money received during the year? (example: cash payments, jury duty, awards, digital assets, royalties, union strike benefits)</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.other"> Other income (see Pub 4012 for guidance on other income, i.e., scope of service chart)</label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.other" class="f13c-p2-notes-input" value="">
+        </div>
+    </div>
+
+</div><!-- /.f13c-p2-grid -->
+
+<!-- ============================================================
+     Footer
+     ============================================================ -->
+<div class="f13c-footer">
+    <span>Catalog Number 52121E</span>
+    <span>www.irs.gov</span>
+    <span class="f13c-footer-right">Form 13614-C (Rev. 10-2025)</span>
+</div>
+
+</div><!-- /.f13c-form -->
+
+</body>
+</html>
