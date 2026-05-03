@@ -4,6 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="/app-static/styles/form_13614c_p1.css">
+<link rel="stylesheet" href="/app-static/styles/layout.css">
 <style>
 /* Full-viewport app shell */
 html, body { height: 100%; overflow: hidden; }
@@ -14,11 +15,7 @@ html, body { height: 100%; overflow: hidden; }
     height: 100vh;
 }
 
-.app-main {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-}
+/* .app-main and the workspace inside it are managed by layout.css. */
 
 /* Page 1 of the new 13614-C template uses its own f13c-* styles and
    wants a gray paper backdrop. Make the page container scroll its
@@ -43,7 +40,38 @@ html, body { height: 100%; overflow: hidden; }
 {% endset %}
 
 {% set titlebar_right_html %}
-<button class="iconbtn" id="sidebar-toggle-btn" aria-label="Toggle sidebar">&#9881;</button>
+{# Pane-cycle button — three SVG icons, one shown per data-next-panes value.
+   Disabled by the renderer while chat is open. #}
+<button class="layout-btn" id="pane-cycle-btn" type="button"
+        data-layout-action="cycle-panes" data-next-panes="2"
+        aria-label="Cycle workspace layout">
+    <svg class="layout-btn__icon-1" viewBox="0 0 18 18" fill="none"
+         stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="2" width="14" height="14" rx="1.5"/>
+    </svg>
+    <svg class="layout-btn__icon-2" viewBox="0 0 18 18" fill="none"
+         stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="2" width="14" height="6" rx="1.5"/>
+        <rect x="2" y="10" width="14" height="6" rx="1.5"/>
+    </svg>
+    <svg class="layout-btn__icon-3" viewBox="0 0 18 18" fill="none"
+         stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="2" width="14" height="6" rx="1.5"/>
+        <rect x="2" y="10" width="6" height="6" rx="1.5"/>
+        <rect x="10" y="10" width="6" height="6" rx="1.5"/>
+    </svg>
+</button>
+{# Chat-toggle button. The hidden-doc badge is anchored inside it
+   (position: absolute) and shown by the renderer when state.hiddenDocCache
+   is set. #}
+<button class="layout-btn" id="chat-toggle-btn" type="button"
+        data-layout-action="toggle-chat"
+        aria-pressed="false" aria-label="Toggle chat">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 4 H15 V12 H8 L5 15 V12 H3 Z" stroke-linejoin="round"/>
+    </svg>
+    <span class="hidden-doc-badge" id="hidden-doc-badge" hidden></span>
+</button>
 <button class="btn-primary" id="submit-btn">Submit</button>
 {% endset %}
 
@@ -51,10 +79,17 @@ html, body { height: 100%; overflow: hidden; }
     {% include "components/titlebar.html" %}
     {% include "components/scenario_menu.html" %}
 
-    {# --- Main area: workspace + sidebar (2.1) --- #}
+    {# --- Main area: workspace + chat pane (2.1) ---
+        layout.css turns .app-main into a CSS Grid. When body has
+        data-chat="closed", the grid is 1fr 0fr (workspace gets the
+        full width); when "open", it's 2fr 1fr (chat takes 1/3). #}
     <div class="app-main">
-        <div class="workspace" id="workspace">
-            <div class="workspace__form" id="form-area">
+        {# --- Workspace: form pane + up to two doc panes ---
+           Default data-layout="form-only" is rendered server-side so
+           the no-JS first paint is form-only-full-width. The renderer
+           confirms or restores from sessionStorage on hydration. #}
+        <div id="workspace" data-layout="form-only">
+            <div id="form-pane">
                 {# --- Form sheet (3.1 + 3.2) --- #}
                 <div class="sheet">
                     {# Navy banner header #}
@@ -161,27 +196,38 @@ html, body { height: 100%; overflow: hidden; }
                     </div>
                 </div>
             </div>
-            <div class="workspace__doc-left" id="doc-pane-left">
+
+            {# Document panes — populated by the renderer when a layout
+               with non-zero docSlots is active. Each pane has a tab
+               strip plus an iframe pointing at the doc URL. data-pane-
+               index is read by the renderer when a tab is clicked. #}
+            <div id="doc-pane-0" data-pane-index="0" hidden>
+                <div class="doc-pane__tabs"></div>
+                <iframe class="doc-pane__frame" loading="lazy" title="Document"></iframe>
             </div>
-            <div class="workspace__doc-right" id="doc-pane-right">
+            <div id="doc-pane-1" data-pane-index="1" hidden>
+                <div class="doc-pane__tabs"></div>
+                <iframe class="doc-pane__frame" loading="lazy" title="Document"></iframe>
             </div>
         </div>
 
-        {# --- Right sidebar (collapsed by default) --- #}
-        <aside class="sidebar sidebar--collapsed" id="sidebar">
-            <div class="sidebar__tabs">
-                <button class="sidebar__tab sidebar__tab--active" data-panel="probes">Probes</button>
-                <button class="sidebar__tab" data-panel="flags">Flags</button>
-                <button class="sidebar__tab" data-panel="notes">Notes</button>
+        {# --- Chat pane (right 1/3 when body has data-chat="open") ---
+           MVP placeholder: three sub-tabs reserved for Probes / Flags /
+           Notes. Real probe interaction is future work. #}
+        <aside id="chat-pane">
+            <div class="chat-pane__tabs">
+                <button class="chat-pane__tab chat-pane__tab--active" data-panel="probes" type="button">Probes</button>
+                <button class="chat-pane__tab" data-panel="flags" type="button">Flags</button>
+                <button class="chat-pane__tab" data-panel="notes" type="button">Notes</button>
             </div>
-            <div class="sidebar__panel sidebar__panel--active" id="panel-probes">
-                <div class="sidebar__empty">Select a field and right-click to see available probes.</div>
+            <div class="chat-pane__panel chat-pane__panel--active" id="chat-panel-probes">
+                <div class="chat-pane__empty">Probes will appear here.</div>
             </div>
-            <div class="sidebar__panel" id="panel-flags">
-                <div class="sidebar__empty">No flags yet.</div>
+            <div class="chat-pane__panel" id="chat-panel-flags">
+                <div class="chat-pane__empty">No flags yet.</div>
             </div>
-            <div class="sidebar__panel" id="panel-notes">
-                <textarea class="sidebar__notes-area" placeholder="Scratchpad — your notes here..."></textarea>
+            <div class="chat-pane__panel" id="chat-panel-notes">
+                <textarea class="chat-pane__notes-area" placeholder="Scratchpad — your notes here..."></textarea>
             </div>
         </aside>
     </div>
@@ -190,7 +236,17 @@ html, body { height: 100%; overflow: hidden; }
     {% include "components/statusbar.html" %}
 </div>
 
+{# --- Layout-system data + scripts ---
+   The data globals must be defined before layout-render.js loads;
+   layout-render.js reads them on init. layout-reducer.js exports
+   window.LayoutReducer which layout-render.js consumes. #}
+<script>
+    window.SCENARIO_ID = {{ scenario_id|tojson }};
+    window.SCENARIO_DOCS = {{ doc_urls|tojson }};
+    window.SCENARIO_DOC_LABELS = {{ doc_labels|tojson }};
+</script>
 <script src="/app-static/js/menus.js"></script>
-<script src="/app-static/js/sidebar.js"></script>
 <script src="/app-static/js/encounter.js"></script>
+<script src="/app-static/js/layout-reducer.js"></script>
+<script src="/app-static/js/layout-render.js"></script>
 {% endblock %}
