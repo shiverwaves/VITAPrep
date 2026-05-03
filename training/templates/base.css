@@ -8,7 +8,16 @@
 
 body {
     background: white;
-    display: inline-block;
+    padding: 16px 0;
+}
+
+/* Center the doc inside the iframe (the doc-pane is the parent).
+ * Same margin-auto pattern as the form: centered when the iframe
+ * is wider than the doc, flush-left when narrower (and the iframe's
+ * native horizontal scroll lets the player reach the right side). */
+body > * {
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* Watermark overlay — applied to every document.
