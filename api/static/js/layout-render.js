@@ -186,8 +186,19 @@
             );
         }
         if (hiddenDocBadge) {
-            hiddenDocBadge.hidden = state.hiddenDocCache === null
-                || state.hiddenDocCache === undefined;
+            var cached = state.hiddenDocCache;
+            var hasHidden = cached !== null && cached !== undefined;
+            hiddenDocBadge.hidden = !hasHidden;
+            if (hasHidden) {
+                /* Tooltip identifies which doc is cached so the player
+                 * can decide whether to close chat to bring it back. */
+                var label = docLabels[cached] || cached;
+                hiddenDocBadge.setAttribute(
+                    "title", "Hidden while chat is open: " + label
+                );
+            } else {
+                hiddenDocBadge.removeAttribute("title");
+            }
         }
     }
 

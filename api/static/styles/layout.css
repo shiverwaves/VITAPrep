@@ -1,0 +1,356 @@
+/*
+ * Multi-pane workspace layout for the encounter view.
+ *
+ * The renderer (api/static/js/layout-render.js) sets two attributes
+ * the styles below key off:
+ *
+ *     <body data-chat="open|closed">
+ *     <div id="workspace" data-layout="form-only|h2|h3|form-only-chat|h2-chat">
+ *
+ * Five grid configurations, single horizontal axis, no vertical splits
+ * (the form is 980px wide; vertical splits would squeeze it below
+ * readable width). 3-pane is forbidden when chat is open — opening
+ * chat from a 3-pane state caches one doc and drops to h2-chat.
+ *
+ * Default `data-layout="form-only"` is server-rendered so the no-JS
+ * first paint is form-only-full-width; the JS hydration just confirms
+ * or restores from sessionStorage.
+ */
+
+/* =========================================================================
+ * App-main: chat allocation
+ * =========================================================================
+ * The workspace and the chat pane are siblings inside .app-main. When
+ * chat is closed, chat pane is display:none and workspace gets the
+ * full width. When chat is open, .app-main becomes a 2/3 + 1/3 grid.
+ */
+
+.app-main {
+    display: grid;
+    grid-template-columns: 1fr 0fr;
+    grid-template-rows: 1fr;
+    height: 100%;
+    overflow: hidden;
+}
+
+body[data-chat="open"] .app-main {
+    grid-template-columns: 2fr 1fr;
+}
+
+/* =========================================================================
+ * Chat pane
+ * =========================================================================
+ */
+
+#chat-pane {
+    background: var(--color-surface);
+    border-left: 1px solid var(--color-border);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body:not([data-chat="open"]) #chat-pane {
+    display: none;
+}
+
+/* =========================================================================
+ * Workspace grid layouts
+ * =========================================================================
+ * Each layout is a CSS Grid template with named areas:
+ *   f  = form pane
+ *   d0 = document pane 0
+ *   d1 = document pane 1
+ */
+
+#workspace {
+    display: grid;
+    gap: var(--spacing-xs);
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+#workspace[data-layout="form-only"] {
+    grid-template-areas: "f";
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr;
+}
+
+#workspace[data-layout="h2"] {
+    grid-template-areas:
+        "f"
+        "d0";
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: 1fr;
+}
+
+#workspace[data-layout="h3"] {
+    grid-template-areas:
+        "f  f"
+        "d0 d1";
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
+}
+
+/* Chat-open variants — workspace lives inside the left 2/3 of
+ * .app-main; same structure as the chat-closed counterparts. */
+
+#workspace[data-layout="form-only-chat"] {
+    grid-template-areas: "f";
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr;
+}
+
+#workspace[data-layout="h2-chat"] {
+    grid-template-areas:
+        "f"
+        "d0";
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: 1fr;
+}
+
+/* =========================================================================
+ * Pane positioning + scroll behavior
+ * =========================================================================
+ * min-width: 0 opts each pane out of the grid default that prevents
+ * shrinking below content size; without it the form pane would stay
+ * 980px wide and either clip or push the grid open.
+ *
+ * overflow: auto lets each pane's content scroll horizontally /
+ * vertically when it exceeds the cell.
+ */
+
+#form-pane {
+    grid-area: f;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    background: var(--color-surface);
+}
+
+#doc-pane-0,
+#doc-pane-1 {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    display: flex;
+    flex-direction: column;
+}
+
+#doc-pane-0 { grid-area: d0; }
+#doc-pane-1 { grid-area: d1; }
+
+/* When the renderer hides a pane (state.docSlots[i] is null) the
+ * pane's grid-area cell is still defined — but the [hidden] attribute
+ * keeps it invisible. The grid won't collapse the cell since CSS
+ * grid keeps named areas reserved; that's fine because the active
+ * data-layout is what controls geometry. */
+
+#doc-pane-0[hidden],
+#doc-pane-1[hidden] {
+    display: none;
+}
+
+/* =========================================================================
+ * Doc-pane chrome: tab strip + iframe
+ * =========================================================================
+ */
+
+.doc-pane__tabs {
+    flex: 0 0 auto;
+    display: flex;
+    overflow-x: auto;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    padding: 2px;
+    gap: 2px;
+}
+
+.doc-pane__tab {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 4px);
+    font: inherit;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.doc-pane__tab:hover {
+    background: var(--color-border-light);
+    color: var(--color-text);
+}
+
+.doc-pane__tab--active {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.doc-pane__frame {
+    flex: 1 1 auto;
+    width: 100%;
+    border: 0;
+    background: var(--color-surface);
+}
+
+/* =========================================================================
+ * Titlebar layout-control buttons
+ * =========================================================================
+ */
+
+.layout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    color: var(--color-text);
+    position: relative;  /* anchor the hidden-doc badge */
+}
+
+.layout-btn:hover:not(:disabled) {
+    background: var(--color-border-light);
+}
+
+.layout-btn:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.layout-btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+/* Pane-cycle button: three SVG icons inside the same button. The
+ * renderer sets data-next-panes; we show the matching SVG and hide
+ * the others. */
+
+.layout-btn__icon-1,
+.layout-btn__icon-2,
+.layout-btn__icon-3 {
+    display: none;
+    width: 18px;
+    height: 18px;
+}
+
+#pane-cycle-btn[data-next-panes="1"] .layout-btn__icon-1 { display: block; }
+#pane-cycle-btn[data-next-panes="2"] .layout-btn__icon-2 { display: block; }
+#pane-cycle-btn[data-next-panes="3"] .layout-btn__icon-3 { display: block; }
+
+/* Chat-toggle button: pressed state when chat is open. */
+
+#chat-toggle-btn[aria-pressed="true"] {
+    background: var(--color-navy);
+    color: var(--color-surface);
+}
+
+/* Hidden-doc badge: a small dot anchored to the chat-toggle button.
+ * Visible only when state.hiddenDocCache is set (i.e. chat is open
+ * and a doc was shed from a 3-pane layout). The renderer sets a
+ * tooltip on the badge identifying which doc is cached. */
+
+.hidden-doc-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    border: 2px solid var(--color-surface);
+    box-sizing: content-box;
+    pointer-events: auto;  /* still hoverable for tooltip */
+}
+
+.hidden-doc-badge[hidden] {
+    display: none;
+}
+
+/* =========================================================================
+ * Chat-pane chrome (tabs + panels + notes textarea)
+ * =========================================================================
+ * MVP placeholder content; real probe interaction is future work. The
+ * tab strip and panels mirror the layout the (now retired) sidebar
+ * had so the structure is familiar.
+ */
+
+.chat-pane__tabs {
+    display: flex;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.chat-pane__tab {
+    flex: 1;
+    padding: var(--spacing-sm) var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+
+.chat-pane__tab:hover {
+    color: var(--color-text);
+}
+
+.chat-pane__tab--active {
+    color: var(--color-navy);
+    border-bottom-color: var(--color-navy);
+}
+
+.chat-pane__panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    display: none;
+}
+
+.chat-pane__panel--active {
+    display: block;
+}
+
+.chat-pane__empty {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-style: italic;
+    text-align: center;
+    padding: var(--spacing-xl) var(--spacing-md);
+}
+
+.chat-pane__notes-area {
+    width: 100%;
+    min-height: 200px;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    font-family: var(--font-stack);
+    font-size: var(--font-size-sm);
+    resize: vertical;
+}
+
+.chat-pane__notes-area:focus {
+    outline: 2px solid var(--color-navy);
+    outline-offset: -1px;
+}
