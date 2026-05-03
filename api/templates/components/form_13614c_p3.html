@@ -1,0 +1,409 @@
+{# ============================================================
+   Form 13614-C, Page 3 — Expenses & Tax Related Events (Part III).
+
+   Renders the new Page 3 mockup (docs/mockups/13614c_page3.html)
+   with data from build_p3_field_values(scenario.household). The
+   caller passes p3=<that dict>; this template reads from it via
+   p3.get(...).
+
+   The shared root (.f13c-form, typography, custom checkboxes) lives
+   in form_13614c_p1.css; the page-3-specific structural classes
+   (.f13c-p3-*) live in form_13614c_p3.css. The encounter view
+   imports all three stylesheets in order. This partial expects to
+   be wrapped in the same .f13c-form-shell as Page 1 / Page 2.
+
+   Three sections:
+   - Itemize: medical / mortgage / taxes / charitable (one tall row).
+   - Other Expenses: 5 rows.
+   - Tax Related Events: 12 rows (mostly unmodeled — player fills
+     them in).
+
+   Notes column (right): always blank, free-form, ungraded.
+   ============================================================ #}
+<!-- f13c-p3-partial v=phase-4 -->
+<div class="f13c-form">
+
+<!-- ============================================================
+     Page indicator
+     ============================================================ -->
+<div class="f13c-p3-page-indicator">Page 3</div>
+
+<!-- ============================================================
+     Top-of-page banner
+     ============================================================ -->
+<div class="f13c-p3-banner">
+    <strong>Expenses and Tax Related Events:</strong> Answer the questions on the left side of this page. Check only the boxes that apply to you and/or your spouse.
+</div>
+
+<!-- ============================================================
+     SECTION 1 — Itemize Deductions (single tall row).
+     ============================================================ -->
+<div class="f13c-p3-row f13c-p3-row--section-start">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-cell-header">Paid any of the following expenses to itemize in 2025?</div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.mortgage_interest"{% if p3.get('expense.mortgage_interest') %} checked{% endif %}> <span><strong>(A)</strong> Mortgage Interest</span></label>
+        </div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.taxes"{% if p3.get('expense.taxes') %} checked{% endif %}> <span><strong>(A)</strong> Taxes: state, local, real estate, sales, etc.</span></label>
+        </div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.medical"{% if p3.get('expense.medical') %} checked{% endif %}> <span><strong>(A)</strong> Medical, dental, prescription expenses</span></label>
+        </div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.charitable"{% if p3.get('expense.charitable') %} checked{% endif %}> <span><strong>(A)</strong> Charitable contributions</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-cell-header">(To be completed by certified volunteer) Standard or Itemized Deductions</div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.1098"{% if p3.get('vol.expense.1098') %} checked{% endif %}> <strong>(A)</strong> 1098</label>
+            <span class="f13c-p3-vol-prefix">#</span>
+            <input type="text" name="vol.expense.1098.count" class="f13c-p3-vol-input" value="{{ p3.get('vol.expense.1098.count', '') }}">
+        </div>
+        <div class="f13c-p3-vol-twoup">
+            <label><input type="checkbox" name="vol.expense.standard_deduction"{% if p3.get('vol.expense.standard_deduction') %} checked{% endif %}> <strong>(B)</strong> Standard deduction</label>
+            <label><input type="checkbox" name="vol.expense.itemized_deduction"{% if p3.get('vol.expense.itemized_deduction') %} checked{% endif %}> <strong>(A)</strong> Itemized deduction</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <div class="f13c-p3-cell-header">Notes/Comments</div>
+        <input type="text" name="expense.note.itemize" class="f13c-p3-notes-input" value="{{ p3.get('expense.note.itemize', '') }}">
+    </div>
+</div>
+
+<!-- ============================================================
+     SECTION 2 — Other Expenses (5 rows).
+     ============================================================ -->
+
+<!-- Row: Student loan interest (section start) -->
+<div class="f13c-p3-row f13c-p3-row--section-start">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-cell-header">Paid any of these expenses in 2025?</div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.student_loan"{% if p3.get('expense.student_loan') %} checked{% endif %}> <span><strong>(B)</strong> Student loan interest</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-cell-header">(To be completed by certified volunteer) Expenses to report</div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.1098e"{% if p3.get('vol.expense.1098e') %} checked{% endif %}> <strong>(B)</strong> 1098-E</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <div class="f13c-p3-cell-header">Notes/Comments</div>
+        <input type="text" name="expense.note.student_loan" class="f13c-p3-notes-input" value="{{ p3.get('expense.note.student_loan', '') }}">
+    </div>
+</div>
+
+<!-- Row: Child and dependent care -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.child_care"{% if p3.get('expense.child_care') %} checked{% endif %}> <span><strong>(B)</strong> Child and dependent care</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.child_care_credit"{% if p3.get('vol.expense.child_care_credit') %} checked{% endif %}> <strong>(B)</strong> Child and dependent care credit</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.child_care" class="f13c-p3-notes-input" value="{{ p3.get('expense.note.child_care', '') }}">
+    </div>
+</div>
+
+<!-- Row: Retirement account contributions -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.retirement_contrib"{% if p3.get('expense.retirement_contrib') %} checked{% endif %}> <span><strong>(B/A)</strong> Contributions to a retirement account</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.ira"{% if p3.get('vol.expense.ira') %} checked{% endif %}> <strong>(B/A)</strong> IRA (Basic if a Roth IRA or 401K)</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.retirement_contrib" class="f13c-p3-notes-input" value="{{ p3.get('expense.note.retirement_contrib', '') }}">
+    </div>
+</div>
+
+<!-- Row: Educator expenses -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.educator"{% if p3.get('expense.educator') %} checked{% endif %}> <span><strong>(B)</strong> School supplies by a teacher, teacher's aide or other educator</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.educator"{% if p3.get('vol.expense.educator') %} checked{% endif %}> <strong>(B)</strong> Educator expenses deduction</label>
+            <span class="f13c-p3-vol-prefix">$</span>
+            <input type="text" name="vol.expense.educator.amount" class="f13c-p3-vol-input" value="{{ p3.get('vol.expense.educator.amount', '') }}">
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.educator" class="f13c-p3-notes-input" value="{{ p3.get('expense.note.educator', '') }}">
+    </div>
+</div>
+
+<!-- Row: Alimony payments -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="expense.alimony_paid"{% if p3.get('expense.alimony_paid') %} checked{% endif %}> <span><strong>(B)</strong> Alimony payments (do not include child support)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.expense.alimony_paid"{% if p3.get('vol.expense.alimony_paid') %} checked{% endif %}> <strong>(B)</strong> Alimony payments with spouse's SSN</label>
+            <span class="f13c-p3-vol-prefix">$</span>
+            <input type="text" name="vol.expense.alimony_paid.amount" class="f13c-p3-vol-input" value="{{ p3.get('vol.expense.alimony_paid.amount', '') }}">
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label>Adjustment to income</label>
+            <span class="f13c-p3-yn">
+                <label><input type="checkbox" name="vol.expense.alimony_adjustment.yes"{% if p3.get('vol.expense.alimony_adjustment.yes') %} checked{% endif %}> Yes</label>
+                <label><input type="checkbox" name="vol.expense.alimony_adjustment.no"{% if p3.get('vol.expense.alimony_adjustment.no') %} checked{% endif %}> No</label>
+            </span>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="expense.note.alimony_paid" class="f13c-p3-notes-input" value="{{ p3.get('expense.note.alimony_paid', '') }}">
+    </div>
+</div>
+
+<!-- ============================================================
+     SECTION 3 — Tax Related Events (12 rows).
+     ============================================================ -->
+
+<!-- Row: Educational classes (section start) -->
+<div class="f13c-p3-row f13c-p3-row--section-start">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-cell-header">Did any of the following happen during 2025?</div>
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.education"{% if p3.get('event.education') %} checked{% endif %}> <span><strong>(B)</strong> You or someone in your family took educational classes (technical school, college, job related, etc.)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-cell-header">(To be completed by certified volunteer) Information to report</div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.taxable_scholarship"{% if p3.get('vol.event.taxable_scholarship') %} checked{% endif %}> <strong>(B)</strong> Taxable scholarship income</label>
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1098t"{% if p3.get('vol.event.1098t') %} checked{% endif %}> <strong>(B)</strong> 1098-T (itemized statement from school, invoice, etc.)</label>
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.education_credit"{% if p3.get('vol.event.education_credit') %} checked{% endif %}> <strong>(B)</strong> Education credit or tuition and fees deduction</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <div class="f13c-p3-cell-header">Notes/Comments</div>
+        <input type="text" name="event.note.education" class="f13c-p3-notes-input" value="{{ p3.get('event.note.education', '') }}">
+    </div>
+</div>
+
+<!-- Row: Sell a home -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.sell_home"{% if p3.get('event.sell_home') %} checked{% endif %}> <span><strong>(A)</strong> Sell a home</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1099s"{% if p3.get('vol.event.1099s') %} checked{% endif %}> <strong>(A)</strong> Sale of home (1099-S)</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.sell_home" class="f13c-p3-notes-input" value="{{ p3.get('event.note.sell_home', '') }}">
+    </div>
+</div>
+
+<!-- Row: HSA -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.hsa"{% if p3.get('event.hsa') %} checked{% endif %}> <span><strong>(A)</strong> Have a health savings account (HSA)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-twoup">
+            <label><input type="checkbox" name="vol.event.hsa_contributions"{% if p3.get('vol.event.hsa_contributions') %} checked{% endif %}> <strong>(A)</strong> HSA contributions</label>
+            <label><input type="checkbox" name="vol.event.hsa_distributions"{% if p3.get('vol.event.hsa_distributions') %} checked{% endif %}> <strong>(A)</strong> HSA distributions</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.hsa" class="f13c-p3-notes-input" value="{{ p3.get('event.note.hsa', '') }}">
+    </div>
+</div>
+
+<!-- Row: Marketplace insurance -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.marketplace"{% if p3.get('event.marketplace') %} checked{% endif %}> <span><strong>(A)</strong> Purchase health insurance through the Marketplace (Exchange)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1095a"{% if p3.get('vol.event.1095a') %} checked{% endif %}> <strong>(A)</strong> 1095-A</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.marketplace" class="f13c-p3-notes-input" value="{{ p3.get('event.note.marketplace', '') }}">
+    </div>
+</div>
+
+<!-- Row: Energy-efficient home items -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.energy_home"{% if p3.get('event.energy_home') %} checked{% endif %}> <span><strong>(A)</strong> Purchase and install energy-efficient home items (example: windows, furnace, insulation, etc.)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.energy_credit"{% if p3.get('vol.event.energy_credit') %} checked{% endif %}> <strong>(A)</strong> Energy efficient home improvement credit (Form 5695, Part II only)</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.energy_home" class="f13c-p3-notes-input" value="{{ p3.get('event.note.energy_home', '') }}">
+    </div>
+</div>
+
+<!-- Row: Other (vehicle, etc.) -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.other_purchase"{% if p3.get('event.other_purchase') %} checked{% endif %}> <span><strong>(A)</strong> Other (example: purchased a new vehicle, etc.)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <span>VIN #</span>
+            <input type="text" name="vol.event.other_purchase.vin" class="f13c-p3-vol-input" value="{{ p3.get('vol.event.other_purchase.vin', '') }}" style="width:200px">
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.other_purchase" class="f13c-p3-notes-input" value="{{ p3.get('event.note.other_purchase', '') }}">
+    </div>
+</div>
+
+<!-- Row: Cancelled/forgiven debt -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.debt_cancelled"{% if p3.get('event.debt_cancelled') %} checked{% endif %}> <span><strong>(A)</strong> Have credit card, mortgage, or other debt cancelled/forgiven by a lender</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1099c"{% if p3.get('vol.event.1099c') %} checked{% endif %}> <strong>(A)</strong> 1099-C</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.debt_cancelled" class="f13c-p3-notes-input" value="{{ p3.get('event.note.debt_cancelled', '') }}">
+    </div>
+</div>
+
+<!-- Row: Federal disaster area loss -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.disaster_loss"{% if p3.get('event.disaster_loss') %} checked{% endif %}> <span><strong>(A)</strong> Have a loss related to a declared Federal disaster area</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.1099a"{% if p3.get('vol.event.1099a') %} checked{% endif %}> <strong>(A)</strong> 1099-A</label>
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.disaster_relief_impacts"{% if p3.get('vol.event.disaster_relief_impacts') %} checked{% endif %}> Disaster relief impacts return</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.disaster_loss" class="f13c-p3-notes-input" value="{{ p3.get('event.note.disaster_loss', '') }}">
+    </div>
+</div>
+
+<!-- Row: Tax credit disallowed -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.credit_disallowed"{% if p3.get('event.credit_disallowed') %} checked{% endif %}> <span><strong>(B)</strong> Have a tax credit disallowed (example: earned income credit, child tax credit, or American opportunity credit)</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.credit_disallowed"{% if p3.get('vol.event.credit_disallowed') %} checked{% endif %}> <strong>(B)</strong> EITC, CTC, AOTC or HOH disallowed in a previous year</label>
+        </div>
+        <div class="f13c-p3-vol-fields">
+            <label>Year disallowed <input type="text" name="vol.event.credit_disallowed.year" value="{{ p3.get('vol.event.credit_disallowed.year', '') }}"></label>
+            <label>Reason <input type="text" name="vol.event.credit_disallowed.reason" value="{{ p3.get('vol.event.credit_disallowed.reason', '') }}" style="width:140px"></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.credit_disallowed" class="f13c-p3-notes-input" value="{{ p3.get('event.note.credit_disallowed', '') }}">
+    </div>
+</div>
+
+<!-- Row: Letter from IRS -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.irs_letter"{% if p3.get('event.irs_letter') %} checked{% endif %}> <span>Receive any letter or bill from the IRS</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.litc_referral"{% if p3.get('vol.event.litc_referral') %} checked{% endif %}> Eligible for Low Income Taxpayer Clinic referral</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.irs_letter" class="f13c-p3-notes-input" value="{{ p3.get('event.note.irs_letter', '') }}">
+    </div>
+</div>
+
+<!-- Row: Estimated tax payments / prior year refund -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.estimated_payments"{% if p3.get('event.estimated_payments') %} checked{% endif %}> <span><strong>(B)</strong> Make estimated tax payments or apply last year's refund to 2025 taxes</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.estimated_payments"{% if p3.get('vol.event.estimated_payments') %} checked{% endif %}> <strong>(B)</strong> Estimated tax payments</label>
+            <input type="text" name="vol.event.estimated_payments.amount" class="f13c-p3-vol-input" value="{{ p3.get('vol.event.estimated_payments.amount', '') }}">
+        </div>
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.prior_refund_applied"{% if p3.get('vol.event.prior_refund_applied') %} checked{% endif %}> <strong>(B)</strong> Last year's refund applied to this year</label>
+            <input type="text" name="vol.event.prior_refund_applied.amount" class="f13c-p3-vol-input" value="{{ p3.get('vol.event.prior_refund_applied.amount', '') }}">
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.estimated_payments" class="f13c-p3-notes-input" value="{{ p3.get('event.note.estimated_payments', '') }}">
+    </div>
+</div>
+
+<!-- Row: Brought last year's return -->
+<div class="f13c-p3-row">
+    <div class="f13c-p3-cell f13c-p3-cell--client">
+        <div class="f13c-p3-q">
+            <label><input type="checkbox" name="event.brought_prior_return"{% if p3.get('event.brought_prior_return') %} checked{% endif %}> <span>Brought last year's return</span></label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--volunteer">
+        <div class="f13c-p3-vol-entry">
+            <label><input type="checkbox" name="vol.event.prior_return_available"{% if p3.get('vol.event.prior_return_available') %} checked{% endif %}> Last year's return available</label>
+        </div>
+    </div>
+    <div class="f13c-p3-cell f13c-p3-cell--notes">
+        <input type="text" name="event.note.brought_prior_return" class="f13c-p3-notes-input" value="{{ p3.get('event.note.brought_prior_return', '') }}">
+    </div>
+</div>
+
+</div>{# /.f13c-form #}

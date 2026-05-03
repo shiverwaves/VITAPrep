@@ -1,0 +1,264 @@
+/*
+ * Form 13614-C Page 3 — scoped styles (f13c-p3- prefix).
+ *
+ * Lifted from docs/mockups/13614c_page3.html. Only the page-3
+ * structural classes (.f13c-p3-*) live here; the shared root
+ * (.f13c-form, typography, custom checkboxes, .f13c-footer) is
+ * already defined in form_13614c_p1.css and the encounter view
+ * imports all three stylesheets in order.
+ */
+
+/* ================================================================
+   Page indicator (top-right)
+   ================================================================ */
+
+.f13c-p3-page-indicator {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px 0;
+    border-bottom: 1.5px solid #000;
+}
+
+/* ================================================================
+   Top-of-page banner
+   ================================================================ */
+
+.f13c-p3-banner {
+    padding: 5px 8px;
+    border-bottom: 1.5px solid #000;
+    font-size: 11px;
+}
+
+.f13c-p3-banner strong {
+    font-size: 11.5px;
+}
+
+/* ================================================================
+   Section headers — bold prologue rendered inline inside the first
+   cell of the section, not a separate row, so there's no horizontal
+   seam between the header text and the content below it.
+   ================================================================ */
+
+.f13c-p3-cell-header {
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 1.3;
+    margin-bottom: 6px;
+}
+
+/* Section divider — heavier top border on the cells of the row that
+   starts a new section. */
+
+.f13c-p3-row--section-start > .f13c-p3-cell {
+    border-top: 1.5px solid #000;
+}
+
+/* ================================================================
+   Body rows — same three-column grid as Page 2.
+   ================================================================ */
+
+.f13c-p3-row {
+    display: grid;
+    grid-template-columns: 42% 45% 13%;
+}
+
+.f13c-p3-row > .f13c-p3-cell {
+    border-bottom: 0.5px solid #888;
+    border-right: 0.5px solid #888;
+    padding: 4px 8px;
+    min-height: 28px;
+}
+
+.f13c-p3-row > .f13c-p3-cell:last-child {
+    border-right: none;
+}
+
+.f13c-p3-cell--client {
+    background: #fff;
+}
+
+.f13c-p3-cell--volunteer,
+.f13c-p3-cell--notes {
+    background: #f0efea;
+}
+
+/* Client cell content: stack of checkbox-label items, optionally
+   with sub-questions (text inputs, Y/N pairs). */
+
+.f13c-p3-cell--client {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.f13c-p3-q {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    line-height: 1.35;
+}
+
+.f13c-p3-q > label {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    cursor: pointer;
+    line-height: 1.35;
+}
+
+.f13c-p3-q > label > input[type="checkbox"] {
+    margin-top: 2px;
+}
+
+/* Volunteer cell content: column flex with stacked entries. */
+
+.f13c-p3-cell--volunteer {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.f13c-p3-vol-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1.35;
+}
+
+.f13c-p3-vol-entry > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+}
+
+.f13c-p3-vol-entry > label > input[type="checkbox"] {
+    flex-shrink: 0;
+}
+
+/* Same Y/N alignment treatment as Page 2 — pull pairs left so [No]
+   aligns with $/# above. */
+.f13c-p3-vol-entry > .f13c-p3-yn {
+    margin-right: 60px;
+}
+
+.f13c-p3-vol-prefix {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: 11px;
+    color: #444;
+}
+
+.f13c-p3-vol-input {
+    flex: 0 0 auto;
+    width: 80px;
+}
+
+/* Two-up volunteer entries — used when a single row has two
+   side-by-side checkbox/input groups (Standard / Itemized
+   deduction, HSA contributions / HSA distributions). */
+
+.f13c-p3-vol-twoup {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.f13c-p3-vol-twoup > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+/* Inline Yes/No pair (mirrors Page 2 styling). */
+
+.f13c-p3-yn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+.f13c-p3-yn label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    min-width: 36px;
+}
+
+/* Sub-question row (text-input or Y/N follow-up under a primary
+   label). Same grid pattern as Page 2 — Y/N stays with the last
+   line of wrapped text via align-items: end. */
+.f13c-p3-subq {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 6px;
+    align-items: end;
+    margin-top: 3px;
+    margin-left: 18px;
+    padding-right: 60px;
+    font-size: 10.5px;
+    color: #222;
+}
+
+.f13c-p3-subq input[type="text"] {
+    width: 100px;
+    justify-self: start;
+}
+
+/* Inline-text inputs ("Year disallowed ___ Reason ___" in the
+   tax-credit-disallowed row). Two text fields side-by-side. */
+.f13c-p3-vol-fields {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 2px;
+    font-size: 10.5px;
+    color: #222;
+}
+
+.f13c-p3-vol-fields label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.f13c-p3-vol-fields input[type="text"] {
+    width: 80px;
+}
+
+/* Notes cell — fills the cell, no input underline. Cell uses
+   padding: 0 + flex column so the input can fill the cell when
+   alone, or sit below an inline cell-header on section-start rows. */
+
+.f13c-p3-cell--notes {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.f13c-p3-cell--notes .f13c-p3-cell-header {
+    padding: 4px 8px 0;
+    margin-bottom: 4px;
+}
+
+.f13c-p3-notes-input {
+    display: block;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: none !important;
+    background: transparent;
+}
+
+.f13c-p3-notes-input:focus {
+    outline: 2px dashed #e87a2e;
+    outline-offset: -2px;
+}
