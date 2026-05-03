@@ -126,20 +126,15 @@ html, body { height: 100%; overflow: hidden; }
                         <span class="sheet__header-subtitle">OMB 1545-2272</span>
                     </div>
 
-                    {# Page tab strip (2.3) #}
-                    <div class="sheet__tabs" id="page-tabs">
-                        {% for tab in page_tabs %}
-                        <button class="sheet__tab{% if tab.active %} sheet__tab--active{% endif %}{% if tab.complete %} sheet__tab--complete{% endif %}"
-                                data-page="{{ tab.page }}"
-                                type="button">
-                            {{ tab.label }}
-                        </button>
-                        {% endfor %}
-                    </div>
-
-                    {# Page content panels — switched by encounter.js #}
+                    {# Page content panels — single-scroll form (Phase B).
+                       The tab strip that used to swap visibility was
+                       removed; all three sections render stacked. The
+                       --active class is no longer emitted, and the
+                       per-page CSS modifiers (--p1 / --p2 / --p3) carry
+                       the layout-override behavior the old --active
+                       wrapper used to. #}
                     {% for tab in page_tabs %}
-                    <div class="sheet__page{% if tab.active %} sheet__page--active{% endif %}{% if tab.page == 1 %} sheet__page--p1{% endif %}{% if tab.page == 2 %} sheet__page--p2{% endif %}{% if tab.page == 3 %} sheet__page--p3{% endif %}"
+                    <div class="sheet__page{% if tab.page == 1 %} sheet__page--p1{% endif %}{% if tab.page == 2 %} sheet__page--p2{% endif %}{% if tab.page == 3 %} sheet__page--p3{% endif %}"
                          id="page-{{ tab.page }}"
                          data-page="{{ tab.page }}">
 
