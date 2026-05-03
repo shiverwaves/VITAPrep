@@ -261,14 +261,89 @@ emits old names), then 1B flips everything in one commit.
 
 ## Part 2 — Layout system
 
+### Simplified scope (rev 2)
+
+The original spec had a two-axis layout system (vertical and horizontal
+splits, seven valid grid configurations, two split-cycle icons plus a
+chat toggle). After watching Part 1 land in the encounter view we
+decided to reduce scope: a single horizontal axis is enough for this
+product because every relevant document is letter-format and reads
+top-to-bottom alongside the form, and the form itself is 980px wide so
+a vertical split would squeeze it below readable width.
+
+The simplified system:
+
+| State | Layout |
+|---|---|
+| 1-pane (chat closed, **default on load**) | Form full screen |
+| 2-pane (chat closed) | Form top, one doc bottom |
+| 3-pane (chat closed) | Form top, two docs split side-by-side bottom |
+| 1-pane (chat open) | Form 2/3 left, chat 1/3 right |
+| 2-pane (chat open) | Form top + one doc bottom (in left 2/3) + chat 1/3 right |
+
+Two buttons in the chrome:
+
+1. **Pane cycle** — advances through `1 → 2 → 3 → 2 → 1`. Endpoints flip
+   the cycle direction; that's all the state the icon needs to track.
+2. **Chat toggle** — opens / closes the chat pane.
+
+What dropped vs. the original spec:
+- No vertical-split layouts (form-left + doc-right, etc.).
+- No second split-axis icon.
+- No cross-axis transitions (no "click the other axis to collapse and
+  re-split").
+- `LayoutState.axis` field deleted; `direction` is now just for icon
+  display.
+- Two CSS Grid layouts removed (the v2 / v3 vertical configurations).
+
+Effort drops by ~30% across the reducer, renderer, and CSS.
+
+### Default layout
+
+**On first load of a scenario, the workspace renders form-only at full
+viewport width.** This is the simpler default for a new player and
+sidesteps the current half-width-by-default behavior the encounter view
+shows today (where `workspace__form` is one of three pre-allocated grid
+cells regardless of whether doc panes have content).
+
+Implementation: `data-layout="form-only"` is the initial state of
+`#workspace`; doc panes don't exist in the DOM until pane cycle adds
+them, or they're hidden via `display: none` until activated. The grid
+template for `form-only` is a single 1fr cell.
+
+### Horizontal scrolling on the form pane
+
+The new 13614-C Page 1 partial has a fixed `width: 980px` (chosen to
+match the IRS form's reading width). When chat is open, the workspace
+collapses to the left 2/3 of the screen — on a typical 1280px window
+that's ~853px, narrower than the form. Without explicit handling the
+form gets clipped or the layout breaks.
+
+Required CSS at the form pane level:
+
+```css
+#form-pane {
+    min-width: 0;       /* opt out of the flex/grid default that
+                           prevents shrinking below content size */
+    overflow: auto;     /* horizontal scroll when content > pane width */
+}
+```
+
+The `f13c-form` keeps its 980px and becomes scrollable inside the pane
+whenever the pane is narrower. This applies in both chat-open and
+chat-closed states; document panes get the same treatment for the same
+reason (W-2s and 1099s want ~600px to read comfortably; squeezed
+narrower they should scroll, not wrap).
+
 ### Files
 
 **New:**
-- `api/static/js/layout-reducer.js` — pure reducer + state shape. ~100
-  LOC. Importable by tests.
+- `api/static/js/layout-reducer.js` — pure reducer + state shape.
+  ~60 LOC (down from ~100 in the dual-axis design). Importable by
+  tests.
 - `api/static/js/layout-render.js` — `applyState(state)`, pane template
-  functions, event delegation. ~200 LOC.
-- `api/static/styles/layout.css` — seven CSS Grid configurations as
+  functions, event delegation. ~150 LOC (down from ~200).
+- `api/static/styles/layout.css` — five CSS Grid configurations as
   `[data-layout="..."]` selectors.
 
 **Modified:**
@@ -276,19 +351,19 @@ emits old names), then 1B flips everything in one commit.
   pane structure; add
   `<script>window.SCENARIO_DOCS = {{ doc_urls|tojson }};</script>`; add
   layout-control icons to titlebar.
-- `api/templates/components/titlebar.html` — three new buttons
-  (vertical-split, horizontal-split, chat-toggle).
+- `api/templates/components/titlebar.html` — two new buttons (pane
+  cycle, chat toggle).
 - `api/routes/scenarios.py` (`page_exercise`) — pass the existing
   `doc_urls` map (currently built but unused) to the template; build a
-  `doc_labels` map for tab strip readability.
+  `doc_labels` map for tab-strip readability.
 
 ### State shape
 
 ```js
 const initialState = {
     panes: 1,                      // 1, 2, or 3
-    axis: "vertical",              // only meaningful when panes >= 2
-    direction: "expanding",        // for icon state display
+    direction: "expanding",        // "expanding" or "contracting" — drives the
+                                   // pane-cycle icon's "next state" rendering
     docSlots: [],                  // doc_ids; length = panes - 1
     chatOpen: false,
     hiddenDocCache: null,          // doc_id stashed during chat-open
@@ -298,29 +373,54 @@ const initialState = {
 };
 ```
 
-Field values stay in the DOM, not in state. This is intentional — the form
-pane is never re-rendered on layout transitions, so DOM is the source of
-truth for field values, and we never have to round-trip through
-`applyState` for keystrokes.
+No `axis` field — there's only one axis. Field values stay in the DOM,
+not in state. The form pane is never re-rendered on layout transitions,
+so the live DOM is the source of truth for field values; we never
+round-trip through `applyState` for keystrokes.
 
 ### CSS Grid layouts
 
 ```css
-#workspace { display: grid; gap: 4px; height: 100%; }
+#workspace {
+    display: grid;
+    gap: 4px;
+    height: 100%;
+}
 
-#workspace[data-layout="form-only"] { grid-template: "f" / 1fr; }
-#workspace[data-layout="v2"]        { grid-template: "f d0" / 1fr 1fr; }
-#workspace[data-layout="v3"]        { grid-template: "f d0" 1fr "f d1" 1fr / 1fr 1fr; }
-#workspace[data-layout="h2"]        { grid-template: "f" 1fr "d0" 1fr / 1fr; }
-#workspace[data-layout="h3"]        { grid-template: "f f" 1fr "d0 d1" 1fr / 1fr 1fr; }
+#workspace[data-layout="form-only"] {
+    grid-template: "f" / 1fr;
+}
 
-/* Chat-open variants live in left 2/3; chat lives outside #workspace */
-#workspace[data-layout="v2-chat"]   { grid-template: "f" / 1fr; }
-#workspace[data-layout="h2-chat"]   { grid-template: "f" 1fr "d0" 1fr / 1fr; }
+#workspace[data-layout="h2"] {
+    grid-template:
+        "f"  1fr
+        "d0" 1fr
+        / 1fr;
+}
 
-#form-pane  { grid-area: f; }
-#doc-pane-0 { grid-area: d0; }
-#doc-pane-1 { grid-area: d1; }
+#workspace[data-layout="h3"] {
+    grid-template:
+        "f  f"  1fr
+        "d0 d1" 1fr
+        / 1fr 1fr;
+}
+
+/* Chat-open variants live in the left 2/3 of the screen;
+   chat itself sits outside #workspace in the right 1/3. */
+#workspace[data-layout="form-only-chat"] {
+    grid-template: "f" / 1fr;
+}
+
+#workspace[data-layout="h2-chat"] {
+    grid-template:
+        "f"  1fr
+        "d0" 1fr
+        / 1fr;
+}
+
+#form-pane  { grid-area: f; min-width: 0; overflow: auto; }
+#doc-pane-0 { grid-area: d0; min-width: 0; overflow: auto; }
+#doc-pane-1 { grid-area: d1; min-width: 0; overflow: auto; }
 ```
 
 Chat allocation: `.app-main` is itself a grid with
@@ -335,7 +435,7 @@ Chat allocation: `.app-main` is itself a grid with
   route (`/scenarios/{id}/documents/{type}/{pid}/{idx}`). Tabs populated
   from `window.SCENARIO_DOCS`. JS swaps the iframe `src` on tab click.
 - **ChatPane** — static `<aside id="chat-pane">` with three placeholder
-  sub-tabs (Probes/Flags/Notes). Hidden via
+  sub-tabs (Probes / Flags / Notes). Hidden via
   `body:not([data-chat="open"]) #chat-pane { display: none; }`.
 
 Iframes for documents avoid all style collision with the form (each
@@ -345,19 +445,27 @@ but that's deferred.
 
 ### Reducer behavior
 
-Cycle for split-axis click: `1 → 2 → 3 → 2 → 1`, with `direction` flipping
-at endpoints. Cross-axis click collapses to 1 along current axis and
-immediately splits to 2 along new axis.
+Pane-cycle click:
+- From `panes: 1` (always `direction: expanding` here): go to
+  `panes: 2, direction: expanding`.
+- From `panes: 2, direction: expanding`: go to
+  `panes: 3, direction: contracting` (next click should shrink).
+- From `panes: 3` (always `direction: contracting`): go to
+  `panes: 2, direction: contracting`.
+- From `panes: 2, direction: contracting`: go to
+  `panes: 1, direction: expanding`.
+
+The icon shows the state the *next* click will produce. Endpoints flip
+the direction.
 
 Chat-toggle:
 - **Open from 3-pane**: cache `docSlots[1]` in `hiddenDocCache`, set
-  `panes = 2, axis = "horizontal"` (the only valid 2-pane chat-open state
-  per spec), `chatOpen = true`. Show small "1 doc hidden" indicator.
-- **Open from 1- or 2-pane**: just set `chatOpen = true`. If currently
-  2-pane vertical, force axis to horizontal (or to form-only — see open
-  question 7 below).
+  `panes = 2, chatOpen = true`. Show small "1 doc hidden" indicator near
+  the chat-toggle button.
+- **Open from 1- or 2-pane**: just set `chatOpen = true`. Pane count
+  unchanged.
 - **Close with cached doc**: restore `docSlots[1] = hiddenDocCache`,
-  `panes = 3`, `axis = previousAxis`, clear cache.
+  `panes = 3, direction = contracting`, clear cache.
 - **Close without cache**: just `chatOpen = false`.
 
 ### State persistence
@@ -398,33 +506,30 @@ Each phase is independently shippable behind a feature flag (e.g.,
 
 1. **Verify mode prefill.** The new flow always prefills the client column.
    Verify mode currently prefills more than that. What's Verify mode's
-   behavior post-migration? (Worth resolving before 1D.)
+   behavior post-migration?
 2. **Generator diversity.** `Person.us_citizen`, `legally_blind`, etc.
    default to safe values. Should the generator actively diversify (produce
    some non-citizen, some legally-blind scenarios)?
    *Recommendation: not in this work. Defer to a separate generator-update
    task.*
-3. **Dependent name format.** Single combined `dep.{i}.name` per template,
-   or split? Decision affects the answer key.
-   *Recommendation: combined*, since that's what the rendered template
-   expects.
-4. **DOB format for dependents.** Template hint says `mm/dd/yy`; populator
-   emits 4-digit.
-   *Recommendation: align both to `MM/DD/YYYY`*, update the template hint.
-5. **Legacy `/form`, `/form/income`, `/form/expenses` pages.** Keep as-is,
+3. **Legacy `/form`, `/form/income`, `/form/expenses` pages.** Keep as-is,
    retire, or hide behind a debug flag?
    *Recommendation: keep for now, retire after Pages 2/3/4 are migrated.*
-6. **Layout-control icon location.** Titlebar (with gear and Submit) or a
-   new bar above the workspace?
-   *Recommendation: titlebar.*
-7. **Chat-open layout from a 1-pane state.** Spec says two valid chat-open
-   layouts (form-only-2/3 and form-top + doc-bottom-2/3). What does opening
-   chat from form-only do — stay form-only, or auto-add a doc pane?
-   *Recommendation: stay form-only*; player explicitly clicks split if
-   they want a doc.
 
-Most of these are tactical and resolvable when their step lands. #1
-(Verify mode prefill) is the only one that could change Phase 1D's scope.
+### Resolved
+
+- **Dependent name format**: single combined `dep.{i}.name` (matches the
+  template). Implemented in Phase 1B.
+- **DOB format for dependents**: `MM/DD/YYYY` everywhere. Template hint
+  updated to match.
+- **Layout-control icon location**: titlebar (alongside the gear and
+  Submit buttons).
+- **Chat-open layout from a 1-pane state**: stay form-only; the player
+  explicitly clicks pane-cycle to add a doc. (Resolved trivially by the
+  Part 2 simplification — there's no axis decision left to make.)
+- **Layout axes**: dropped vertical splitting entirely. Single horizontal
+  axis. Five layouts instead of seven; two chrome buttons instead of
+  three.
 
 ---
 
@@ -434,12 +539,17 @@ After this work:
 
 - Loading a scenario shows the form with Page 1 pre-filled from the
   household data.
-- The player can switch among the five chat-closed layouts via the two
-  layout-control icons.
-- The player can open chat (which reorients the layout) and close chat
-  (which restores the prior layout).
+- The workspace defaults to **form-only at full viewport width** on
+  first load (no half-screen-by-default behavior).
+- The player can cycle through the three chat-closed layouts (form-only,
+  form-top + 1-doc, form-top + 2-docs) via a single pane-cycle button.
+- The player can toggle chat on/off; opening chat from a 3-pane state
+  caches one doc and surfaces a "1 doc hidden" indicator; closing chat
+  restores the cached doc.
 - Each document pane has a tab strip showing all scenario documents;
   clicking a tab swaps the pane's content.
+- The form pane scrolls horizontally when the pane is narrower than the
+  form's 980px width (in particular when chat is open).
 - Submitting the form posts the volunteer-column data to the grader;
   grading runs and returns a result.
 - The two ungraded volunteer columns are visibly marked in the form and
@@ -458,7 +568,8 @@ present; pages render as empty templates).
 - Probe interaction in the chat pane.
 - Verify mode (different right-click verbs, different submission flow).
 - Vida coach scripts.
-- Layout customization beyond the seven preset layouts.
+- Layout customization beyond the five preset layouts (no free-form
+  resizing, no drag-and-drop pane rearrangement, no vertical splitting).
 - Mobile / touch.
 - Generator diversification of the new boolean fields (`Person.us_citizen`
   etc. default to safe values until a separate generator-update task).
