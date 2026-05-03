@@ -11,7 +11,6 @@
  *
  *     {
  *         panes: 1 | 2 | 3,            (max 2 when chatOpen is true)
- *         direction: "expanding" | "contracting",
  *         docSlots: [doc_id | null, ...],   length = panes - 1
  *         chatOpen: boolean,
  *         hiddenDocCache: doc_id | null,    set when chat opens from panes:3
@@ -25,9 +24,11 @@
  *     SELECT_DOC         { slotIndex, docId }
  *     SET_FORM_PAGE      { page: 1..4 }
  *
- * The pane-cycle action is a no-op while chatOpen is true (the UI
- * disables the button in that state; the reducer guards as a safety
- * net so a mis-fired event can't corrupt state).
+ * Pane-cycle is a wrapping forward cycle: 1 → 2 → 3 → 1 → 2 → ...
+ * Each click advances; the 3 → 1 wrap drops both docs back to a
+ * clean form-only view. The action is a no-op while chatOpen is
+ * true (the UI disables the button in that state; the reducer
+ * guards as a safety net so a mis-fired event can't corrupt state).
  */
 
 (function (global) {
@@ -36,7 +37,6 @@
     function initialState() {
         return {
             panes: 1,
-            direction: "expanding",
             docSlots: [],
             chatOpen: false,
             hiddenDocCache: null,
@@ -60,40 +60,31 @@
         return availableDocs[0];
     }
 
+    /* Wrapping cycle: 1 → 2 → 3 → 1. Single forward direction; no
+     * endpoint flips, no direction tracking. The pane-cycle button
+     * is one-way "next" — click again to keep going. */
     function cyclePanes(state, availableDocs) {
         if (state.chatOpen) return state;  /* disabled while chat open */
 
         if (state.panes === 1) {
-            /* 1 → 2, expanding (next click should keep expanding) */
             return Object.assign({}, state, {
                 panes: 2,
-                direction: "expanding",
                 docSlots: [pickNextDoc(availableDocs, state.docSlots)],
             });
         }
-        if (state.panes === 2 && state.direction === "expanding") {
-            /* 2 → 3, flip to contracting (3 is the endpoint) */
+        if (state.panes === 2) {
             return Object.assign({}, state, {
                 panes: 3,
-                direction: "contracting",
                 docSlots: state.docSlots.concat([
                     pickNextDoc(availableDocs, state.docSlots),
                 ]),
             });
         }
         if (state.panes === 3) {
-            /* 3 → 2, contracting */
-            return Object.assign({}, state, {
-                panes: 2,
-                direction: "contracting",
-                docSlots: state.docSlots.slice(0, 1),
-            });
-        }
-        if (state.panes === 2 && state.direction === "contracting") {
-            /* 2 → 1, flip to expanding (1 is the endpoint) */
+            /* 3 → 1: drop both docs (the player wraps back to a clean
+             * form-only view; clicking again starts the cycle over). */
             return Object.assign({}, state, {
                 panes: 1,
-                direction: "expanding",
                 docSlots: [],
             });
         }
@@ -119,7 +110,6 @@
             return Object.assign({}, state, {
                 chatOpen: false,
                 panes: 3,
-                direction: "contracting",
                 docSlots: state.docSlots.concat([state.hiddenDocCache]),
                 hiddenDocCache: null,
             });
