@@ -279,33 +279,7 @@ async def api_get_scenario(
                 "form_1098_t_count": len(p.form_1098_ts),
             })
 
-    # Build document URLs
-    doc_urls: Dict[str, str] = {}
-    if hh:
-        for p in hh.members:
-            pid = p.person_id
-            if p.ssn:
-                doc_urls[f"ssn_{pid}"] = f"/scenarios/{scenario_id}/documents/ssn-card/{pid}"
-            if p.id_type:
-                doc_urls[f"id_{pid}"] = f"/scenarios/{scenario_id}/documents/photo-id/{pid}"
-            for i in range(len(p.w2s)):
-                doc_urls[f"w2_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/w2/{pid}/{i}"
-            for i in range(len(p.form_1099_ints)):
-                doc_urls[f"1099int_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-int/{pid}/{i}"
-            for i in range(len(p.form_1099_divs)):
-                doc_urls[f"1099div_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-div/{pid}/{i}"
-            for i in range(len(p.form_1099_rs)):
-                doc_urls[f"1099r_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-r/{pid}/{i}"
-            if p.ssa_1099 is not None:
-                doc_urls[f"ssa1099_{pid}"] = f"/scenarios/{scenario_id}/documents/ssa-1099/{pid}"
-            for i in range(len(p.form_1099_necs)):
-                doc_urls[f"1099nec_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1099-nec/{pid}/{i}"
-            for i in range(len(p.form_1098s)):
-                doc_urls[f"1098_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1098/{pid}/{i}"
-            for i in range(len(p.form_1098_es)):
-                doc_urls[f"1098e_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1098-e/{pid}/{i}"
-            for i in range(len(p.form_1098_ts)):
-                doc_urls[f"1098t_{pid}_{i}"] = f"/scenarios/{scenario_id}/documents/1098-t/{pid}/{i}"
+    doc_urls = _build_doc_urls(scenario_id, hh)
 
     return JSONResponse(content={
         "scenario_id": scenario.scenario_id,
@@ -563,6 +537,159 @@ def _enrich_notes(notes_by_page: Dict[int, List[dict]]) -> None:
             note["hint"] = hint
 
 
+# =========================================================================
+# Document tab labels
+# =========================================================================
+# Each scenario's documents get readable tab labels for the new layout
+# system's DocumentPane. The format leads with the most identifying piece
+# of information for the document type:
+#
+#   - Person-owned, single of type:        "Maria's W-2"
+#   - Person-owned, multiple of same type: "Maria's W-2 (1 of 2)"
+#   - Household-owned, with issuer:        "1098 — Bank of Hawaii"
+#   - Household-owned, no issuer:          "1098"
+#
+# Today every document in the data model is technically person-owned
+# (form_1098s lives on Person, not Household), so the household-owned
+# branches are reserved for future use; current code always emits the
+# possessive form.
+
+_ID_TYPE_LABELS: Dict[str, str] = {
+    "drivers_license": "Driver's License",
+    "state_id": "State ID",
+}
+
+
+def _build_doc_urls(scenario_id: str, household) -> Dict[str, str]:
+    """Build a ``{doc_id: url}`` map for every document in the household.
+
+    Doc-id format mirrors the per-document HTML routes:
+
+        ``ssn_{pid}``                      → /scenarios/.../documents/ssn-card/{pid}
+        ``id_{pid}``                       → /scenarios/.../documents/photo-id/{pid}
+        ``ssa1099_{pid}``                  → /scenarios/.../documents/ssa-1099/{pid}
+        ``w2_{pid}_{i}``                   → /scenarios/.../documents/w2/{pid}/{i}
+        ``1099int_{pid}_{i}``              → /scenarios/.../documents/1099-int/{pid}/{i}
+        ``1099div_{pid}_{i}``              → /scenarios/.../documents/1099-div/{pid}/{i}
+        ``1099r_{pid}_{i}``                → /scenarios/.../documents/1099-r/{pid}/{i}
+        ``1099nec_{pid}_{i}``              → /scenarios/.../documents/1099-nec/{pid}/{i}
+        ``1098_{pid}_{i}``                 → /scenarios/.../documents/1098/{pid}/{i}
+        ``1098e_{pid}_{i}``                → /scenarios/.../documents/1098-e/{pid}/{i}
+        ``1098t_{pid}_{i}``                → /scenarios/.../documents/1098-t/{pid}/{i}
+
+    The keys match those produced by :func:`_build_doc_labels`, so the
+    layout system's DocumentPane can look up URL and label by the same
+    ``doc_id``.
+    """
+    urls: Dict[str, str] = {}
+    if household is None:
+        return urls
+
+    base = f"/scenarios/{scenario_id}/documents"
+    for p in household.members:
+        pid = p.person_id
+        if p.ssn:
+            urls[f"ssn_{pid}"] = f"{base}/ssn-card/{pid}"
+        if p.id_type:
+            urls[f"id_{pid}"] = f"{base}/photo-id/{pid}"
+        if p.ssa_1099 is not None:
+            urls[f"ssa1099_{pid}"] = f"{base}/ssa-1099/{pid}"
+        for i in range(len(p.w2s)):
+            urls[f"w2_{pid}_{i}"] = f"{base}/w2/{pid}/{i}"
+        for i in range(len(p.form_1099_ints)):
+            urls[f"1099int_{pid}_{i}"] = f"{base}/1099-int/{pid}/{i}"
+        for i in range(len(p.form_1099_divs)):
+            urls[f"1099div_{pid}_{i}"] = f"{base}/1099-div/{pid}/{i}"
+        for i in range(len(p.form_1099_rs)):
+            urls[f"1099r_{pid}_{i}"] = f"{base}/1099-r/{pid}/{i}"
+        for i in range(len(p.form_1099_necs)):
+            urls[f"1099nec_{pid}_{i}"] = f"{base}/1099-nec/{pid}/{i}"
+        for i in range(len(p.form_1098s)):
+            urls[f"1098_{pid}_{i}"] = f"{base}/1098/{pid}/{i}"
+        for i in range(len(p.form_1098_es)):
+            urls[f"1098e_{pid}_{i}"] = f"{base}/1098-e/{pid}/{i}"
+        for i in range(len(p.form_1098_ts)):
+            urls[f"1098t_{pid}_{i}"] = f"{base}/1098-t/{pid}/{i}"
+
+    return urls
+
+
+def _label_multi(
+    labels: Dict[str, str],
+    person_name: str,
+    person_id: str,
+    key_prefix: str,
+    type_label: str,
+    items: List,
+) -> None:
+    """Add labels for a list of multi-instance docs to the labels dict.
+
+    A single doc gets ``"{Person}'s {Type}"``; multiple of the same
+    type get the ``({n} of {total})`` disambiguator.
+    """
+    n = len(items)
+    if n == 0:
+        return
+    if n == 1:
+        labels[f"{key_prefix}_{person_id}_0"] = f"{person_name}'s {type_label}"
+        return
+    for i in range(n):
+        labels[f"{key_prefix}_{person_id}_{i}"] = (
+            f"{person_name}'s {type_label} ({i + 1} of {n})"
+        )
+
+
+def _build_doc_labels(household) -> Dict[str, str]:
+    """Build human-readable tab labels for every doc_id the scenario produces.
+
+    Mirrors the doc_id construction in ``page_exercise``'s document URL
+    builder so that ``doc_labels[doc_id]`` matches ``doc_urls[doc_id]``
+    one-to-one.
+
+    Args:
+        household: Household whose member documents are being labeled.
+            ``None`` is treated as an empty household.
+
+    Returns:
+        ``dict[doc_id, label]`` keyed identically to ``doc_urls``.
+    """
+    labels: Dict[str, str] = {}
+    if household is None:
+        return labels
+
+    for p in household.members:
+        pid = p.person_id
+        person_name = p.legal_first_name or "Unknown"
+
+        # Single-instance per-person docs (no index in the doc_id).
+        if p.ssn:
+            labels[f"ssn_{pid}"] = f"{person_name}'s SSN Card"
+        if p.id_type:
+            id_label = _ID_TYPE_LABELS.get(p.id_type, "ID")
+            labels[f"id_{pid}"] = f"{person_name}'s {id_label}"
+        if p.ssa_1099 is not None:
+            labels[f"ssa1099_{pid}"] = f"{person_name}'s SSA-1099"
+
+        # Multi-instance docs (indexed in the doc_id).
+        _label_multi(labels, person_name, pid, "w2", "W-2", p.w2s)
+        _label_multi(labels, person_name, pid, "1099int", "1099-INT",
+                     p.form_1099_ints)
+        _label_multi(labels, person_name, pid, "1099div", "1099-DIV",
+                     p.form_1099_divs)
+        _label_multi(labels, person_name, pid, "1099r", "1099-R",
+                     p.form_1099_rs)
+        _label_multi(labels, person_name, pid, "1099nec", "1099-NEC",
+                     p.form_1099_necs)
+        _label_multi(labels, person_name, pid, "1098", "1098",
+                     p.form_1098s)
+        _label_multi(labels, person_name, pid, "1098e", "1098-E",
+                     p.form_1098_es)
+        _label_multi(labels, person_name, pid, "1098t", "1098-T",
+                     p.form_1098_ts)
+
+    return labels
+
+
 @router.get("/scenarios/{scenario_id}", response_class=HTMLResponse)
 async def page_exercise(
     request: Request,
@@ -603,6 +730,15 @@ async def page_exercise(
         from training.form_populator import build_p1_field_values
         p1 = build_p1_field_values(scenario.household)
 
+    # Document URL + label maps for the layout system's DocumentPane
+    # (Phase 2). The keys are doc_ids; both maps share the same key
+    # space so the renderer can look up either by the same id.
+    # Phase 2A wires the data; Phase 2B will read it via
+    # window.SCENARIO_DOCS / window.SCENARIO_DOC_LABELS in the
+    # encounter template.
+    doc_urls = _build_doc_urls(scenario_id, scenario.household)
+    doc_labels = _build_doc_labels(scenario.household)
+
     return templates.TemplateResponse(request, "encounter.html", {
         "scenario_id": scenario_id,
         "mode": scenario.mode,
@@ -613,6 +749,8 @@ async def page_exercise(
         "category_labels": _CATEGORY_LABELS,
         "prefill": prefill,
         "p1": p1,
+        "doc_urls": doc_urls,
+        "doc_labels": doc_labels,
     })
 
 
