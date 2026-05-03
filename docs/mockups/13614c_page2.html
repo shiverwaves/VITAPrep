@@ -283,6 +283,15 @@ body {
     flex-shrink: 0;
 }
 
+/* When a volunteer entry ends in a Y/N pair, hold the pair off the
+ * cell's right edge so the [No] checkbox lines up vertically with the
+ * "$" (or "#") prefix in the row above (which sits just before the
+ * 80px input). 60px right-margin places [No]'s checkbox at roughly
+ * the same x as the prefix marker. */
+.f13c-p2-vol-entry > .f13c-p2-yn {
+    margin-right: 60px;
+}
+
 .f13c-p2-vol-prefix {
     flex: 0 0 auto;
     font-weight: 600;
