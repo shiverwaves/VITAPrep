@@ -34,6 +34,10 @@ from training.form_fields import (
     DEP_SINGLE_OR_MARRIED,
     DEP_STUDENT,
     DEP_US_CITIZEN,
+    DEP_VOL_HOME_COST,
+    DEP_VOL_INCOME_UNDER,
+    DEP_VOL_SUPPORT,
+    UNGRADED_FIELDS,
     EXPENSE_CHARITABLE,
     EXPENSE_CHARITABLE_AMOUNT,
     EXPENSE_CHILD_CARE,
@@ -211,6 +215,25 @@ def build_form_answers(household: Household) -> Dict[str, str]:
         key[dep_field(i, DEP_US_CITIZEN)] = "Yes"
         key[dep_field(i, DEP_STUDENT)] = "Yes" if dep.is_full_time_student else "No"
         key[dep_field(i, DEP_DISABLED)] = "Yes" if dep.has_disability else "No"
+
+        # Volunteer columns (Page 1 Section 11) — three scored, two
+        # left ungraded (vol_qc_other, vol_self_support; see
+        # UNGRADED_FIELDS in form_fields.py). _values_match treats
+        # "Y" / "Yes" as equivalent so either convention is accepted.
+        income_under = (
+            dep.total_income() < 5200
+            if hasattr(dep, "total_income") else True
+        )
+        key[dep_field(i, DEP_VOL_INCOME_UNDER)] = "Yes" if income_under else "No"
+        key[dep_field(i, DEP_VOL_SUPPORT)] = (
+            "Yes" if dep.months_in_home >= 6 else "No"
+        )
+        # Home-cost question is "did taxpayer(s) pay >50% of home cost
+        # for this person?" — assume yes when the dependent lived in
+        # the household. Refine when we model multi-supporter cases.
+        key[dep_field(i, DEP_VOL_HOME_COST)] = (
+            "Yes" if dep.months_in_home >= 6 else "No"
+        )
 
     # Section F: Additional questions
     if householder.can_be_claimed:
@@ -423,6 +446,25 @@ class Grader:
                     "submitted": student_val,
                 })
 
+        # Surface UNGRADED_FIELDS the player filled in. These don't
+        # affect the score, but the result UI shows them with a
+        # "Not graded in this version" label so players know their
+        # answer wasn't checked (rather than silently passing).
+        scoped = set(fields) if fields is not None else None
+        for field_name in UNGRADED_FIELDS:
+            if scoped is not None and field_name not in scoped:
+                continue
+            student_val = submission.get(field_name, "")
+            if not student_val:
+                # Player left it blank — no need to clutter the
+                # results UI.
+                continue
+            field_feedback.append({
+                "field": field_name,
+                "status": "ungraded",
+                "submitted": student_val,
+            })
+
         accuracy = score / max_score if max_score > 0 else 0.0
 
         if accuracy == 1.0:
@@ -603,5 +645,18 @@ def _values_match(submitted: str, expected: str) -> bool:
             return True
     except ValueError:
         pass
+
+    # Y / Yes equivalence (and N / No). The new Page 1 template's
+    # volunteer columns hint at one-letter answers; the legacy answer
+    # key emits "Yes" / "No". Treat both conventions as equivalent so
+    # a player who keeps the pre-filled "Y" isn't marked wrong against
+    # an expected "Yes".
+    yes_set = {"y", "yes"}
+    no_set = {"n", "no"}
+    sl, el = s.lower(), e.lower()
+    if sl in yes_set and el in yes_set:
+        return True
+    if sl in no_set and el in no_set:
+        return True
 
     return False

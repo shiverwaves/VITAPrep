@@ -1799,7 +1799,12 @@ def _build_results_html(
     else:
         score_color = "#f44336"
 
-    # Per-field feedback table
+    # Per-field feedback table.
+    # Three statuses: correct (✓), incorrect (✗), and ungraded (—).
+    # Ungraded entries surface UNGRADED_FIELDS the player filled in
+    # but the grader doesn't score; their submitted answer is shown
+    # with a "Not graded in this version" label so the player knows
+    # their answer wasn't silently passed.
     field_rows = ""
     if result.field_feedback:
         for fb in result.field_feedback:
@@ -1809,6 +1814,14 @@ def _build_results_html(
                 icon = "&#10004;"
                 row_class = "correct"
                 detail = ""
+            elif status == "ungraded":
+                icon = "&mdash;"
+                row_class = "ungraded"
+                submitted = fb.get("submitted", "")
+                detail = (
+                    f'You entered: <strong>{submitted}</strong> '
+                    '<em>(Not graded in this version)</em>'
+                )
             else:
                 icon = "&#10008;"
                 row_class = "incorrect"
@@ -1893,6 +1906,8 @@ th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
 th {{ background: #f0f4f8; }}
 tr.correct td {{ background: #e8f5e9; }}
 tr.incorrect td {{ background: #ffebee; }}
+tr.ungraded td {{ background: #f5f5f5; color: #555; }}
+tr.ungraded em {{ color: #888; font-size: 11px; }}
 ul {{ line-height: 1.8; }}
 .actions {{ margin-top: 32px; text-align: center; }}
 .actions a {{ display: inline-block; margin: 0 8px; padding: 12px 24px;
