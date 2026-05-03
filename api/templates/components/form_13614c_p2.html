@@ -1,0 +1,440 @@
+{# ============================================================
+   Form 13614-C, Page 2 — Income (Part II).
+
+   Renders the new Page 2 mockup (docs/mockups/13614c_page2.html)
+   with data from build_p2_field_values(scenario.household). The
+   caller passes p2=<that dict>; this template reads from it via
+   p2.get(...).
+
+   The shared root (.f13c-form, typography, custom checkboxes) lives
+   in form_13614c_p1.css; the page-2-specific structural classes
+   (.f13c-p2-*) live in form_13614c_p2.css. The encounter view
+   imports both. This partial expects to be wrapped in the same
+   .f13c-form-shell as the Page 1 partial.
+
+   Volunteer column: only rows whose ground truth is modeled get
+   pre-filled (W-2 count, 1099-R count, SSA count, etc.). Tips,
+   disability $, unemployment, state refund, stock sale, alimony,
+   rental, gambling are blank — the player fills them.
+
+   Notes column (right): always blank, free-form, ungraded.
+   ============================================================ #}
+<div class="f13c-form">
+
+<!-- ============================================================
+     Page indicator
+     ============================================================ -->
+<div class="f13c-p2-page-indicator">Page 2</div>
+
+<!-- ============================================================
+     Section banner
+     ============================================================ -->
+<div class="f13c-p2-banner">
+    <strong>Income:</strong> Answer the following questions on the left side of this page. Check only the boxes that apply to you and/or your spouse.
+</div>
+
+<!-- ============================================================
+     Three-column income grid
+     ============================================================ -->
+<div class="f13c-p2-grid">
+
+    <!-- Column header row -->
+    <div class="f13c-p2-grid__head">
+        <div>Received money from any of the following in 2025:</div>
+        <div>(To be completed by certified volunteer) Income to be included</div>
+        <div>Notes/Comments</div>
+    </div>
+
+    <!-- Row 1: Wages -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.wages"{% if p2.get('income.wages') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Wages as a part-time or full-time employee</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>How many jobs</span>
+                <input type="text" name="income.wages.jobs" value="{{ p2.get('income.wages.jobs', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.w2"{% if p2.get('vol.income.w2') %} checked{% endif %}> <strong>(B)</strong> W-2s</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.w2.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.w2.count', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.wages" class="f13c-p2-notes-input" value="{{ p2.get('income.note.wages', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 2: Tips -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.tips"{% if p2.get('income.tips') %} checked{% endif %}>
+                    <span><strong>(B/A)</strong> Tips</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.tips"{% if p2.get('vol.income.tips') %} checked{% endif %}> <strong>(B/A)</strong> Tips (Basic when reported on W2)</label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.tips" class="f13c-p2-notes-input" value="{{ p2.get('income.note.tips', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 3: Retirement -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.retirement"{% if p2.get('income.retirement') %} checked{% endif %}>
+                    <span><strong>(B/A)</strong> Retirement account, pension or annuity proceeds</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099r"{% if p2.get('vol.income.1099r') %} checked{% endif %}> <strong>(B/A)</strong> 1099-R (Basic when taxable amount is reported)</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099r.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099r.count', '') }}">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.qcd"{% if p2.get('vol.income.qcd') %} checked{% endif %}> <strong>(A)</strong> Qualified Charitable Distribution From 1099-R</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.qcd.amount" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.qcd.amount', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.retirement" class="f13c-p2-notes-input" value="{{ p2.get('income.note.retirement', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 4: Disability benefits -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.disability"{% if p2.get('income.disability') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Disability benefits (such as payments from insurance and worker's compensation)</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.disability"{% if p2.get('vol.income.disability') %} checked{% endif %}> <strong>(B)</strong> Disability benefits on 1099-R or W-2</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.disability.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.disability.count', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.disability" class="f13c-p2-notes-input" value="{{ p2.get('income.note.disability', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 5: Social Security / Railroad Retirement -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.ss"{% if p2.get('income.ss') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Social Security or Railroad Retirement Benefits</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.ssa"{% if p2.get('vol.income.ssa') %} checked{% endif %}> <strong>(B)</strong> SSA-1099, RRB-1099</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.ssa.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.ssa.count', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.ss" class="f13c-p2-notes-input" value="{{ p2.get('income.note.ss', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 6: Unemployment -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.unemployment"{% if p2.get('income.unemployment') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Unemployment benefits</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099g"{% if p2.get('vol.income.1099g') %} checked{% endif %}> <strong>(B)</strong> 1099-G</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099g.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099g.count', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.unemployment" class="f13c-p2-notes-input" value="{{ p2.get('income.note.unemployment', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 7: State refund -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.state_refund"{% if p2.get('income.state_refund') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Refund of state or local income tax</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.state_refund"{% if p2.get('vol.income.state_refund') %} checked{% endif %}> <strong>(B)</strong> Refund</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.state_refund.amount" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.state_refund.amount', '') }}">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.itemized_last_year"{% if p2.get('vol.income.itemized_last_year') %} checked{% endif %}> <strong>(B)</strong> Itemized last year</label>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="vol.income.itemized_last_year.yes"{% if p2.get('vol.income.itemized_last_year.yes') %} checked{% endif %}> Yes</label>
+                    <label><input type="checkbox" name="vol.income.itemized_last_year.no"{% if p2.get('vol.income.itemized_last_year.no') %} checked{% endif %}> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.state_refund" class="f13c-p2-notes-input" value="{{ p2.get('income.note.state_refund', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 8: Interest / Dividends -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.interest_dividends"{% if p2.get('income.interest_dividends') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Interest or dividends (bank account, bonds, etc.)</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099int"{% if p2.get('vol.income.1099int') %} checked{% endif %}> <strong>(B)</strong> 1099-INT</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099int.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099int.count', '') }}">
+                <label><input type="checkbox" name="vol.income.1099div"{% if p2.get('vol.income.1099div') %} checked{% endif %}> <strong>(B)</strong> 1099-DIV</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099div.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099div.count', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.interest_dividends" class="f13c-p2-notes-input" value="{{ p2.get('income.note.interest_dividends', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 9: Sale of stocks / bonds / RE -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.stock_sale"{% if p2.get('income.stock_sale') %} checked{% endif %}>
+                    <span><strong>(A)</strong> Sale of stocks, bonds or real estate</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>Did you report a loss on last year's return</span>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="income.stock_sale.prior_loss.yes"{% if p2.get('income.stock_sale.prior_loss.yes') %} checked{% endif %}> Yes</label>
+                    <label><input type="checkbox" name="income.stock_sale.prior_loss.no"{% if p2.get('income.stock_sale.prior_loss.no') %} checked{% endif %}> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.1099b"{% if p2.get('vol.income.1099b') %} checked{% endif %}> <strong>(A)</strong> 1099-B (include brokerage statement)</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099b.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099b.count', '') }}">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.capital_loss_carryover"{% if p2.get('vol.income.capital_loss_carryover') %} checked{% endif %}> Capital loss carryover</label>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="vol.income.capital_loss_carryover.yes"{% if p2.get('vol.income.capital_loss_carryover.yes') %} checked{% endif %}> Yes</label>
+                    <label><input type="checkbox" name="vol.income.capital_loss_carryover.no"{% if p2.get('vol.income.capital_loss_carryover.no') %} checked{% endif %}> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.stock_sale" class="f13c-p2-notes-input" value="{{ p2.get('income.note.stock_sale', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 10: Alimony -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.alimony"{% if p2.get('income.alimony') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Alimony</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.alimony"{% if p2.get('vol.income.alimony') %} checked{% endif %}> <strong>(B)</strong> Alimony</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.alimony.amount" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.alimony.amount', '') }}">
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.alimony_excluded"{% if p2.get('vol.income.alimony_excluded') %} checked{% endif %}> Excluded from income</label>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="vol.income.alimony_excluded.yes"{% if p2.get('vol.income.alimony_excluded.yes') %} checked{% endif %}> Yes</label>
+                    <label><input type="checkbox" name="vol.income.alimony_excluded.no"{% if p2.get('vol.income.alimony_excluded.no') %} checked{% endif %}> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.alimony" class="f13c-p2-notes-input" value="{{ p2.get('income.note.alimony', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 11: Rental income (real property + personal property)
+         Per the IRS form, the personal-property-rental question is a
+         continuation of the rental row, not its own row. -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.rental"{% if p2.get('income.rental') %} checked{% endif %}>
+                    <span><strong>(A/M)</strong> Income from renting out your house or a room in your house</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>If yes, did you use the dwelling unit as a personal residence and rent it for fewer than 15 days</span>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="income.rental.short_personal_residence.yes"{% if p2.get('income.rental.short_personal_residence.yes') %} checked{% endif %}> Yes</label>
+                    <label><input type="checkbox" name="income.rental.short_personal_residence.no"{% if p2.get('income.rental.short_personal_residence.no') %} checked{% endif %}> No</label>
+                </span>
+            </div>
+            <div class="f13c-p2-q f13c-p2-q--secondary">
+                <label>
+                    <input type="checkbox" name="income.personal_property_rental"{% if p2.get('income.personal_property_rental') %} checked{% endif %}>
+                    <span>Income from renting personal property such as a vehicle</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.rental"{% if p2.get('vol.income.rental') %} checked{% endif %}> <strong>(A/M)</strong> Rental income (Advanced when the dwelling is a personal residence and rented for fewer than 15 days)</label>
+            </div>
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.rental_expense"{% if p2.get('vol.income.rental_expense') %} checked{% endif %}> Rental expense</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.rental_expense.amount" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.rental_expense.amount', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.rental" class="f13c-p2-notes-input" value="{{ p2.get('income.note.rental', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 13: Gambling winnings -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.gambling"{% if p2.get('income.gambling') %} checked{% endif %}>
+                    <span><strong>(B)</strong> Gambling winnings, including lottery</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.w2g"{% if p2.get('vol.income.w2g') %} checked{% endif %}> <strong>(B)</strong> W-2G or other gambling winnings (list losses below if taxpayer can itemize deductions)</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.w2g.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.w2g.count', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.gambling" class="f13c-p2-notes-input" value="{{ p2.get('income.note.gambling', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 14: Self-employment / Schedule C -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.self_employment"{% if p2.get('income.self_employment') %} checked{% endif %}>
+                    <span><strong>(A)</strong> Payments for contract or self-employment work</span>
+                </label>
+            </div>
+            <div class="f13c-p2-subq">
+                <span>Did you report a loss on last year's return</span>
+                <span class="f13c-p2-yn">
+                    <label><input type="checkbox" name="income.self_employment.prior_loss.yes"{% if p2.get('income.self_employment.prior_loss.yes') %} checked{% endif %}> Yes</label>
+                    <label><input type="checkbox" name="income.self_employment.prior_loss.no"{% if p2.get('income.self_employment.prior_loss.no') %} checked{% endif %}> No</label>
+                </span>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.schedule_c"{% if p2.get('vol.income.schedule_c') %} checked{% endif %}> <strong>(A)</strong> Schedule C</label>
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.1099misc"{% if p2.get('vol.income.1099misc') %} checked{% endif %}> 1099-MISC</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099misc.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099misc.count', '') }}">
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.1099nec"{% if p2.get('vol.income.1099nec') %} checked{% endif %}> 1099-NEC</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099nec.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099nec.count', '') }}">
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.1099k"{% if p2.get('vol.income.1099k') %} checked{% endif %}> 1099-K</label>
+                <span class="f13c-p2-vol-prefix">#</span>
+                <input type="text" name="vol.income.1099k.count" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.1099k.count', '') }}">
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.other_reported_elsewhere"{% if p2.get('vol.income.other_reported_elsewhere') %} checked{% endif %}> Other income reported elsewhere</label>
+            </div>
+            <div class="f13c-p2-schedule-c-sub">
+                <label><input type="checkbox" name="vol.income.schedule_c_expenses"{% if p2.get('vol.income.schedule_c_expenses') %} checked{% endif %}> Schedule C expenses</label>
+                <span class="f13c-p2-vol-prefix">$</span>
+                <input type="text" name="vol.income.schedule_c_expenses.amount" class="f13c-p2-vol-input" value="{{ p2.get('vol.income.schedule_c_expenses.amount', '') }}">
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.self_employment" class="f13c-p2-notes-input" value="{{ p2.get('income.note.self_employment', '') }}">
+        </div>
+    </div>
+
+    <!-- Row 15: Any other money -->
+    <div class="f13c-p2-row">
+        <div class="f13c-p2-cell f13c-p2-cell--client">
+            <div class="f13c-p2-q">
+                <label>
+                    <input type="checkbox" name="income.other"{% if p2.get('income.other') %} checked{% endif %}>
+                    <span>Any other money received during the year? (example: cash payments, jury duty, awards, digital assets, royalties, union strike benefits)</span>
+                </label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--volunteer">
+            <div class="f13c-p2-vol-entry">
+                <label><input type="checkbox" name="vol.income.other"{% if p2.get('vol.income.other') %} checked{% endif %}> Other income (see Pub 4012 for guidance on other income, i.e., scope of service chart)</label>
+            </div>
+        </div>
+        <div class="f13c-p2-cell f13c-p2-cell--notes">
+            <input type="text" name="income.note.other" class="f13c-p2-notes-input" value="{{ p2.get('income.note.other', '') }}">
+        </div>
+    </div>
+
+</div>{# /.f13c-p2-grid #}
+
+</div>{# /.f13c-form #}
