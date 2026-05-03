@@ -291,8 +291,9 @@ caches one doc and drops to 2-pane in the left 2/3.
 
 Two buttons in the chrome:
 
-1. **Pane cycle** — advances through `1 → 2 → 3 → 2 → 1`. Endpoints flip
-   the cycle direction; that's all the state the icon needs to track.
+1. **Pane cycle** — wraps forward through `1 → 2 → 3 → 1 → 2 → ...`.
+   No endpoint flips, no direction tracking — every click advances;
+   the 3 → 1 wrap drops both docs back to a clean form-only view.
    Disabled while chat is open.
 2. **Chat toggle** — opens / closes the chat pane.
 
@@ -301,8 +302,8 @@ What dropped vs. the original spec:
 - No second split-axis icon.
 - No cross-axis transitions (no "click the other axis to collapse and
   re-split").
-- `LayoutState.axis` field deleted; `direction` is now just for icon
-  display.
+- `LayoutState.axis` and `LayoutState.direction` fields both deleted —
+  the wrapping cycle needs no direction memory.
 - Two CSS Grid layouts removed (the v2 / v3 vertical configurations).
 
 Effort drops by ~30% across the reducer, renderer, and CSS.
@@ -393,9 +394,7 @@ labels by id; no per-tab logic on the JS side.
 
 ```js
 const initialState = {
-    panes: 1,                      // 1, 2, or 3
-    direction: "expanding",        // "expanding" or "contracting" — drives the
-                                   // pane-cycle icon's "next state" rendering
+    panes: 1,                      // 1, 2, or 3 (max 2 when chatOpen)
     docSlots: [],                  // doc_ids; length = panes - 1
     chatOpen: false,
     hiddenDocCache: null,          // doc_id stashed during chat-open
@@ -405,10 +404,12 @@ const initialState = {
 };
 ```
 
-No `axis` field — there's only one axis. Field values stay in the DOM,
-not in state. The form pane is never re-rendered on layout transitions,
-so the live DOM is the source of truth for field values; we never
-round-trip through `applyState` for keystrokes.
+No `axis` field — there's only one axis. No `direction` field — the
+wrapping cycle needs no direction memory; the next state is always
+`(panes % 3) + 1`. Field values stay in the DOM, not in state. The
+form pane is never re-rendered on layout transitions, so the live
+DOM is the source of truth for field values; we never round-trip
+through `applyState` for keystrokes.
 
 ### CSS Grid layouts
 
@@ -477,18 +478,17 @@ but that's deferred.
 
 ### Reducer behavior
 
-Pane-cycle click (no-op while `chatOpen` is true):
-- From `panes: 1` (always `direction: expanding` here): go to
-  `panes: 2, direction: expanding`.
-- From `panes: 2, direction: expanding`: go to
-  `panes: 3, direction: contracting` (next click should shrink).
-- From `panes: 3` (always `direction: contracting`): go to
-  `panes: 2, direction: contracting`.
-- From `panes: 2, direction: contracting`: go to
-  `panes: 1, direction: expanding`.
+Pane-cycle click (no-op while `chatOpen` is true). Wrapping cycle —
+every click advances; the 3 → 1 wrap drops both docs:
+- From `panes: 1`: go to `panes: 2`, pick first available doc into
+  `docSlots[0]`.
+- From `panes: 2`: go to `panes: 3`, pick first not-yet-visible doc
+  into `docSlots[1]`.
+- From `panes: 3`: go to `panes: 1`, clear `docSlots`.
 
-The icon shows the state the *next* click will produce. Endpoints flip
-the direction.
+The icon shows the state the *next* click will produce: at `panes:1`
+the icon shows the 2-pane figure; at `panes:2` it shows 3-pane; at
+`panes:3` it shows 1-pane.
 
 Chat-toggle:
 - **Open from `panes:1`**: just set `chatOpen = true`. Workspace shrinks
@@ -501,7 +501,7 @@ Chat-toggle:
   left 2/3. Show a small "1 doc hidden" indicator near the chat-toggle
   button.
 - **Close with `hiddenDocCache` set**: restore `docSlots[1] =
-  hiddenDocCache`, `panes = 3`, `direction = contracting`, clear cache.
+  hiddenDocCache`, `panes = 3`, clear cache.
 - **Close without cache**: just `chatOpen = false`. Pane count and
   docSlots are unchanged from before chat opened.
 

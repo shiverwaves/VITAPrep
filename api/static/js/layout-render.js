@@ -171,12 +171,13 @@
     }
 
     /* Returns the panes count the next pane-cycle click will produce.
-     * Used by the icon to show "next state, not current". */
+     * Used by the icon to show "next state, not current". The cycle
+     * wraps forward: 1 → 2 → 3 → 1 → ... While chat is open the
+     * button is disabled, so the icon shows the current state instead
+     * (which is the more informative choice on a no-op affordance). */
     function computeNextPanes(s) {
         if (s.chatOpen) return s.panes;
-        if (s.panes === 1) return 2;
-        if (s.panes === 3) return 2;
-        return s.direction === "expanding" ? 3 : 1;
+        return s.panes === 3 ? 1 : s.panes + 1;
     }
 
     function updateChatToggleButton() {
