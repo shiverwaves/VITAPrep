@@ -747,9 +747,242 @@ present; pages render as empty templates).
 
 ---
 
+## Part 3 — Page 2 (Income) integration
+
+Page 2 of the 13614-C is Part II — Income. Unlike Page 1, it has an
+explicit three-column structure:
+
+| Column | Purpose | Background |
+|---|---|---|
+| **Client (left)** | Income-source category checkboxes + occasional sub-questions | white |
+| **Volunteer (middle)** | Counts (`#`), amounts (`$`), Yes/No verification | gray-shaded |
+| **Notes (right)** | Free-text scratchpad, one input per row | gray-shaded |
+
+The layout maps cleanly to the IRS form's literal Part II layout. The
+letter classifications `(B)` / `(B/A)` / `(A)` / `(A/M)` mark which
+volunteer certification level handles each row; they're rendered
+inline with the label, not as separate styled tags.
+
+### Decisions made
+
+1. **Everything always visible.** No conditional rendering — sub-
+   questions and Schedule C sub-rows render whether the parent box
+   is checked or not, matching the IRS form exactly.
+2. **Pre-fill what we model today.** Wages, retirement, SS, interest,
+   dividends, self-employment income are pre-fillable from existing
+   `Person` fields. The corresponding form-count volunteer fields
+   (`W-2s #`, `1099-R #`, `1099-INT #`, `1099-DIV #`, `SSA-1099 #`,
+   `1099-NEC #`) are scoreable by counting the document lists already
+   on `Person`.
+3. **Mark unmodeled fields ungraded.** Anything that requires data
+   we don't model today renders as a normal interactive input but
+   has no answer-key entry. The result UI surfaces these with the
+   same "Not graded in this version" treatment Page 1 uses.
+4. **Per-row notes.** Each income category gets its own
+   `<input type="text">` for free-form notes. Never pre-filled,
+   never scored — pure scratchpad. Per-row reads more naturally than
+   a single textarea and matches the IRS form's visual structure.
+5. **Letter prefixes inline.** `(B)` / `(B/A)` / `(A)` / `(A/M)` are
+   part of the literal label text. They're styling-light, not their
+   own tag elements.
+6. **Schedule C sub-rows always visible.** Row 14's five sub-fields
+   (`1099-MISC`, `1099-NEC`, `1099-K`, `Other income reported
+   elsewhere`, `Schedule C expenses`) render whether the parent
+   `(A) Schedule C` box is checked or not.
+
+### Field inventory
+
+15 income categories. Columns of the table below: row number, IRS
+letter, client checkbox, client extras, volunteer entries, modeled
+status today.
+
+| # | Letter | Client checkbox | Client extras | Volunteer entries | Modeled? |
+|---|---|---|---|---|---|
+| 1 | B | Wages part/full-time | "How many jobs ___" | `(B) W-2s` `#` | **Yes** — `wage_income`, `len(w2s)` |
+| 2 | B/A | Tips | — | `(B/A) Tips` (checkbox only) | **No** |
+| 3 | B/A | Retirement / pension | — | `(B/A) 1099-R` `#`; `(A) QCD` `$` | **Partial** — `retirement_income`, `len(form_1099_rs)` modeled; QCD not |
+| 4 | B | Disability benefits | — | `(B) Disability on 1099-R or W-2` `#` | **Partial** — `has_disability` flag, `disability_income_source` exists; no amount |
+| 5 | B | SS / RR retirement | — | `(B) SSA-1099, RRB-1099` `#` | **Partial** — SSA-1099 modeled; RRB-1099 not |
+| 6 | B | Unemployment | — | `(B) 1099-G` `#` | **No** |
+| 7 | B | State tax refund | — | `(B) Refund` `$`; `(B) Itemized last year` Y/N | **No** (prior-year state) |
+| 8 | B | Interest or dividends | — | `(B) 1099-INT` `#`; `(B) 1099-DIV` `#` | **Yes** — `interest_income`, `dividend_income`, `len(form_1099_ints)`, `len(form_1099_divs)` |
+| 9 | A | Sale of stocks/bonds/RE | "Loss on last year's return" Y/N | `(A) 1099-B` `#`; "Capital loss carryover" Y/N | **No** |
+| 10 | B | Alimony | — | `(B) Alimony` `$`; "Excluded from income" Y/N | **No** |
+| 11 | A/M | Rental income | "Personal residence rented <15 days" Y/N | `(A/M) Rental income` `$`; "Rental expense" `$` | **No** |
+| 12 | — | Renting personal property | — | (none) | **No** |
+| 13 | B | Gambling winnings | — | `(B) W-2G or other gambling` `#` | **No** |
+| 14 | A | Self-employment work | "Loss on last year's return" Y/N | `(A) Schedule C` parent + 5 sub-rows: `1099-MISC` `#`, `1099-NEC` `#`, `1099-K` `#`, `Other income reported elsewhere`, `Schedule C expenses` `$` | **Partial** — `self_employment_income`, `len(form_1099_necs)` modeled; 1099-MISC, 1099-K, Schedule C expenses not |
+| 15 | — | Any other money | — | "Other income" (placeholder, no field) | **No** |
+
+### Deferred model extensions for Page 2
+
+This section is the "what we'd need to build to fully grade Page 2"
+catalog. None of it blocks the Page 2 mockup integration — the
+fields just stay ungraded for now. Tracked here so the generator /
+tax_core teams can iterate on them as separate work.
+
+#### New `Person` fields
+
+| Field | Type | What it represents |
+|---|---|---|
+| `tip_income` | `int` | Tips not reported on a W-2 (`(B/A) Tips` row 2) |
+| `disability_income_amount` | `int` | Dollar amount of disability income (we have flag + source, not amount; row 4) |
+| `unemployment_income` | `int` | Unemployment compensation (row 6) |
+| `alimony_received` | `int` | Alimony income (row 10) |
+| `alimony_excluded_from_income` | `bool` | True for post-2018 divorce agreements (row 10) |
+| `rental_income` | `int` | Real-property rental income (row 11) |
+| `rental_expense` | `int` | Rental expenses (row 11) |
+| `personal_property_rental_income` | `int` | Vehicle / personal-property rental income (row 12) |
+| `gambling_winnings` | `int` | Gross gambling winnings (row 13) |
+| `qcd_amount` | `int` | Qualified Charitable Distribution from a 1099-R (row 3, advanced cert) |
+
+#### New `Household` fields
+
+| Field | Type | What it represents |
+|---|---|---|
+| `prior_year_state_refund` | `int` | Prior-year state-tax refund (row 7) |
+| `prior_year_itemized` | `bool` | Whether the household itemized last year (row 7 sub-question) |
+| `prior_year_stock_sale_loss` | `bool` | Loss reported on prior-year stock sale (row 9 sub-question) |
+| `prior_year_se_loss` | `bool` | Loss reported on prior-year SE work (row 14 sub-question) |
+| `prior_year_capital_loss_carryover` | `int` | Capital loss carryover (row 9) |
+| `rental_dwelling_personal_residence_short_rental` | `bool` | True when the rental dwelling is a personal residence rented <15 days (row 11) |
+
+#### New document dataclasses
+
+| Dataclass | Replaces / Adds |
+|---|---|
+| `Form1099B` | Sale of stocks, bonds, real estate (row 9) |
+| `Form1099G` | Government payments incl. unemployment + state-tax refund (rows 6, 7) |
+| `Form1099MISC` | Miscellaneous income (row 14 — currently we only model 1099-NEC) |
+| `Form1099K` | Payment-card / third-party network income (row 14) |
+| `FormW2G` | Gambling winnings (row 13) |
+| `RRB1099` | Railroad retirement (row 5) |
+| `ScheduleC` | Self-employment expense aggregation (row 14) |
+
+#### Predicates / computations needed
+
+These belong in `tax_core/` once the data is in place:
+
+- **Capital gains computation** — `Form1099B` → Schedule D → AGI flow.
+  Short-vs-long-term distinction, capital-loss-carryover application.
+- **Rental income classification** — Schedule E (rental real estate)
+  vs. personal-residence 15-day rule (row 11 sub-question gates which
+  form applies; tax-free if <15 days personal-residence-only).
+- **Alimony tax treatment** — pre-2019 vs. post-2018 divorce
+  agreements have different income / deduction treatment.
+- **QCD exclusion** — Qualified Charitable Distribution from a 1099-R
+  reduces taxable retirement income (row 3 advanced).
+- **1099-MISC vs. 1099-NEC vs. 1099-K categorization** — different
+  income types route to different Schedule C lines or to other
+  schedules entirely.
+- **State-refund taxability** — prior-year refund is taxable income
+  iff the household itemized last year and got a state-tax deduction
+  (row 7 sub-question).
+- **Tip income reconciliation** — tips not reported on W-2 must be
+  added to wages and trigger Form 4137 (uncollected SS/Medicare).
+- **Self-employment loss carry rules** — row 14 sub-question is a
+  scope-of-service gate: VITA volunteers are out of scope when there's
+  a prior-year SE loss to offset.
+
+#### Concept-catalog candidates
+
+Worth registering in `docs/CONCEPT_CATALOG.md` once they're testable:
+
+- `qualified_charitable_distribution`
+- `state_refund_taxability`
+- `rental_15_day_rule`
+- `alimony_tax_treatment_split` (pre-2019 vs. post-2018)
+- `capital_loss_carryover_application`
+- `tip_income_reconciliation` (Form 4137)
+- `se_prior_year_loss_scope_gate`
+
+### Phased approach
+
+Same shape as Part 1's Page 1 work, lighter because there's no
+constant rename / migration this time — Page 2's namespace is new.
+
+#### Phase 3-Mockup: Static HTML mockup
+Mirror the workflow that worked for Page 1: write
+`docs/mockups/13614c_page2.html` as a static HTML file with hardcoded
+sample values, iterate on layout / styles in isolation, then convert
+to a Jinja partial once the visual is right.
+
+#### Phase 3-A: form_fields constants
+Add Page 2 constants to `training/form_fields.py`. Three-tier naming:
+
+- `INCOME_<source>` — top-level client checkbox (e.g.
+  `INCOME_WAGES = "income.wages"`)
+- `INCOME_<source>_<sub>` — client sub-questions (e.g.
+  `INCOME_WAGES_JOBS = "income.wages.jobs"`)
+- `VOL_INCOME_<source>` — volunteer-area entries (e.g.
+  `VOL_INCOME_W2_COUNT = "vol.income.w2.count"`)
+- `INCOME_NOTE_<source>` — per-row notes (e.g.
+  `INCOME_NOTE_WAGES = "income.note.wages"`)
+
+Add `PART2_FIELDS` enumeration. Add Page 2 ungraded fields to
+`UNGRADED_FIELDS` (every volunteer-area field whose source isn't
+modeled today; per the deferred catalog above, that's most of them).
+
+#### Phase 3-B: build_p2_field_values populator
+Add `build_p2_field_values(household) → Dict[str, str | bool]` in
+`training/form_populator.py`. Pre-fills:
+
+- Client checkboxes for the six modeled income types (wages,
+  retirement, SS, interest, dividends, SE).
+- "How many jobs" text input.
+- Form-count volunteer fields for `W-2s`, `1099-R`, `1099-INT`,
+  `1099-DIV`, `SSA-1099`, `1099-NEC`.
+
+Notes column: not pre-filled (player scratchpad).
+
+#### Phase 3-C: Jinja partial + CSS
+Convert `docs/mockups/13614c_page2.html` to
+`api/templates/components/form_13614c_p2.html` and lift styles to
+`api/static/styles/form_13614c_p2.css` (use `f13c2-` prefix to scope
+away from Page 1's `f13c-` styles). Mark ungraded volunteer cells
+with the same `f13c-vol-col-ungraded` class Page 1 uses (or define
+a Page-2-specific equivalent).
+
+#### Phase 3-D: Wire into encounter view
+Encounter template's per-page loop already has a `tab.page == 1`
+branch for Page 1. Add a `tab.page == 2` branch that renders the
+new partial with `p2 = build_p2_field_values(scenario.household)`
+context. Pages 3 / 4 stay legacy for now.
+
+#### Phase 3-E: Answer-key + grader updates
+`grader.build_form_answers` already iterates `PART2_FIELDS` for the
+existing legacy income page. Add per-source answer-key entries for
+the six scoreable counts; rely on `UNGRADED_FIELDS` to keep the
+unscored ones out. The result UI's "Not graded" rendering already
+handles this (Phase 1E machinery).
+
+#### Phase 3-G: Tests
+Mirror Phase 1G's test files:
+
+- `tests/test_form_populator_p2.py` — `build_p2_field_values`
+  contract.
+- `tests/test_encounter_p2_render.py` — Page 2 partial reachability,
+  sample fields appear, ungraded markers present.
+- `tests/test_encounter_submit_p2.py` — submission flow, ungraded
+  surfacing.
+
+### Sequencing
+
+3-Mockup → 3-A → 3-B → 3-C → 3-D → 3-E → 3-G. Mockup phase happens
+before any Python work; everything after is additive (no rename, no
+migration), so the suite stays green throughout.
+
+---
+
 ## What's deferred
 
-- Pages 2, 3, 4 of the form (each gets its own template + wiring task).
+- Pages 3, 4 of the form (Page 2 is now planned in Part 3 above; each
+  remaining page gets its own template + wiring task).
+- Model extensions for Page 2's unmodeled income sources — the full
+  catalog of new `Person` / `Household` fields, document dataclasses,
+  and predicates is in Part 3 → Deferred model extensions for Page 2.
+  None of it blocks the Page 2 mockup integration; the affected
+  fields just stay ungraded until the model lands.
 - Right-click context menu on form fields.
 - Probe interaction in the chat pane.
 - Verify mode (different right-click verbs, different submission flow).
