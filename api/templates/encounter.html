@@ -5,6 +5,7 @@
 {% block head %}
 <link rel="stylesheet" href="/app-static/styles/form_13614c_p1.css">
 <link rel="stylesheet" href="/app-static/styles/form_13614c_p2.css">
+<link rel="stylesheet" href="/app-static/styles/form_13614c_p3.css">
 <link rel="stylesheet" href="/app-static/styles/layout.css">
 <style>
 /* Full-viewport app shell */
@@ -38,7 +39,8 @@ html, body { height: 100%; overflow: hidden; }
 }
 
 .sheet__page--p1,
-.sheet__page--p2 {
+.sheet__page--p2,
+.sheet__page--p3 {
     padding: 0;
     overflow: visible;
 }
@@ -137,7 +139,7 @@ html, body { height: 100%; overflow: hidden; }
 
                     {# Page content panels — switched by encounter.js #}
                     {% for tab in page_tabs %}
-                    <div class="sheet__page{% if tab.active %} sheet__page--active{% endif %}{% if tab.page == 1 %} sheet__page--p1{% endif %}{% if tab.page == 2 %} sheet__page--p2{% endif %}"
+                    <div class="sheet__page{% if tab.active %} sheet__page--active{% endif %}{% if tab.page == 1 %} sheet__page--p1{% endif %}{% if tab.page == 2 %} sheet__page--p2{% endif %}{% if tab.page == 3 %} sheet__page--p3{% endif %}"
                          id="page-{{ tab.page }}"
                          data-page="{{ tab.page }}">
 
@@ -173,6 +175,16 @@ html, body { height: 100%; overflow: hidden; }
                                always blank (free-form, ungraded). #}
                             <div class="f13c-form-shell">
                                 {% include "components/form_13614c_p2.html" %}
+                            </div>
+                        {% elif tab.page == 3 %}
+                            {# Page 3 — Expenses & Tax Related Events
+                               (Part III). Driven by build_p3_field_values();
+                               the partial reads from p3 via p3.get(...).
+                               Tax Related Events section is unmodeled today
+                               (player fills it in); notes column is always
+                               blank. #}
+                            <div class="f13c-form-shell">
+                                {% include "components/form_13614c_p3.html" %}
                             </div>
                         {% else %}
                             {# Pages 2-4 — legacy notes-driven layout. #}

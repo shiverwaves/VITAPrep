@@ -89,6 +89,14 @@ from training.form_fields import (
     INCOME_TOTAL,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
+    EXPENSE_TAXES_NEW,
+    VOL_EXPENSE_1098,
+    VOL_EXPENSE_1098E,
+    VOL_EXPENSE_CHILD_CARE_CREDIT,
+    VOL_EXPENSE_EDUCATOR,
+    VOL_EXPENSE_IRA,
+    VOL_EXPENSE_ITEMIZED_DEDUCTION,
+    VOL_EXPENSE_STANDARD_DEDUCTION,
     VOL_INCOME_1099DIV,
     VOL_INCOME_1099INT,
     VOL_INCOME_1099INT_COUNT,
@@ -117,6 +125,7 @@ from training.form_fields import (
     YOU_US_CITIZEN,
     dep_field,
 )
+from training.form_populator import build_field_values
 from training.grader import Grader, build_form_answers
 
 
@@ -154,6 +163,18 @@ def _all_checkbox_nos() -> Dict[str, str]:
         EXPENSE_IRA: "No",
         EXPENSE_CHILD_CARE: "No",
         EXPENSE_EDUCATION: "No",
+        # Page 3 new namespace defaults — written by the grader's
+        # extended _build_expense_key. Standard deduction defaults
+        # to "Yes" since the legacy household model defaults
+        # uses_standard_deduction=True.
+        EXPENSE_TAXES_NEW: "No",
+        VOL_EXPENSE_1098: "No",
+        VOL_EXPENSE_1098E: "No",
+        VOL_EXPENSE_CHILD_CARE_CREDIT: "No",
+        VOL_EXPENSE_EDUCATOR: "No",
+        VOL_EXPENSE_IRA: "No",
+        VOL_EXPENSE_STANDARD_DEDUCTION: "Yes",
+        VOL_EXPENSE_ITEMIZED_DEDUCTION: "No",
     }
 
 
@@ -856,22 +877,10 @@ class TestGradeExpenses:
     def test_perfect_expense_score(
         self, grader: Grader, expense_household: Household,
     ) -> None:
-        sub = {
-            EXPENSE_MORTGAGE_INTEREST: "Yes",
-            EXPENSE_MORTGAGE_INTEREST_AMOUNT: "9000",
-            EXPENSE_PROPERTY_TAXES: "Yes",
-            EXPENSE_PROPERTY_TAXES_AMOUNT: "3500",
-            EXPENSE_MEDICAL: "No",
-            EXPENSE_CHARITABLE: "Yes",
-            EXPENSE_CHARITABLE_AMOUNT: "2000",
-            EXPENSE_STUDENT_LOAN: "Yes",
-            EXPENSE_STUDENT_LOAN_AMOUNT: "1200",
-            EXPENSE_EDUCATOR: "No",
-            EXPENSE_IRA: "No",
-            EXPENSE_CHILD_CARE: "No",
-            EXPENSE_EDUCATION: "No",
-            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
-        }
+        # Build the perfect submission off the populator so the new
+        # Page 3 namespace defaults (vol.expense.*, expense.taxes)
+        # come along for free.
+        sub = build_field_values(expense_household)
         result = grader.grade_encounter(sub, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
@@ -914,18 +923,7 @@ class TestGradeExpenses:
             )],
             uses_standard_deduction=True,
         )
-        sub = {
-            EXPENSE_MORTGAGE_INTEREST: "No",
-            EXPENSE_PROPERTY_TAXES: "No",
-            EXPENSE_MEDICAL: "No",
-            EXPENSE_CHARITABLE: "No",
-            EXPENSE_STUDENT_LOAN: "No",
-            EXPENSE_EDUCATOR: "No",
-            EXPENSE_IRA: "No",
-            EXPENSE_CHILD_CARE: "No",
-            EXPENSE_EDUCATION: "No",
-            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
-        }
+        sub = build_field_values(hh)
         result = grader.grade_encounter(sub, _gt_dict(hh), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
@@ -943,22 +941,15 @@ class TestGradeExpenses:
     def test_expense_amount_tolerance(
         self, grader: Grader, expense_household: Household,
     ) -> None:
-        sub = {
-            EXPENSE_MORTGAGE_INTEREST: "Yes",
+        # Override the legacy amount fields with $-formatted values to
+        # exercise the grader's numeric-tolerance normalization.
+        sub = build_field_values(expense_household)
+        sub.update({
             EXPENSE_MORTGAGE_INTEREST_AMOUNT: "$9,000",
-            EXPENSE_PROPERTY_TAXES: "Yes",
             EXPENSE_PROPERTY_TAXES_AMOUNT: "$3,500",
-            EXPENSE_MEDICAL: "No",
-            EXPENSE_CHARITABLE: "Yes",
             EXPENSE_CHARITABLE_AMOUNT: "$2,000",
-            EXPENSE_STUDENT_LOAN: "Yes",
             EXPENSE_STUDENT_LOAN_AMOUNT: "$1,200",
-            EXPENSE_EDUCATOR: "No",
-            EXPENSE_IRA: "No",
-            EXPENSE_CHILD_CARE: "No",
-            EXPENSE_EDUCATION: "No",
-            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_ITEMIZED,
-        }
+        })
         result = grader.grade_encounter(sub, _gt_dict(expense_household), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
@@ -985,20 +976,7 @@ class TestGradeExpenses:
             members=[p],
             uses_standard_deduction=True,
         )
-        sub = {
-            EXPENSE_MORTGAGE_INTEREST: "No",
-            EXPENSE_PROPERTY_TAXES: "No",
-            EXPENSE_MEDICAL: "No",
-            EXPENSE_CHARITABLE: "No",
-            EXPENSE_STUDENT_LOAN: "No",
-            EXPENSE_EDUCATOR: "Yes",
-            EXPENSE_EDUCATOR_AMOUNT: "250",
-            EXPENSE_IRA: "Yes",
-            EXPENSE_IRA_AMOUNT: "3000",
-            EXPENSE_CHILD_CARE: "No",
-            EXPENSE_EDUCATION: "No",
-            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
-        }
+        sub = build_field_values(hh)
         result = grader.grade_encounter(sub, _gt_dict(hh), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 
@@ -1024,20 +1002,7 @@ class TestGradeExpenses:
             education_expenses=8000,
             uses_standard_deduction=True,
         )
-        sub = {
-            EXPENSE_MORTGAGE_INTEREST: "No",
-            EXPENSE_PROPERTY_TAXES: "No",
-            EXPENSE_MEDICAL: "No",
-            EXPENSE_CHARITABLE: "No",
-            EXPENSE_STUDENT_LOAN: "No",
-            EXPENSE_EDUCATOR: "No",
-            EXPENSE_IRA: "No",
-            EXPENSE_CHILD_CARE: "Yes",
-            EXPENSE_CHILD_CARE_AMOUNT: "5000",
-            EXPENSE_EDUCATION: "Yes",
-            EXPENSE_EDUCATION_AMOUNT: "8000",
-            EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
-        }
+        sub = build_field_values(hh)
         result = grader.grade_encounter(sub, _gt_dict(hh), fields=PART3_FIELDS)
         assert result.accuracy == 1.0
 

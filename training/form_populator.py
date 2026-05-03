@@ -520,6 +520,109 @@ def build_p2_field_values(household: Household) -> Dict[str, Any]:
     return p2
 
 
+def build_p3_field_values(household: Household) -> Dict[str, Any]:
+    """Build a dict of {field_name: value} for the new Page 3 template.
+
+    Same shape as :func:`build_p1_field_values` /
+    :func:`build_p2_field_values`: booleans for checkboxes, strings
+    for text inputs (counts, amounts).
+
+    Pre-fills the rows backed by the household / Person model today:
+    - Itemize section: medical, mortgage, taxes (state income tax +
+      property tax), charitable; standard-vs-itemized volunteer
+      deduction-type checkbox; 1098 receipt for mortgage interest.
+    - Other Expenses section: child care, educator (per-filer), IRA,
+      student loan (per-filer 1098-E).
+    - Tax Related Events section: nothing modeled yet — all 12 event
+      checkboxes plus their volunteer-side follow-ups are left blank
+      for the player to fill in.
+
+    Notes column entries are always blank (free-form, ungraded).
+
+    Args:
+        household: Household with expense data populated.
+
+    Returns:
+        Dict keyed by Page 3 input names, ready to pass into the
+        Jinja partial as ``p3=build_p3_field_values(scenario.household)``.
+    """
+    from training.form_fields import (
+        EXPENSE_TAXES_NEW,
+        EXPENSE_RETIREMENT_CONTRIB,
+        VOL_EXPENSE_1098,
+        VOL_EXPENSE_1098E,
+        VOL_EXPENSE_1098_COUNT,
+        VOL_EXPENSE_CHILD_CARE_CREDIT,
+        VOL_EXPENSE_EDUCATOR,
+        VOL_EXPENSE_EDUCATOR_AMOUNT,
+        VOL_EXPENSE_IRA,
+        VOL_EXPENSE_ITEMIZED_DEDUCTION,
+        VOL_EXPENSE_STANDARD_DEDUCTION,
+    )
+
+    p3: Dict[str, Any] = {}
+
+    filers: List[Person] = []
+    filer = household.get_householder()
+    spouse = household.get_spouse()
+    if filer:
+        filers.append(filer)
+    if spouse:
+        filers.append(spouse)
+
+    # ---- Section 1: Itemize ------------------------------------------
+    has_medical = household.medical_expenses > 0
+    has_mortgage = household.mortgage_interest > 0
+    has_taxes = (
+        household.property_taxes > 0
+        or household.state_income_tax > 0
+    )
+    has_charitable = household.charitable_contributions > 0
+
+    p3[EXPENSE_MEDICAL] = has_medical
+    p3[EXPENSE_MORTGAGE_INTEREST] = has_mortgage
+    p3[EXPENSE_TAXES_NEW] = has_taxes
+    p3[EXPENSE_CHARITABLE] = has_charitable
+
+    # Volunteer deduction-type: standard vs itemized.
+    p3[VOL_EXPENSE_STANDARD_DEDUCTION] = bool(household.uses_standard_deduction)
+    p3[VOL_EXPENSE_ITEMIZED_DEDUCTION] = not household.uses_standard_deduction
+
+    # 1098 mortgage interest statement: assume one per household when
+    # mortgage interest is present.
+    p3[VOL_EXPENSE_1098] = has_mortgage
+    p3[VOL_EXPENSE_1098_COUNT] = "1" if has_mortgage else ""
+
+    # ---- Section 2: Other Expenses -----------------------------------
+    has_child_care = household.child_care_expenses > 0
+    p3[EXPENSE_CHILD_CARE] = has_child_care
+    p3[VOL_EXPENSE_CHILD_CARE_CREDIT] = has_child_care
+
+    total_educator = sum(p.educator_expenses for p in filers)
+    p3[EXPENSE_EDUCATOR] = total_educator > 0
+    p3[VOL_EXPENSE_EDUCATOR] = total_educator > 0
+    p3[VOL_EXPENSE_EDUCATOR_AMOUNT] = (
+        str(total_educator) if total_educator > 0 else ""
+    )
+
+    total_ira = sum(p.ira_contributions for p in filers)
+    # The "retirement contributions" client checkbox on the IRS form
+    # explicitly excludes IRA / W-2-reported 401(k); since the model
+    # only carries IRA contributions, leave the client checkbox
+    # blank. The volunteer IRA row keys off the same total.
+    p3[EXPENSE_RETIREMENT_CONTRIB] = False
+    p3[VOL_EXPENSE_IRA] = total_ira > 0
+
+    total_student_loan = sum(p.student_loan_interest for p in filers)
+    has_student_loan = total_student_loan > 0
+    p3[EXPENSE_STUDENT_LOAN] = has_student_loan
+    p3[VOL_EXPENSE_1098E] = has_student_loan
+
+    # Tax Related Events section is unmodeled in this version — every
+    # row stays blank for the player to fill in. Notes column likewise.
+    return p3
+
+
 def build_field_values(household: Household) -> Dict[str, str]:
     """Build a dict mapping form field names to their string values.
 
@@ -855,3 +958,46 @@ def _populate_expense_fields(
         values[EXPENSE_EDUCATION_AMOUNT] = str(household.education_expenses)
     else:
         values[EXPENSE_EDUCATION] = "No"
+
+    # Mirror the grader's new Page 3 namespace entries so a submission
+    # built from this populator (used as a "perfect submission" in
+    # tests) still grades 100% against the extended answer key.
+    from training.form_fields import (
+        EXPENSE_TAXES_NEW,
+        VOL_EXPENSE_1098,
+        VOL_EXPENSE_1098_COUNT,
+        VOL_EXPENSE_1098E,
+        VOL_EXPENSE_CHILD_CARE_CREDIT,
+        VOL_EXPENSE_EDUCATOR,
+        VOL_EXPENSE_EDUCATOR_AMOUNT,
+        VOL_EXPENSE_IRA,
+        VOL_EXPENSE_ITEMIZED_DEDUCTION,
+        VOL_EXPENSE_STANDARD_DEDUCTION,
+    )
+    has_taxes = (
+        household.property_taxes > 0
+        or household.state_income_tax > 0
+    )
+    has_mortgage = household.mortgage_interest > 0
+    total_educator = sum(p.educator_expenses for p in filers)
+    total_ira = sum(p.ira_contributions for p in filers)
+    total_student_loan = sum(p.student_loan_interest for p in filers)
+
+    values[EXPENSE_TAXES_NEW] = "Yes" if has_taxes else "No"
+    values[VOL_EXPENSE_1098] = "Yes" if has_mortgage else "No"
+    if has_mortgage:
+        values[VOL_EXPENSE_1098_COUNT] = "1"
+    values[VOL_EXPENSE_STANDARD_DEDUCTION] = (
+        "Yes" if household.uses_standard_deduction else "No"
+    )
+    values[VOL_EXPENSE_ITEMIZED_DEDUCTION] = (
+        "No" if household.uses_standard_deduction else "Yes"
+    )
+    values[VOL_EXPENSE_CHILD_CARE_CREDIT] = (
+        "Yes" if household.child_care_expenses > 0 else "No"
+    )
+    values[VOL_EXPENSE_EDUCATOR] = "Yes" if total_educator > 0 else "No"
+    if total_educator > 0:
+        values[VOL_EXPENSE_EDUCATOR_AMOUNT] = str(total_educator)
+    values[VOL_EXPENSE_IRA] = "Yes" if total_ira > 0 else "No"
+    values[VOL_EXPENSE_1098E] = "Yes" if total_student_loan > 0 else "No"
