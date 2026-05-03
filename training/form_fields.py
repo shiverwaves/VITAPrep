@@ -594,6 +594,212 @@ EXPENSE_AMOUNT_FIELDS: List[str] = [
 ]
 
 # =========================================================================
+# Part III — Expenses & Tax Related Events (Page 3 new template)
+# =========================================================================
+# Constants for the new IRS-faithful Page 3 mockup. The legacy
+# EXPENSE_*_AMOUNT pairs above remain for back-compat with the old
+# render path; the new template uses three columns and three sections:
+#   - Itemize section: medical, mortgage interest, taxes, charitable.
+#   - Other Expenses section: child care, educator, alimony, retirement,
+#     student loan.
+#   - Tax Related Events section: 12 yes/no events plus volunteer
+#     follow-ups.
+#
+# Naming follows the input ``name`` attributes in
+# ``docs/mockups/13614c_page3.html`` so the populator and grader can
+# cross-reference them directly.
+
+# --- Section 1: Itemize — client column ---------------------------------
+# Reuses the legacy EXPENSE_MEDICAL / EXPENSE_MORTGAGE_INTEREST /
+# EXPENSE_CHARITABLE constants. Note: the new template's "taxes"
+# row maps to EXPENSE_TAXES_NEW (broader: state income tax + property
+# tax + sales tax), distinct from EXPENSE_PROPERTY_TAXES (legacy,
+# property only).
+EXPENSE_TAXES_NEW = "expense.taxes"
+
+# --- Section 2: Other Expenses — client column --------------------------
+# Reuses EXPENSE_CHILD_CARE / EXPENSE_EDUCATOR / EXPENSE_STUDENT_LOAN.
+EXPENSE_ALIMONY_PAID = "expense.alimony_paid"
+EXPENSE_RETIREMENT_CONTRIB = "expense.retirement_contrib"
+
+# --- Section 3: Tax Related Events — client column ----------------------
+EVENT_BROUGHT_PRIOR_RETURN = "event.brought_prior_return"
+EVENT_ESTIMATED_PAYMENTS = "event.estimated_payments"
+EVENT_EDUCATION = "event.education"
+EVENT_ENERGY_HOME = "event.energy_home"
+EVENT_HSA = "event.hsa"
+EVENT_MARKETPLACE = "event.marketplace"
+EVENT_SELL_HOME = "event.sell_home"
+EVENT_OTHER_PURCHASE = "event.other_purchase"
+EVENT_DEBT_CANCELLED = "event.debt_cancelled"
+EVENT_DISASTER_LOSS = "event.disaster_loss"
+EVENT_IRS_LETTER = "event.irs_letter"
+EVENT_CREDIT_DISALLOWED = "event.credit_disallowed"
+
+# --- Section 1: Itemize — volunteer column ------------------------------
+VOL_EXPENSE_ITEMIZED_DEDUCTION = "vol.expense.itemized_deduction"
+VOL_EXPENSE_STANDARD_DEDUCTION = "vol.expense.standard_deduction"
+VOL_EXPENSE_1098 = "vol.expense.1098"
+VOL_EXPENSE_1098_COUNT = "vol.expense.1098.count"
+
+# --- Section 2: Other Expenses — volunteer column -----------------------
+VOL_EXPENSE_CHILD_CARE_CREDIT = "vol.expense.child_care_credit"
+VOL_EXPENSE_EDUCATOR = "vol.expense.educator"
+VOL_EXPENSE_EDUCATOR_AMOUNT = "vol.expense.educator.amount"
+VOL_EXPENSE_ALIMONY_PAID = "vol.expense.alimony_paid"
+VOL_EXPENSE_ALIMONY_PAID_AMOUNT = "vol.expense.alimony_paid.amount"
+VOL_EXPENSE_ALIMONY_ADJUSTMENT_YES = "vol.expense.alimony_adjustment.yes"
+VOL_EXPENSE_ALIMONY_ADJUSTMENT_NO = "vol.expense.alimony_adjustment.no"
+VOL_EXPENSE_IRA = "vol.expense.ira"
+VOL_EXPENSE_1098E = "vol.expense.1098e"
+
+# --- Section 3: Tax Related Events — volunteer column -------------------
+VOL_EVENT_PRIOR_RETURN_AVAILABLE = "vol.event.prior_return_available"
+VOL_EVENT_PRIOR_REFUND_APPLIED = "vol.event.prior_refund_applied"
+VOL_EVENT_PRIOR_REFUND_APPLIED_AMOUNT = "vol.event.prior_refund_applied.amount"
+VOL_EVENT_ESTIMATED_PAYMENTS = "vol.event.estimated_payments"
+VOL_EVENT_ESTIMATED_PAYMENTS_AMOUNT = "vol.event.estimated_payments.amount"
+VOL_EVENT_EDUCATION_CREDIT = "vol.event.education_credit"
+VOL_EVENT_TAXABLE_SCHOLARSHIP = "vol.event.taxable_scholarship"
+VOL_EVENT_1098T = "vol.event.1098t"
+VOL_EVENT_ENERGY_CREDIT = "vol.event.energy_credit"
+VOL_EVENT_HSA_CONTRIBUTIONS = "vol.event.hsa_contributions"
+VOL_EVENT_HSA_DISTRIBUTIONS = "vol.event.hsa_distributions"
+VOL_EVENT_1095A = "vol.event.1095a"
+VOL_EVENT_1099A = "vol.event.1099a"
+VOL_EVENT_1099S = "vol.event.1099s"
+VOL_EVENT_1099C = "vol.event.1099c"
+VOL_EVENT_DISASTER_RELIEF_IMPACTS = "vol.event.disaster_relief_impacts"
+VOL_EVENT_LITC_REFERRAL = "vol.event.litc_referral"
+VOL_EVENT_CREDIT_DISALLOWED = "vol.event.credit_disallowed"
+VOL_EVENT_CREDIT_DISALLOWED_YEAR = "vol.event.credit_disallowed.year"
+VOL_EVENT_CREDIT_DISALLOWED_REASON = "vol.event.credit_disallowed.reason"
+VOL_EVENT_OTHER_PURCHASE_VIN = "vol.event.other_purchase.vin"
+
+# --- Notes column (one per row, free-form, ungraded) --------------------
+EXPENSE_NOTE_ITEMIZE = "expense.note.itemize"
+EXPENSE_NOTE_CHILD_CARE = "expense.note.child_care"
+EXPENSE_NOTE_EDUCATOR = "expense.note.educator"
+EXPENSE_NOTE_ALIMONY_PAID = "expense.note.alimony_paid"
+EXPENSE_NOTE_RETIREMENT_CONTRIB = "expense.note.retirement_contrib"
+EXPENSE_NOTE_STUDENT_LOAN = "expense.note.student_loan"
+EVENT_NOTE_BROUGHT_PRIOR_RETURN = "event.note.brought_prior_return"
+EVENT_NOTE_ESTIMATED_PAYMENTS = "event.note.estimated_payments"
+EVENT_NOTE_EDUCATION = "event.note.education"
+EVENT_NOTE_ENERGY_HOME = "event.note.energy_home"
+EVENT_NOTE_HSA = "event.note.hsa"
+EVENT_NOTE_MARKETPLACE = "event.note.marketplace"
+EVENT_NOTE_SELL_HOME = "event.note.sell_home"
+EVENT_NOTE_OTHER_PURCHASE = "event.note.other_purchase"
+EVENT_NOTE_DEBT_CANCELLED = "event.note.debt_cancelled"
+EVENT_NOTE_DISASTER_LOSS = "event.note.disaster_loss"
+EVENT_NOTE_IRS_LETTER = "event.note.irs_letter"
+EVENT_NOTE_CREDIT_DISALLOWED = "event.note.credit_disallowed"
+
+# --- Aggregations -------------------------------------------------------
+# Client-column primary checkboxes for Page 3 (one per row across all
+# three sections).
+P3_CLIENT_CHECKBOX_FIELDS: List[str] = [
+    # Itemize
+    EXPENSE_MEDICAL,
+    EXPENSE_MORTGAGE_INTEREST,
+    EXPENSE_TAXES_NEW,
+    EXPENSE_CHARITABLE,
+    # Other Expenses
+    EXPENSE_CHILD_CARE,
+    EXPENSE_EDUCATOR,
+    EXPENSE_ALIMONY_PAID,
+    EXPENSE_RETIREMENT_CONTRIB,
+    EXPENSE_STUDENT_LOAN,
+    # Tax Related Events
+    EVENT_BROUGHT_PRIOR_RETURN,
+    EVENT_ESTIMATED_PAYMENTS,
+    EVENT_EDUCATION,
+    EVENT_ENERGY_HOME,
+    EVENT_HSA,
+    EVENT_MARKETPLACE,
+    EVENT_SELL_HOME,
+    EVENT_OTHER_PURCHASE,
+    EVENT_DEBT_CANCELLED,
+    EVENT_DISASTER_LOSS,
+    EVENT_IRS_LETTER,
+    EVENT_CREDIT_DISALLOWED,
+]
+
+# Volunteer-column primary checkbox fields for Page 3.
+P3_VOL_CHECKBOX_FIELDS: List[str] = [
+    VOL_EXPENSE_ITEMIZED_DEDUCTION,
+    VOL_EXPENSE_STANDARD_DEDUCTION,
+    VOL_EXPENSE_1098,
+    VOL_EXPENSE_CHILD_CARE_CREDIT,
+    VOL_EXPENSE_EDUCATOR,
+    VOL_EXPENSE_ALIMONY_PAID,
+    VOL_EXPENSE_ALIMONY_ADJUSTMENT_YES,
+    VOL_EXPENSE_ALIMONY_ADJUSTMENT_NO,
+    VOL_EXPENSE_IRA,
+    VOL_EXPENSE_1098E,
+    VOL_EVENT_PRIOR_RETURN_AVAILABLE,
+    VOL_EVENT_PRIOR_REFUND_APPLIED,
+    VOL_EVENT_ESTIMATED_PAYMENTS,
+    VOL_EVENT_EDUCATION_CREDIT,
+    VOL_EVENT_TAXABLE_SCHOLARSHIP,
+    VOL_EVENT_1098T,
+    VOL_EVENT_ENERGY_CREDIT,
+    VOL_EVENT_HSA_CONTRIBUTIONS,
+    VOL_EVENT_HSA_DISTRIBUTIONS,
+    VOL_EVENT_1095A,
+    VOL_EVENT_1099A,
+    VOL_EVENT_1099S,
+    VOL_EVENT_1099C,
+    VOL_EVENT_DISASTER_RELIEF_IMPACTS,
+    VOL_EVENT_LITC_REFERRAL,
+    VOL_EVENT_CREDIT_DISALLOWED,
+]
+
+# Volunteer-column count / amount / sub text fields for Page 3.
+P3_VOL_TEXT_FIELDS: List[str] = [
+    VOL_EXPENSE_1098_COUNT,
+    VOL_EXPENSE_EDUCATOR_AMOUNT,
+    VOL_EXPENSE_ALIMONY_PAID_AMOUNT,
+    VOL_EVENT_PRIOR_REFUND_APPLIED_AMOUNT,
+    VOL_EVENT_ESTIMATED_PAYMENTS_AMOUNT,
+    VOL_EVENT_CREDIT_DISALLOWED_YEAR,
+    VOL_EVENT_CREDIT_DISALLOWED_REASON,
+    VOL_EVENT_OTHER_PURCHASE_VIN,
+]
+
+# Notes column for Page 3 (free-form text, one per row).
+P3_NOTE_FIELDS: List[str] = [
+    EXPENSE_NOTE_ITEMIZE,
+    EXPENSE_NOTE_CHILD_CARE,
+    EXPENSE_NOTE_EDUCATOR,
+    EXPENSE_NOTE_ALIMONY_PAID,
+    EXPENSE_NOTE_RETIREMENT_CONTRIB,
+    EXPENSE_NOTE_STUDENT_LOAN,
+    EVENT_NOTE_BROUGHT_PRIOR_RETURN,
+    EVENT_NOTE_ESTIMATED_PAYMENTS,
+    EVENT_NOTE_EDUCATION,
+    EVENT_NOTE_ENERGY_HOME,
+    EVENT_NOTE_HSA,
+    EVENT_NOTE_MARKETPLACE,
+    EVENT_NOTE_SELL_HOME,
+    EVENT_NOTE_OTHER_PURCHASE,
+    EVENT_NOTE_DEBT_CANCELLED,
+    EVENT_NOTE_DISASTER_LOSS,
+    EVENT_NOTE_IRS_LETTER,
+    EVENT_NOTE_CREDIT_DISALLOWED,
+]
+
+# All Page 3 fields (used by the submit handler to enumerate which
+# inputs to harvest from the form post).
+P3_ALL_FIELDS: List[str] = (
+    P3_CLIENT_CHECKBOX_FIELDS
+    + P3_VOL_CHECKBOX_FIELDS
+    + P3_VOL_TEXT_FIELDS
+    + P3_NOTE_FIELDS
+)
+
+# =========================================================================
 # Helpers — enumerate all fields
 # =========================================================================
 
@@ -681,6 +887,65 @@ for _i in range(MAX_DEPENDENTS):
 # self-employment loss, alimony spouse-excluded, capital-loss carryover,
 # itemized-last-year). They render so the form is complete; they're
 # surfaced as ungraded until the model catches up.
+# Page 3 — notes column is free-form (no ground truth). The bulk of
+# the volunteer-side and event-side fields aren't modeled in the
+# household generator yet (HSA, 1095-A marketplace, 1099-A/S/C, prior
+# refund applied, education credit, energy credit, disaster relief,
+# etc.). They render so the form is complete; they're surfaced as
+# ungraded until the model catches up.
+UNGRADED_FIELDS.extend(P3_NOTE_FIELDS)
+UNGRADED_FIELDS.extend([
+    EXPENSE_TAXES_NEW,
+    EXPENSE_ALIMONY_PAID,
+    EXPENSE_RETIREMENT_CONTRIB,
+    # Section 3 client checkboxes — no ground truth in the model yet.
+    EVENT_BROUGHT_PRIOR_RETURN,
+    EVENT_ESTIMATED_PAYMENTS,
+    EVENT_EDUCATION,
+    EVENT_ENERGY_HOME,
+    EVENT_HSA,
+    EVENT_MARKETPLACE,
+    EVENT_SELL_HOME,
+    EVENT_OTHER_PURCHASE,
+    EVENT_DEBT_CANCELLED,
+    EVENT_DISASTER_LOSS,
+    EVENT_IRS_LETTER,
+    EVENT_CREDIT_DISALLOWED,
+    # Volunteer-side rows for unmodeled topics.
+    VOL_EXPENSE_1098,
+    VOL_EXPENSE_1098_COUNT,
+    VOL_EXPENSE_CHILD_CARE_CREDIT,
+    VOL_EXPENSE_EDUCATOR,
+    VOL_EXPENSE_EDUCATOR_AMOUNT,
+    VOL_EXPENSE_ALIMONY_PAID,
+    VOL_EXPENSE_ALIMONY_PAID_AMOUNT,
+    VOL_EXPENSE_ALIMONY_ADJUSTMENT_YES,
+    VOL_EXPENSE_ALIMONY_ADJUSTMENT_NO,
+    VOL_EXPENSE_IRA,
+    VOL_EXPENSE_1098E,
+    VOL_EVENT_PRIOR_RETURN_AVAILABLE,
+    VOL_EVENT_PRIOR_REFUND_APPLIED,
+    VOL_EVENT_PRIOR_REFUND_APPLIED_AMOUNT,
+    VOL_EVENT_ESTIMATED_PAYMENTS,
+    VOL_EVENT_ESTIMATED_PAYMENTS_AMOUNT,
+    VOL_EVENT_EDUCATION_CREDIT,
+    VOL_EVENT_TAXABLE_SCHOLARSHIP,
+    VOL_EVENT_1098T,
+    VOL_EVENT_ENERGY_CREDIT,
+    VOL_EVENT_HSA_CONTRIBUTIONS,
+    VOL_EVENT_HSA_DISTRIBUTIONS,
+    VOL_EVENT_1095A,
+    VOL_EVENT_1099A,
+    VOL_EVENT_1099S,
+    VOL_EVENT_1099C,
+    VOL_EVENT_DISASTER_RELIEF_IMPACTS,
+    VOL_EVENT_LITC_REFERRAL,
+    VOL_EVENT_CREDIT_DISALLOWED,
+    VOL_EVENT_CREDIT_DISALLOWED_YEAR,
+    VOL_EVENT_CREDIT_DISALLOWED_REASON,
+    VOL_EVENT_OTHER_PURCHASE_VIN,
+])
+
 UNGRADED_FIELDS.extend(P2_NOTE_FIELDS)
 UNGRADED_FIELDS.extend([
     INCOME_WAGES_JOBS,
@@ -713,10 +978,17 @@ PART2_FIELDS: List[str] = list(dict.fromkeys(
     INCOME_CHECKBOX_FIELDS + INCOME_AMOUNT_FIELDS + P2_ALL_FIELDS
 ))
 
-# Part III fields only (expense checkboxes + amounts + deduction type)
-PART3_FIELDS: List[str] = (
-    EXPENSE_CHECKBOX_FIELDS + EXPENSE_AMOUNT_FIELDS + [EXPENSE_DEDUCTION_TYPE]
-)
+# Part III fields only. Includes both the legacy EXPENSE_*_AMOUNT pairs
+# (still referenced by old render paths and grader logic) and the
+# Page 3 new-template namespace (expense.* + event.* + vol.expense.* +
+# vol.event.*); deduplicated via dict.fromkeys to preserve order while
+# dropping shared identifiers (e.g. EXPENSE_MEDICAL).
+PART3_FIELDS: List[str] = list(dict.fromkeys(
+    EXPENSE_CHECKBOX_FIELDS
+    + EXPENSE_AMOUNT_FIELDS
+    + [EXPENSE_DEDUCTION_TYPE]
+    + P3_ALL_FIELDS
+))
 
 # All field names combined
 ALL_FIELDS: List[str] = PART1_FIELDS + PART2_FIELDS + PART3_FIELDS
