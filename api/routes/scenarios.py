@@ -78,6 +78,9 @@ from training.form_fields import (
     TEXT_FIELDS,
     CHECKBOX_FIELDS,
     ALL_FIELDS,
+    P2_CLIENT_CHECKBOX_FIELDS,
+    P2_CLIENT_SUBQ_FIELDS,
+    P2_VOL_CHECKBOX_FIELDS,
     PART1_FIELDS,
     PART2_FIELDS,
     PART3_FIELDS,
@@ -1265,13 +1268,34 @@ async def page_submit(
             detail="Scenario has no ground truth. Regenerate the scenario.",
         )
 
-    # Parse form data — Part I fields only
+    # Parse form data — Part I + Part II fields together. The single
+    # Submit button posts the entire form across all pages; the
+    # grader scopes via fields= so other pages' inputs are ignored
+    # until their grader plumbing lands.
+    graded_fields = PART1_FIELDS + PART2_FIELDS
+    # Checkboxes that are unchecked don't appear in form_data; the
+    # answer key has them as "No". Translate the absence into an
+    # explicit "No" before grading so the strict _values_match
+    # ("" != "No") still rules them correct. Skip the auto-fill for
+    # fields in UNGRADED_FIELDS — for those, blank means "the player
+    # didn't engage with this control", and the result UI uses
+    # blankness to suppress noisy "Not graded" rows.
+    from training.form_fields import UNGRADED_FIELDS
+    ungraded_set = set(UNGRADED_FIELDS)
+    checkbox_field_set = (
+        set(CHECKBOX_FIELDS)
+        | set(P2_CLIENT_CHECKBOX_FIELDS)
+        | set(P2_CLIENT_SUBQ_FIELDS)
+        | set(P2_VOL_CHECKBOX_FIELDS)
+    ) - ungraded_set
     form_data = await request.form()
     submission: Dict[str, str] = {}
-    for field_name in PART1_FIELDS:
+    for field_name in graded_fields:
         val = form_data.get(field_name, "")
         if isinstance(val, str) and val.strip():
             submission[field_name] = val.strip()
+        elif field_name in checkbox_field_set:
+            submission[field_name] = "No"
 
     # Grade based on mode
     if scenario.mode == "verify":
@@ -1286,7 +1310,7 @@ async def page_submit(
         result = grader.grade_verification(flagged, scenario.injected_errors)
     else:
         result = grader.grade_encounter(
-            submission, scenario.ground_truth, fields=PART1_FIELDS,
+            submission, scenario.ground_truth, fields=graded_fields,
         )
 
     # Save grade with section tag

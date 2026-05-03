@@ -82,10 +82,22 @@ from training.form_fields import (
     INCOME_INTEREST_AMOUNT,
     INCOME_RETIREMENT,
     INCOME_SELF_EMPLOYMENT,
+    INCOME_INTEREST_DIVIDENDS,
+    INCOME_OTHER,
     INCOME_SOCIAL_SECURITY,
+    INCOME_SS,
     INCOME_TOTAL,
     INCOME_WAGES,
     INCOME_WAGES_AMOUNT,
+    VOL_INCOME_1099DIV,
+    VOL_INCOME_1099INT,
+    VOL_INCOME_1099INT_COUNT,
+    VOL_INCOME_1099NEC,
+    VOL_INCOME_1099R,
+    VOL_INCOME_SCHEDULE_C,
+    VOL_INCOME_SSA,
+    VOL_INCOME_W2,
+    VOL_INCOME_W2_COUNT,
     NOT_CLAIMED_AS_DEPENDENT,
     ADDR_CITY,
     ADDR_STATE,
@@ -109,7 +121,11 @@ from training.grader import Grader, build_form_answers
 
 
 def _all_checkbox_nos() -> Dict[str, str]:
-    """All income and expense checkbox fields set to 'No'."""
+    """All income and expense checkbox fields set to 'No'.
+
+    Covers both the legacy Part II / Part III namespace and the new
+    Page 2 namespace populated by the grader's _build_income_key.
+    """
     return {
         INCOME_WAGES: "No",
         INCOME_INTEREST: "No",
@@ -117,6 +133,18 @@ def _all_checkbox_nos() -> Dict[str, str]:
         INCOME_SOCIAL_SECURITY: "No",
         INCOME_RETIREMENT: "No",
         INCOME_SELF_EMPLOYMENT: "No",
+        # New Page 2 namespace defaults (negative answers when no
+        # corresponding household income exists).
+        INCOME_SS: "No",
+        INCOME_INTEREST_DIVIDENDS: "No",
+        INCOME_OTHER: "No",
+        VOL_INCOME_W2: "No",
+        VOL_INCOME_1099R: "No",
+        VOL_INCOME_SSA: "No",
+        VOL_INCOME_1099INT: "No",
+        VOL_INCOME_1099DIV: "No",
+        VOL_INCOME_SCHEDULE_C: "No",
+        VOL_INCOME_1099NEC: "No",
         EXPENSE_MORTGAGE_INTEREST: "No",
         EXPENSE_PROPERTY_TAXES: "No",
         EXPENSE_MEDICAL: "No",
@@ -224,6 +252,7 @@ def married_household() -> Household:
 def _perfect_single_submission() -> Dict[str, str]:
     """A submission that perfectly matches single_household."""
     return {
+        **_all_checkbox_nos(),
         YOU_FIRST_NAME: "Jane",
         YOU_MIDDLE_INITIAL: "A",
         YOU_LAST_NAME: "Doe",
@@ -236,28 +265,14 @@ def _perfect_single_submission() -> Dict[str, str]:
         ADDR_ZIP: "96816",
         FILING_STATUS: "single",
         NOT_CLAIMED_AS_DEPENDENT: "Yes",
-        INCOME_WAGES: "No",
-        INCOME_INTEREST: "No",
-        INCOME_DIVIDENDS: "No",
-        INCOME_SOCIAL_SECURITY: "No",
-        INCOME_RETIREMENT: "No",
-        INCOME_SELF_EMPLOYMENT: "No",
-        EXPENSE_MORTGAGE_INTEREST: "No",
-        EXPENSE_PROPERTY_TAXES: "No",
-        EXPENSE_MEDICAL: "No",
-        EXPENSE_CHARITABLE: "No",
         EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
-        EXPENSE_STUDENT_LOAN: "No",
-        EXPENSE_EDUCATOR: "No",
-        EXPENSE_IRA: "No",
-        EXPENSE_CHILD_CARE: "No",
-        EXPENSE_EDUCATION: "No",
     }
 
 
 def _perfect_married_submission() -> Dict[str, str]:
     """A submission that perfectly matches married_household."""
     return {
+        **_all_checkbox_nos(),
         YOU_FIRST_NAME: "John",
         YOU_MIDDLE_INITIAL: "R",
         YOU_LAST_NAME: "Smith",
@@ -287,22 +302,7 @@ def _perfect_married_submission() -> Dict[str, str]:
         "dep.0.vol_income_under": "Yes",
         "dep.0.vol_support": "Yes",
         "dep.0.vol_home_cost": "Yes",
-        INCOME_WAGES: "No",
-        INCOME_INTEREST: "No",
-        INCOME_DIVIDENDS: "No",
-        INCOME_SOCIAL_SECURITY: "No",
-        INCOME_RETIREMENT: "No",
-        INCOME_SELF_EMPLOYMENT: "No",
-        EXPENSE_MORTGAGE_INTEREST: "No",
-        EXPENSE_PROPERTY_TAXES: "No",
-        EXPENSE_MEDICAL: "No",
-        EXPENSE_CHARITABLE: "No",
         EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
-        EXPENSE_STUDENT_LOAN: "No",
-        EXPENSE_EDUCATOR: "No",
-        EXPENSE_IRA: "No",
-        EXPENSE_CHILD_CARE: "No",
-        EXPENSE_EDUCATION: "No",
     }
 
 
@@ -725,6 +725,15 @@ class TestGradeIntakeIncome:
             INCOME_INTEREST: "Yes",
             INCOME_INTEREST_AMOUNT: "800",
             INCOME_TOTAL: "55800",
+            # New Page 2 namespace overrides — Tom has wages and
+            # interest, so the W-2 / 1099-INT volunteer rows expect
+            # "Yes" plus document counts; interest_dividends is the
+            # combined client checkbox.
+            VOL_INCOME_W2: "Yes",
+            VOL_INCOME_W2_COUNT: "0",
+            INCOME_INTEREST_DIVIDENDS: "Yes",
+            VOL_INCOME_1099INT: "Yes",
+            VOL_INCOME_1099INT_COUNT: "0",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
         result = grader.grade_encounter(sub, _gt_dict(income_household))
@@ -797,6 +806,9 @@ class TestGradeIntakeIncome:
             INCOME_INTEREST: "Yes",
             INCOME_INTEREST_AMOUNT: "800",
             INCOME_TOTAL: "55800",
+            VOL_INCOME_W2: "Yes",
+            INCOME_INTEREST_DIVIDENDS: "Yes",
+            VOL_INCOME_1099INT: "Yes",
             EXPENSE_DEDUCTION_TYPE: DEDUCTION_TYPE_STANDARD,
         }
         result = grader.grade_encounter(sub, _gt_dict(income_household))
