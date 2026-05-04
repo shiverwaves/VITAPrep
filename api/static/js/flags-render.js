@@ -86,85 +86,82 @@
     }
 
     /* Sync .f13c-flagged class on every form input to match flag
-     * state, AND inject / remove a small orange-dot indicator near
-     * each flagged input's label.
+     * state, AND maintain the absolute-positioned orange dot in
+     * the top-right corner of each flagged field's wrapper.
      *
-     * Dots are placed at the label level, not the input level —
-     * the player thinks of the field as "the question" (label text),
-     * not "the input element," and labels are larger / easier to
-     * eyeball at a glance.
+     * Wrapper resolution (flagWrapperFor): walk up from the input
+     * to the smallest ancestor that contains exactly one named
+     * input. That's the same "field's local label area" the
+     * right-click handler treats as the field's interactive zone.
+     * Examples:
+     *   - Checkbox in label → wrapper IS the label
+     *   - Text input in f13c-cell → wrapper is the cell
+     *   - Page 2/3 sub-question text input → wrapper is f13c-p2-subq
      *
-     * Anchor resolution (labelAnchorFor):
-     *   - Checkboxes inside labels → anchor to the label's last span
-     *     (the question text), so the dot trails after the question.
-     *   - Text inputs in cells → anchor to the f13c-label sibling
-     *     (the field caption), so the dot trails after the caption.
-     *   - Fallback → anchor to the input itself.
+     * The wrapper gets:
+     *   - .f13c-flagged-label class (sets position: relative)
+     *   - The dot appended as a child <span class="f13c-flag-dot">
+     * The dot is positioned absolute top-right via CSS.
      *
-     * Each dot carries a data-flag-for="<field_id>" attribute so we
-     * can find and remove the right one without scanning all dots. */
+     * Two-pass: first wipe all existing flagged-label classes and
+     * dots from the form pane; then add fresh ones for currently-
+     * flagged fields. Slightly more DOM churn than surgical updates
+     * but trivial at our scale (~200 inputs, a few flags) and
+     * dramatically simpler. */
     function renderFieldIndicators() {
         var formPane = document.getElementById("form-pane");
         if (!formPane) return;
         var flagged = state.flags || {};
+
+        /* Pass 1: wipe existing dots and wrapper classes. */
+        var existingDots = formPane.querySelectorAll(".f13c-flag-dot");
+        for (var i = 0; i < existingDots.length; i++) {
+            existingDots[i].parentNode.removeChild(existingDots[i]);
+        }
+        var existingWrappers = formPane.querySelectorAll(".f13c-flagged-label");
+        for (var j = 0; j < existingWrappers.length; j++) {
+            existingWrappers[j].classList.remove("f13c-flagged-label");
+        }
+
+        /* Pass 2: re-mark currently-flagged fields. */
         var inputs = formPane.querySelectorAll(
             "input[name], textarea[name], select[name]"
         );
-        for (var i = 0; i < inputs.length; i++) {
-            var input = inputs[i];
+        for (var k = 0; k < inputs.length; k++) {
+            var input = inputs[k];
             var fieldId = input.getAttribute("name");
             var shouldBeFlagged = !!flagged[fieldId];
             input.classList.toggle("f13c-flagged", shouldBeFlagged);
+            if (!shouldBeFlagged) continue;
 
-            var existingDot = formPane.querySelector(
-                '.f13c-flag-dot[data-flag-for="' + cssEscape(fieldId) + '"]'
-            );
+            var wrapper = flagWrapperFor(input, formPane);
+            if (!wrapper) continue;
+            wrapper.classList.add("f13c-flagged-label");
+            var dot = document.createElement("span");
+            dot.className = "f13c-flag-dot";
+            dot.setAttribute("data-flag-for", fieldId);
+            dot.setAttribute("aria-hidden", "true");
+            wrapper.appendChild(dot);
+        }
+    }
 
-            if (shouldBeFlagged && !existingDot) {
-                var anchor = labelAnchorFor(input);
-                if (anchor && anchor.parentNode) {
-                    var dot = document.createElement("span");
-                    dot.className = "f13c-flag-dot";
-                    dot.setAttribute("data-flag-for", fieldId);
-                    dot.setAttribute("aria-hidden", "true");
-                    anchor.parentNode.insertBefore(dot, anchor.nextSibling);
-                }
-            } else if (!shouldBeFlagged && existingDot) {
-                existingDot.parentNode.removeChild(existingDot);
+    /* Smallest ancestor of `input` (inclusive of immediate parent)
+     * that contains exactly one named form input. Mirrors the logic
+     * in encounter.js's findFormInput so right-click and dot use
+     * the same wrapper. */
+    function flagWrapperFor(input, formPane) {
+        var cursor = input.parentNode;
+        while (cursor && cursor !== formPane && cursor.nodeType === 1) {
+            if (cursor.querySelectorAll) {
+                var found = cursor.querySelectorAll(
+                    "input[name], textarea[name], select[name]"
+                );
+                if (found.length === 1) return cursor;
+                if (found.length > 1) return null;
             }
+            cursor = cursor.parentNode;
         }
-    }
-
-    /* Pick the visual anchor for the dot — a sibling-or-near element
-     * that the dot will be inserted *after* in the DOM. */
-    function labelAnchorFor(input) {
-        var labelEl = input.closest ? input.closest("label") : null;
-        if (labelEl) {
-            /* For label-wrapping form rows (most checkboxes), prefer
-             * the label's last child element so the dot trails after
-             * the question text rather than appearing between the
-             * checkbox and its text. */
-            var lastChild = labelEl.lastElementChild;
-            if (lastChild) return lastChild;
-            return labelEl;
-        }
-        /* For cell-style text inputs (Page 1 personal-info rows),
-         * the f13c-label span sits next to the input in the same
-         * cell. Anchor the dot just after the caption. */
-        var parent = input.parentNode;
-        if (parent && parent.querySelector) {
-            var labelSpan = parent.querySelector(".f13c-label");
-            if (labelSpan) return labelSpan;
-        }
-        return input;
-    }
-
-    /* CSS.escape polyfill — older browsers don't have it, and
-     * field IDs contain dots / digits that need escaping in
-     * attribute selectors. */
-    function cssEscape(s) {
-        if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(s);
-        return String(s).replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, "\\$&");
+        return null;
     }
 
     /* -------- Init -------- */

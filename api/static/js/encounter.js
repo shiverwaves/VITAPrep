@@ -51,30 +51,30 @@
         openMenu(e.clientX, e.clientY, fieldId);
     }
 
-    /* Locate the form input associated with a click target, accepting
-     * clicks on labels, cells, or the input itself.
+    /* Locate the form input associated with a click target.
      *
-     * Two-pass walk:
-     *   1. Walk up looking for a direct input click — handles "click on
-     *      the input element itself."
-     *   2. Walk up looking for the smallest ancestor that contains
-     *      exactly one named form input — handles "click on a label,
-     *      cell, label-text, or surrounding chrome."
+     * Direct clicks on inputs / textareas / checkboxes are NOT handled
+     * — the browser's default context menu fires instead. The custom
+     * Flag menu only opens when the player right-clicks a label,
+     * caption, or other surrounding wrapper. This keeps the input
+     * element interactable in the normal browser-native way (cursor
+     * placement, spell-check menu on text inputs, etc.).
      *
-     * Stops at the form-pane root. Returns null if no single input is
-     * unambiguously associated with the click (e.g. the click is in
-     * a wrapper containing multiple inputs). */
+     * Walks up from the click target looking for the smallest ancestor
+     * that contains exactly one named form input. Stops at the form-
+     * pane root. Returns null if the click is on an input directly,
+     * or if no single input is unambiguously associated with the
+     * click target. */
     function findFormInput(node) {
-        var cursor = node;
-        while (cursor && cursor !== formPane) {
-            var tag = cursor.tagName;
-            if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-                return cursor;
+        if (node && node.nodeType === 1) {
+            var directTag = node.tagName;
+            if (directTag === "INPUT"
+                    || directTag === "TEXTAREA"
+                    || directTag === "SELECT") {
+                return null;
             }
-            cursor = cursor.parentNode;
         }
-
-        cursor = node;
+        var cursor = node;
         while (cursor && cursor !== formPane) {
             if (cursor.querySelectorAll) {
                 var found = cursor.querySelectorAll(
@@ -138,7 +138,7 @@
      * canonical "Missing" / "Confirm" / "Other" tokens; this map is
      * presentation-only. */
     var CONTEXT_LABELS = {
-        Missing: "Information Missing",
+        Missing: "Missing Information",
         Confirm: "Needs Confirmation",
         Other: "Other",
     };
