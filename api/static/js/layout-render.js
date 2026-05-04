@@ -187,14 +187,57 @@
         }
     }
 
-    /* Write the active doc's title into the pane's navy banner. The
-     * future switcher sprint replaces this single-line write with a
-     * dropdown trigger; for now it's just the label. */
+    /* Write the active doc's title + action buttons into the pane's
+     * navy banner. Pane 2 (the first doc pane) carries the "open
+     * pane 3" toggle when in 2-pane chat-closed mode; otherwise the
+     * toggle is omitted. The close X is on the far right of every
+     * doc pane's banner (Windows-style placement). */
     function renderDocBanner(pane, docId) {
         var banner = pane.querySelector(".doc-pane__banner");
         if (!banner) return;
+        var paneIndex = parseInt(pane.getAttribute("data-pane-index"), 10);
         var label = docLabels[docId] || docId;
-        banner.textContent = label;
+        var parts = [
+            '<span class="doc-pane__banner-title">' +
+            escapeHtml(label) +
+            '</span>',
+        ];
+
+        /* Pane 2's "open pane 3" toggle: visible only when the
+         * layout is exactly 2-pane and chat is closed. The reducer
+         * guards against dispatch in other states; hiding here is
+         * for visual consistency. */
+        if (paneIndex === 0 && state.panes === 2 && !state.chatOpen) {
+            parts.push(
+                '<button type="button" class="doc-pane__banner-btn"' +
+                ' data-layout-action="open-third-pane"' +
+                ' aria-label="Open third pane">' +
+                '<svg viewBox="0 0 18 18" fill="none"' +
+                ' stroke="currentColor" stroke-width="1.5">' +
+                '<rect x="2" y="2" width="14" height="6" rx="1.5"/>' +
+                '<rect x="2" y="10" width="6" height="6" rx="1.5"/>' +
+                '<rect x="10" y="10" width="6" height="6" rx="1.5"/>' +
+                '</svg></button>'
+            );
+        }
+
+        /* Close X — present on every doc pane. Carries data-doc-id
+         * so the dispatcher knows which doc to close. */
+        parts.push(
+            '<button type="button"' +
+            ' class="doc-pane__banner-btn doc-pane__banner-btn--close"' +
+            ' data-layout-action="close-doc"' +
+            ' data-doc-id="' + escapeAttr(docId) + '"' +
+            ' aria-label="Close ' + escapeAttr(label) + '">' +
+            '<svg viewBox="0 0 18 18" fill="none"' +
+            ' stroke="currentColor" stroke-width="1.5"' +
+            ' stroke-linecap="round">' +
+            '<line x1="4" y1="4" x2="14" y2="14"/>' +
+            '<line x1="14" y1="4" x2="4" y2="14"/>' +
+            '</svg></button>'
+        );
+
+        banner.innerHTML = parts.join("");
     }
 
     function updatePaneCycleButton() {
