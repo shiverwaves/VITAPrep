@@ -59,27 +59,10 @@ html, body { height: 100%; overflow: hidden; }
 {% endset %}
 
 {% set titlebar_right_html %}
-{# Pane-cycle button — three SVG icons, one shown per data-next-panes value.
-   Disabled by the renderer while chat is open. #}
-<button class="layout-btn" id="pane-cycle-btn" type="button"
-        data-layout-action="cycle-panes" data-next-panes="2"
-        aria-label="Cycle workspace layout">
-    <svg class="layout-btn__icon-1" viewBox="0 0 18 18" fill="none"
-         stroke="currentColor" stroke-width="1.5">
-        <rect x="2" y="2" width="14" height="14" rx="1.5"/>
-    </svg>
-    <svg class="layout-btn__icon-2" viewBox="0 0 18 18" fill="none"
-         stroke="currentColor" stroke-width="1.5">
-        <rect x="2" y="2" width="14" height="6" rx="1.5"/>
-        <rect x="2" y="10" width="14" height="6" rx="1.5"/>
-    </svg>
-    <svg class="layout-btn__icon-3" viewBox="0 0 18 18" fill="none"
-         stroke="currentColor" stroke-width="1.5">
-        <rect x="2" y="2" width="14" height="6" rx="1.5"/>
-        <rect x="2" y="10" width="6" height="6" rx="1.5"/>
-        <rect x="10" y="10" width="6" height="6" rx="1.5"/>
-    </svg>
-</button>
+{# Pane-cycle button retired in favor of doc clicks (open/close panes
+   via the doc-list bar) + the pane-2-local "open pane 3" toggle in
+   the doc-pane navy banner. The titlebar now carries only the
+   chat toggle and the form Submit button. #}
 {# Chat-toggle button. The hidden-doc badge is anchored inside it
    (position: absolute) and shown by the renderer when state.hiddenDocCache
    is set. #}
