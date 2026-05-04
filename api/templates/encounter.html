@@ -248,15 +248,18 @@ html, body { height: 100%; overflow: hidden; }
             </div>{# /#form-pane #}
 
             {# Document panes — populated by the renderer when a layout
-               with non-zero docSlots is active. Each pane has a tab
-               strip plus an iframe pointing at the doc URL. data-pane-
-               index is read by the renderer when a tab is clicked. #}
+               with non-zero docSlots is active. Each pane has a navy
+               banner showing the current doc's title (mirroring the
+               form sheet's own navy header) plus an iframe pointing
+               at the doc URL. The banner is the static title-only
+               version; the future switcher sprint will turn it into
+               a clickable dropdown for in-pane doc switching. #}
             <div id="doc-pane-0" data-pane-index="0" hidden>
-                <div class="doc-pane__tabs"></div>
+                <div class="doc-pane__banner"></div>
                 <iframe class="doc-pane__frame" loading="lazy" title="Document"></iframe>
             </div>
             <div id="doc-pane-1" data-pane-index="1" hidden>
-                <div class="doc-pane__tabs"></div>
+                <div class="doc-pane__banner"></div>
                 <iframe class="doc-pane__frame" loading="lazy" title="Document"></iframe>
             </div>
         </div>

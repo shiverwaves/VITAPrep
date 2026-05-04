@@ -165,7 +165,7 @@
             return;
         }
         pane.hidden = false;
-        renderDocTabs(pane, docId);
+        renderDocBanner(pane, docId);
         var iframe = pane.querySelector(".doc-pane__frame");
         if (iframe) {
             var newSrc = docUrls[docId] || "";
@@ -177,24 +177,14 @@
         }
     }
 
-    function renderDocTabs(pane, activeDocId) {
-        var tabs = pane.querySelector(".doc-pane__tabs");
-        if (!tabs) return;
-        var parts = [];
-        for (var i = 0; i < availableDocIds.length; i++) {
-            var docId = availableDocIds[i];
-            var label = docLabels[docId] || docId;
-            var isActive = docId === activeDocId;
-            parts.push(
-                '<button type="button" class="doc-pane__tab' +
-                (isActive ? " doc-pane__tab--active" : "") +
-                '" data-layout-action="select-doc" data-doc-id="' +
-                escapeAttr(docId) + '">' +
-                escapeHtml(label) +
-                '</button>'
-            );
-        }
-        tabs.innerHTML = parts.join("");
+    /* Write the active doc's title into the pane's navy banner. The
+     * future switcher sprint replaces this single-line write with a
+     * dropdown trigger; for now it's just the label. */
+    function renderDocBanner(pane, docId) {
+        var banner = pane.querySelector(".doc-pane__banner");
+        if (!banner) return;
+        var label = docLabels[docId] || docId;
+        banner.textContent = label;
     }
 
     function updatePaneCycleButton() {
