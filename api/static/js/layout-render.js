@@ -78,16 +78,22 @@
 
     /* Drop persisted docSlots entries whose doc_ids no longer exist
      * in this scenario (e.g. the scenario was regenerated). Otherwise
-     * we'd ask iframes to load 404 URLs. */
+     * we'd ask iframes to load 404 URLs. Also backfill paneRecency
+     * and tick for sessions persisted before Phase 2 added them, so
+     * the reducer's bumpRecency / pickRecencyTarget don't see undefined. */
     function sanitizePersistedState(persisted) {
-        if (!persisted || !persisted.docSlots) return persisted;
-        var sanitized = persisted.docSlots.map(function (id) {
-            return docUrls[id] ? id : null;
-        });
+        if (!persisted) return persisted;
+        if (persisted.docSlots) {
+            var sanitized = persisted.docSlots.map(function (id) {
+                return docUrls[id] ? id : null;
+            });
+            persisted.docSlots = sanitized;
+        }
         if (persisted.hiddenDocCache && !docUrls[persisted.hiddenDocCache]) {
             persisted.hiddenDocCache = null;
         }
-        persisted.docSlots = sanitized;
+        if (!persisted.paneRecency) persisted.paneRecency = [0, 0];
+        if (typeof persisted.tick !== "number") persisted.tick = 0;
         return persisted;
     }
 
@@ -126,8 +132,11 @@
     /* Render the sticky doc-list bar at the top of #form-pane.
      * One pill per generated doc; pills whose doc is currently in
      * pane 2 (docSlots[0]) or pane 3 (docSlots[1]) get a [N] badge
-     * and the --in-pane modifier. Inert today; the future switcher
-     * sprint adds click handlers. */
+     * and the --in-pane modifier.
+     *
+     * Pills carry data-layout-action="open-doc" so the central event
+     * handler dispatches OPEN_DOC on click. The reducer decides
+     * what happens — promote layout, replace pane, recency-target. */
     function renderDocList() {
         if (!docList) return;
         if (availableDocIds.length === 0) {
@@ -148,10 +157,11 @@
                 ? '<span class="doc-list__badge">' + paneNum + '</span>'
                 : "";
             parts.push(
-                '<span class="doc-list__item' + modifier +
-                '" data-doc-id="' + escapeAttr(docId) + '">' +
+                '<button type="button" class="doc-list__item' + modifier +
+                '" data-layout-action="open-doc"' +
+                ' data-doc-id="' + escapeAttr(docId) + '">' +
                 escapeHtml(label) + badge +
-                '</span>'
+                '</button>'
             );
         }
         docList.innerHTML = parts.join("");
@@ -265,6 +275,13 @@
                 slotIndex: slotIndex,
                 docId: docId,
             });
+        } else if (action === "open-doc") {
+            /* Click on a pill in the global doc-list bar. The reducer
+             * handles all the layout-promotion + recency-target logic;
+             * the renderer just forwards the doc id. */
+            var openDocId = element.getAttribute("data-doc-id");
+            if (!openDocId) return;
+            dispatch({ type: "OPEN_DOC", docId: openDocId });
         }
     }
 
