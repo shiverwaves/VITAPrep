@@ -21,24 +21,31 @@
  *
  * Action types:
  *
- *     CYCLE_PANES        { availableDocs: [doc_id, ...] }
+ *     CYCLE_PANES        { availableDocs: [doc_id, ...] }   (legacy)
  *     TOGGLE_CHAT        {}
  *     SELECT_DOC         { slotIndex, docId }
  *     OPEN_DOC           { docId }
+ *     CLOSE_DOC          { docId }
+ *     OPEN_THIRD_PANE    { availableDocs: [doc_id, ...] }
  *     SET_FORM_PAGE      { page: 1..4 }
  *
- * Pane-cycle is a wrapping forward cycle: 1 → 2 → 3 → 1 → 2 → ...
- * Each click advances; the 3 → 1 wrap drops both docs back to a
- * clean form-only view. The action is a no-op while chatOpen is
- * true (the UI disables the button in that state; the reducer
- * guards as a safety net so a mis-fired event can't corrupt state).
+ * The previous global pane-cycle button (CYCLE_PANES) was retired:
+ * pane *count* is now driven by doc clicks (OPEN_DOC promotes 1→2),
+ * the per-pane close X (CLOSE_DOC reduces panes by one), and the
+ * pane-2-local "add pane 3" toggle (OPEN_THIRD_PANE goes 2→3).
+ * CYCLE_PANES is left in the reducer for back-compat — old persisted
+ * state still loads cleanly — but no UI dispatches it today.
  *
  * OPEN_DOC is dispatched by clicking a pill in the global doc-list
- * bar. It promotes the layout (1 → 2 panes) when needed and assigns
- * the doc to the least-recently-touched pane in 3-pane mode.
- * Pane *count* is owned exclusively by CYCLE_PANES (and the chat
- * toggle); OPEN_DOC only changes pane *contents* — except it may
- * promote 1 → 2 when there's no doc pane to put the new doc in.
+ * bar. It promotes the layout (1 → 2 panes) when needed, assigns
+ * the doc to the least-recently-touched pane in 3-pane mode, and
+ * swaps the visible/cached docs when chat is open and the clicked
+ * doc is the cached one.
+ *
+ * CLOSE_DOC closes the pane containing the given doc. If pane 2 is
+ * closed from a 3-pane layout, pane 3's doc shifts to the pane 2
+ * slot (panes are always a contiguous 1→2 or 1→2→3 stack). Closing
+ * the only doc pane returns to form-only.
  *
  * paneRecency tracks last-touched ticks per slot index. Any action
  * that writes to docSlots[i] bumps the global tick counter and
@@ -138,20 +145,34 @@
     /* OPEN_DOC — clicking a pill in the global doc-list bar.
      *
      * Behavior by current layout:
-     * - doc already visible in some pane → no-op (focus pulse is
-     *   strictly visual, handled by the renderer).
+     * - doc already visible in some pane → no-op (the renderer
+     *   dispatches CLOSE_DOC instead in that case; the reducer
+     *   guards as a safety net).
+     * - chat-open + cached doc click → swap visible ↔ cached.
      * - panes:1 (form-only) → promote to panes:2 with the new doc
      *   in slot 0. The chat-open form-only-chat variant promotes to
      *   h2-chat (panes:2 + chatOpen) the same way.
      * - panes:2 → replace docSlots[0]. Only one doc pane exists,
-     *   so the "pane count owned by the layout toggle" rule means
-     *   we don't add a second pane — we replace.
+     *   so the "pane count owned by close X / pane-2 toggle" rule
+     *   means we don't add a second pane — we replace.
      * - panes:3 → write to the slot whose paneRecency is smaller
      *   (the least-recently-touched pane). Tiebreaker: slot 0.
      */
     function openDoc(state, docId) {
         if (!docId) return state;
         if (isDocInSlots(docId, state.docSlots)) return state;
+
+        /* Chat-open + cached-doc click → swap. The previously-cached
+         * doc becomes visible in slot 0; the previously-visible doc
+         * goes to the cache. Pane count and chat state unchanged. */
+        if (state.chatOpen && state.hiddenDocCache === docId
+                && state.panes === 2) {
+            var displaced = state.docSlots[0];
+            return Object.assign({}, state, {
+                docSlots: [docId],
+                hiddenDocCache: displaced,
+            }, bumpRecency(state, 0));
+        }
 
         if (state.panes === 1) {
             return Object.assign({}, state, {
@@ -175,6 +196,80 @@
             }, bumpRecency(state, target));
         }
         return state;
+    }
+
+    /* CLOSE_DOC — closes the pane containing the given doc.
+     *
+     * - panes:2, doc in slot 0 → return to form-only (panes:1, no docs).
+     * - panes:3, doc in slot 0 (pane 2) → shift slot 1 down to slot 0
+     *   and drop to panes:2. Pane 3's doc is now visible in pane 2;
+     *   its pill badge updates from [3] to [2] on next render.
+     * - panes:3, doc in slot 1 (pane 3) → drop slot 1 and go to panes:2.
+     * - chat-open + doc in slot 0 → return to form-only-chat (panes:1)
+     *   and clear the hiddenDocCache too (no third pane to restore).
+     * - doc not in any pane → no-op. */
+    function closeDoc(state, docId) {
+        if (!docId) return state;
+        var slotIndex = -1;
+        for (var i = 0; i < state.docSlots.length; i++) {
+            if (state.docSlots[i] === docId) {
+                slotIndex = i;
+                break;
+            }
+        }
+        if (slotIndex === -1) return state;
+
+        /* Closing the only doc pane (slot 0) — drop to form-only.
+         * Reset paneRecency since neither slot will hold a doc.
+         * In chat-open mode, also clear the cache (the cached-doc
+         * lifecycle is bound to having a 3-pane parent state). */
+        if (state.panes === 2 && slotIndex === 0) {
+            return Object.assign({}, state, {
+                panes: 1,
+                docSlots: [],
+                paneRecency: [0, 0],
+                tick: state.tick,
+                hiddenDocCache: state.chatOpen ? null : state.hiddenDocCache,
+            });
+        }
+        /* Closing pane 3 (slot 1) from 3-pane → 2-pane. Reset slot 1
+         * recency since it's no longer in use. */
+        if (state.panes === 3 && slotIndex === 1) {
+            var newRecency = state.paneRecency.slice();
+            newRecency[1] = 0;
+            return Object.assign({}, state, {
+                panes: 2,
+                docSlots: state.docSlots.slice(0, 1),
+                paneRecency: newRecency,
+            });
+        }
+        /* Closing pane 2 (slot 0) from 3-pane: pane 3's doc shifts
+         * down. The shifted doc keeps its recency (now at slot 0). */
+        if (state.panes === 3 && slotIndex === 0) {
+            var shiftedRecency = [state.paneRecency[1], 0];
+            return Object.assign({}, state, {
+                panes: 2,
+                docSlots: [state.docSlots[1]],
+                paneRecency: shiftedRecency,
+            });
+        }
+        return state;
+    }
+
+    /* OPEN_THIRD_PANE — pane-2-local toggle that adds pane 3 with
+     * a default doc. No-op when chat is open (3-pane is forbidden
+     * with chat) or when not in 2-pane mode. The pane-2 toggle
+     * button is only visible in 2-pane chat-closed; this guard is
+     * a safety net. */
+    function openThirdPane(state, availableDocs) {
+        if (state.chatOpen) return state;
+        if (state.panes !== 2) return state;
+        var nextDoc = pickNextDoc(availableDocs, state.docSlots);
+        if (!nextDoc) return state;
+        return Object.assign({}, state, {
+            panes: 3,
+            docSlots: state.docSlots.concat([nextDoc]),
+        }, bumpRecency(state, 1));
     }
 
     function toggleChat(state) {
@@ -236,6 +331,10 @@
                 return selectDoc(state, action.slotIndex, action.docId);
             case "OPEN_DOC":
                 return openDoc(state, action.docId);
+            case "CLOSE_DOC":
+                return closeDoc(state, action.docId);
+            case "OPEN_THIRD_PANE":
+                return openThirdPane(state, action.availableDocs || []);
             case "SET_FORM_PAGE":
                 return setFormPage(state, action.page);
             default:

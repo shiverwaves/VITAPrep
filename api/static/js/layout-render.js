@@ -8,24 +8,24 @@
  *
  *   #workspace                  data-layout="form-only|h2|h3|form-only-chat|h2-chat"
  *     #form-pane                always present
+ *       #doc-list                  sticky doc-list bar (renderer-populated)
  *     #doc-pane-0               doc-pane container, hidden when not in use
- *       .doc-pane__tabs           tab strip (rendered by JS)
+ *       .doc-pane__banner         navy title + action buttons (renderer-populated)
  *       .doc-pane__frame          <iframe>
  *     #doc-pane-1               doc-pane container, hidden when not in use
- *       .doc-pane__tabs
+ *       .doc-pane__banner
  *       .doc-pane__frame
  *   #chat-pane                  hidden when chat is closed
  *
  *   <body data-chat="open|closed">
  *
- *   #pane-cycle-btn             data-next-panes="1|2|3", disabled when chat open
  *   #chat-toggle-btn            aria-pressed="true|false"
  *   #hidden-doc-badge           hidden unless state.hiddenDocCache is set
  *
  * Event delegation listens at the document root for any element with
- * data-layout-action="cycle-panes|toggle-chat|select-doc". Doc-tab
- * elements also carry data-doc-id and live inside an ancestor with
- * data-pane-index="0|1".
+ * data-layout-action="toggle-chat|open-doc|close-doc|open-third-pane|select-doc".
+ * Pills in the doc-list carry data-doc-id; doc-pane banner buttons
+ * carry data-doc-id (close X) or no extra data (pane-2 toggle).
  *
  * Window-globals consumed:
  *   window.LayoutReducer        from layout-reducer.js
@@ -46,7 +46,7 @@
 
     /* -------- Module state (initialized in init()) -------- */
     var workspace, formPane, docPanes, chatPane;
-    var paneCycleBtn, chatToggleBtn, hiddenDocBadge;
+    var chatToggleBtn, hiddenDocBadge;
     var docList;
     var scenarioId = "";
     var docUrls = {};
@@ -125,7 +125,6 @@
         updateDocPane(0, state.docSlots[0] || null);
         updateDocPane(1, state.docSlots[1] || null);
         renderDocList();
-        updatePaneCycleButton();
         updateChatToggleButton();
     }
 
@@ -187,33 +186,57 @@
         }
     }
 
-    /* Write the active doc's title into the pane's navy banner. The
-     * future switcher sprint replaces this single-line write with a
-     * dropdown trigger; for now it's just the label. */
+    /* Write the active doc's title + action buttons into the pane's
+     * navy banner. Pane 2 (the first doc pane) carries the "open
+     * pane 3" toggle when in 2-pane chat-closed mode; otherwise the
+     * toggle is omitted. The close X is on the far right of every
+     * doc pane's banner (Windows-style placement). */
     function renderDocBanner(pane, docId) {
         var banner = pane.querySelector(".doc-pane__banner");
         if (!banner) return;
+        var paneIndex = parseInt(pane.getAttribute("data-pane-index"), 10);
         var label = docLabels[docId] || docId;
-        banner.textContent = label;
-    }
+        var parts = [
+            '<span class="doc-pane__banner-title">' +
+            escapeHtml(label) +
+            '</span>',
+        ];
 
-    function updatePaneCycleButton() {
-        if (!paneCycleBtn) return;
-        paneCycleBtn.disabled = !!state.chatOpen;
-        paneCycleBtn.setAttribute(
-            "data-next-panes",
-            String(computeNextPanes(state))
+        /* Pane 2's "open pane 3" toggle: visible only when the
+         * layout is exactly 2-pane and chat is closed. The reducer
+         * guards against dispatch in other states; hiding here is
+         * for visual consistency. */
+        if (paneIndex === 0 && state.panes === 2 && !state.chatOpen) {
+            parts.push(
+                '<button type="button" class="doc-pane__banner-btn"' +
+                ' data-layout-action="open-third-pane"' +
+                ' aria-label="Open third pane">' +
+                '<svg viewBox="0 0 18 18" fill="none"' +
+                ' stroke="currentColor" stroke-width="1.5">' +
+                '<rect x="2" y="2" width="14" height="6" rx="1.5"/>' +
+                '<rect x="2" y="10" width="6" height="6" rx="1.5"/>' +
+                '<rect x="10" y="10" width="6" height="6" rx="1.5"/>' +
+                '</svg></button>'
+            );
+        }
+
+        /* Close X — present on every doc pane. Carries data-doc-id
+         * so the dispatcher knows which doc to close. */
+        parts.push(
+            '<button type="button"' +
+            ' class="doc-pane__banner-btn doc-pane__banner-btn--close"' +
+            ' data-layout-action="close-doc"' +
+            ' data-doc-id="' + escapeAttr(docId) + '"' +
+            ' aria-label="Close ' + escapeAttr(label) + '">' +
+            '<svg viewBox="0 0 18 18" fill="none"' +
+            ' stroke="currentColor" stroke-width="1.5"' +
+            ' stroke-linecap="round">' +
+            '<line x1="4" y1="4" x2="14" y2="14"/>' +
+            '<line x1="14" y1="4" x2="4" y2="14"/>' +
+            '</svg></button>'
         );
-    }
 
-    /* Returns the panes count the next pane-cycle click will produce.
-     * Used by the icon to show "next state, not current". The cycle
-     * wraps forward: 1 → 2 → 3 → 1 → ... While chat is open the
-     * button is disabled, so the icon shows the current state instead
-     * (which is the more informative choice on a no-op affordance). */
-    function computeNextPanes(s) {
-        if (s.chatOpen) return s.panes;
-        return s.panes === 3 ? 1 : s.panes + 1;
+        banner.innerHTML = parts.join("");
     }
 
     function updateChatToggleButton() {
@@ -254,13 +277,7 @@
     }
 
     function handleAction(action, element) {
-        if (action === "cycle-panes") {
-            if (state.chatOpen) return;  /* button is disabled but be safe */
-            dispatch({
-                type: "CYCLE_PANES",
-                availableDocs: availableDocIds,
-            });
-        } else if (action === "toggle-chat") {
+        if (action === "toggle-chat") {
             dispatch({ type: "TOGGLE_CHAT" });
         } else if (action === "select-doc") {
             var paneEl = closest(element, "[data-pane-index]");
@@ -276,12 +293,34 @@
                 docId: docId,
             });
         } else if (action === "open-doc") {
-            /* Click on a pill in the global doc-list bar. The reducer
-             * handles all the layout-promotion + recency-target logic;
-             * the renderer just forwards the doc id. */
+            /* Click on a pill in the global doc-list bar. Toggles
+             * visibility — if the doc is currently in a pane, close
+             * that pane; otherwise open it (the reducer handles
+             * layout-promotion + recency-target logic). The cached
+             * doc (chat-open mode) is NOT in docSlots, so clicking
+             * it dispatches OPEN_DOC, which the reducer maps to a
+             * visible↔cached swap. */
             var openDocId = element.getAttribute("data-doc-id");
             if (!openDocId) return;
-            dispatch({ type: "OPEN_DOC", docId: openDocId });
+            var inSlots = state.docSlots.indexOf(openDocId) !== -1;
+            if (inSlots) {
+                dispatch({ type: "CLOSE_DOC", docId: openDocId });
+            } else {
+                dispatch({ type: "OPEN_DOC", docId: openDocId });
+            }
+        } else if (action === "close-doc") {
+            /* Click on a doc pane's banner X. The element carries the
+             * doc id directly so we don't need to walk up to the pane. */
+            var closeDocId = element.getAttribute("data-doc-id");
+            if (!closeDocId) return;
+            dispatch({ type: "CLOSE_DOC", docId: closeDocId });
+        } else if (action === "open-third-pane") {
+            /* Click on pane 2's "open pane 3" toggle. Reducer guards
+             * against dispatch in chat-open / non-2-pane states. */
+            dispatch({
+                type: "OPEN_THIRD_PANE",
+                availableDocs: availableDocIds,
+            });
         }
     }
 
@@ -320,7 +359,6 @@
             document.getElementById("doc-pane-1"),
         ];
         chatPane = document.getElementById("chat-pane");
-        paneCycleBtn = document.getElementById("pane-cycle-btn");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
         hiddenDocBadge = document.getElementById("hidden-doc-badge");
         docList = document.getElementById("doc-list");

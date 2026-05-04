@@ -143,28 +143,15 @@ class TestWorkspaceStructure:
 
 class TestTitlebarButtons:
 
-    def test_pane_cycle_button_present(self, client: TestClient) -> None:
+    def test_pane_cycle_button_retired(self, client: TestClient) -> None:
+        """The titlebar pane-cycle button was retired in favor of doc
+        clicks (open/close panes via the doc-list bar) + the
+        pane-2-local 'open pane 3' toggle in the doc-pane banner. The
+        titlebar should no longer carry the pane-cycle DOM."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
-        m = re.search(
-            r'<button[^>]+id="pane-cycle-btn"[^>]+'
-            r'data-layout-action="cycle-panes"[^>]*'
-            r'data-next-panes="(\d)"',
-            body,
-        )
-        assert m is not None, "pane-cycle button missing or malformed"
-        # Server-rendered default: form-only state, so next click adds a
-        # pane → data-next-panes="2".
-        assert m.group(1) == "2"
-
-    def test_pane_cycle_has_three_svg_icons(self, client: TestClient) -> None:
-        """The icon shown depends on data-next-panes; CSS picks one of
-        three svg children. All three must be present in markup so the
-        renderer can flip between them by attribute change alone."""
-        sid = _make_scenario(client)
-        body = client.get(f"/scenarios/{sid}").text
-        for n in (1, 2, 3):
-            assert f'class="layout-btn__icon-{n}"' in body
+        assert 'id="pane-cycle-btn"' not in body
+        assert 'data-layout-action="cycle-panes"' not in body
 
     def test_chat_toggle_button_present(self, client: TestClient) -> None:
         sid = _make_scenario(client)

@@ -166,28 +166,69 @@ body:not([data-chat="open"]) #chat-pane {
 }
 
 /* =========================================================================
- * Doc-pane chrome: navy title banner + iframe
+ * Doc-pane chrome: navy title banner + action buttons + iframe
  * =========================================================================
  * The banner mirrors the form sheet's navy header so a doc pane reads
  * as "this is the document named X" the same way the form pane reads
- * as "this is Form 13614-C". Title-only today; the future switcher
- * sprint turns it into a dropdown for in-pane doc switching.
+ * as "this is Form 13614-C". The banner now also carries the per-pane
+ * action buttons:
+ *   - close X (right edge, all doc panes) — Windows-style placement.
+ *   - 3-pane toggle (pane 2 only, 2-pane chat-closed only) — opens
+ *     a third doc pane.
  */
 
 .doc-pane__banner {
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
     background: var(--color-navy);
     color: #fff;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 4px var(--spacing-sm) 4px var(--spacing-md);
+    /* Empty state — no doc assigned yet — still occupies height so the
+     * iframe doesn't jump when a doc loads in. */
+    min-height: 32px;
+}
+
+.doc-pane__banner-title {
+    flex: 1 1 auto;
     font-size: var(--font-size-md);
     font-weight: 700;
     /* Truncate overlong titles rather than wrapping the banner taller. */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    /* Empty state — no doc assigned yet — still occupies height so the
-     * iframe doesn't jump when a doc loads in. */
-    min-height: 32px;
+    min-width: 0;
+}
+
+.doc-pane__banner-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    color: #fff;
+    cursor: pointer;
+}
+
+.doc-pane__banner-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.doc-pane__banner-btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+.doc-pane__banner-btn svg {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
 }
 
 .doc-pane__frame {
