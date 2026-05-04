@@ -363,3 +363,79 @@ body:not([data-chat="open"]) #chat-pane {
     outline: 2px solid var(--color-navy);
     outline-offset: -1px;
 }
+
+/* =========================================================================
+ * Doc list — sticky strip at the top of #form-pane
+ * =========================================================================
+ * Lists every document generated for the scenario as a row of pill
+ * chips. Sticky to the top of the form-pane scroll container so
+ * doc selection is always visible regardless of how far the player
+ * has scrolled into the form.
+ *
+ * Pills are inert today (display only). The future switcher logic
+ * sprint will wire click handlers for layout-promotion + recency-
+ * rule pane assignment.
+ *
+ * The "[N]" badge appears next to a doc that's currently shown in
+ * doc pane N (where N = 2 for the first doc pane, 3 for the second).
+ */
+
+.doc-list {
+    /* Sticky inside #form-pane (which has overflow:auto). When the
+     * doc list is empty (zero docs in the scenario), the :empty
+     * selector below collapses it so it doesn't take vertical space. */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    /* Subtle drop shadow once content scrolls underneath, communicating
+     * that the strip is pinned. */
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.doc-list:empty {
+    display: none;
+}
+
+.doc-list__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    /* Inert today — no cursor pointer until click handlers land. */
+    user-select: none;
+}
+
+.doc-list__item--in-pane {
+    /* A doc currently shown in a pane gets emphasis: navy text, navy
+     * border, and a small filled badge with the pane number. */
+    color: var(--color-navy);
+    border-color: var(--color-navy);
+    background: var(--color-surface);
+}
+
+.doc-list__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--color-navy);
+    border-radius: 8px;
+}

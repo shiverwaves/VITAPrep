@@ -47,6 +47,7 @@
     /* -------- Module state (initialized in init()) -------- */
     var workspace, formPane, docPanes, chatPane;
     var paneCycleBtn, chatToggleBtn, hiddenDocBadge;
+    var docList;
     var scenarioId = "";
     var docUrls = {};
     var docLabels = {};
@@ -117,8 +118,43 @@
         document.body.setAttribute("data-chat", state.chatOpen ? "open" : "closed");
         updateDocPane(0, state.docSlots[0] || null);
         updateDocPane(1, state.docSlots[1] || null);
+        renderDocList();
         updatePaneCycleButton();
         updateChatToggleButton();
+    }
+
+    /* Render the sticky doc-list bar at the top of #form-pane.
+     * One pill per generated doc; pills whose doc is currently in
+     * pane 2 (docSlots[0]) or pane 3 (docSlots[1]) get a [N] badge
+     * and the --in-pane modifier. Inert today; the future switcher
+     * sprint adds click handlers. */
+    function renderDocList() {
+        if (!docList) return;
+        if (availableDocIds.length === 0) {
+            docList.innerHTML = "";
+            return;
+        }
+        var slot0 = state.docSlots[0] || null;
+        var slot1 = state.docSlots[1] || null;
+        var parts = [];
+        for (var i = 0; i < availableDocIds.length; i++) {
+            var docId = availableDocIds[i];
+            var label = docLabels[docId] || docId;
+            var paneNum = 0;
+            if (docId === slot0) paneNum = 2;
+            else if (docId === slot1) paneNum = 3;
+            var modifier = paneNum ? " doc-list__item--in-pane" : "";
+            var badge = paneNum
+                ? '<span class="doc-list__badge">' + paneNum + '</span>'
+                : "";
+            parts.push(
+                '<span class="doc-list__item' + modifier +
+                '" data-doc-id="' + escapeAttr(docId) + '">' +
+                escapeHtml(label) + badge +
+                '</span>'
+            );
+        }
+        docList.innerHTML = parts.join("");
     }
 
     function updateDocPane(index, docId) {
@@ -280,6 +316,7 @@
         paneCycleBtn = document.getElementById("pane-cycle-btn");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
         hiddenDocBadge = document.getElementById("hidden-doc-badge");
+        docList = document.getElementById("doc-list");
 
         scenarioId = global.SCENARIO_ID || "";
         docUrls = global.SCENARIO_DOCS || {};

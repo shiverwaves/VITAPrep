@@ -110,6 +110,14 @@ html, body { height: 100%; overflow: hidden; }
            confirms or restores from sessionStorage on hydration. #}
         <div id="workspace" data-layout="form-only">
             <div id="form-pane">
+                {# Doc list — sticky bar at the top of the form pane.
+                   Lists every document generated for the scenario; each
+                   pill-chip shows a [2] / [3] badge when its doc is
+                   currently visible in the corresponding doc pane.
+                   Inert today — switching docs / promoting layout on
+                   click is a future sprint. Lives outside the
+                   <form> so it doesn't get submitted. #}
+                <div class="doc-list" id="doc-list"></div>
                 {# Form wraps the entire sheet so the titlebar Submit
                    button (out-of-tree, with form="encounter-form")
                    posts every input across all four pages. The
