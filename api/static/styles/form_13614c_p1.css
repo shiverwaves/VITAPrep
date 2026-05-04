@@ -679,3 +679,31 @@
     margin-top: 1px;
 }
 
+
+/* ================================================================
+   Flagged-field indicator (Marked-for-Follow-Up mechanic, Phase C)
+   ================================================================
+   When a form input is flagged for follow-up, it gets the
+   .f13c-flagged class added by api/static/js/flags-render.js. The
+   visual cue is the existing focus-state accent color applied as
+   a persistent border (text inputs) or outline (checkboxes), so
+   the player can see at a glance which fields they've marked
+   without needing to open the Flags review panel. */
+
+.f13c-form input[type="text"].f13c-flagged {
+    border-bottom-color: #e87a2e;
+    border-bottom-width: 2px;
+    /* Compensate for the extra 1px so the field doesn't shift its
+     * baseline relative to neighbours. */
+    padding-bottom: 0;
+}
+
+.f13c-form input[type="checkbox"].f13c-flagged {
+    outline: 2px solid #e87a2e;
+    outline-offset: 1px;
+}
+
+.f13c-form textarea.f13c-flagged {
+    border-color: #e87a2e;
+    border-width: 2px;
+}
