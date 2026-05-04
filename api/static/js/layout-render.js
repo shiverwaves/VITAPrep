@@ -128,13 +128,19 @@
     }
 
     /* Render the sticky doc-list bar at the top of #form-pane.
-     * One pill per generated doc; pills whose doc is currently in
-     * pane 2 (docSlots[0]) or pane 3 (docSlots[1]) get a [N] badge
-     * and the --in-pane modifier.
+     * One pill per generated doc, with three possible states:
+     * - in-pane: doc is currently in slot 0 or slot 1. Pill gets
+     *   the --in-pane modifier and a [2] / [3] numbered badge.
+     * - cached: chatOpen and doc is in state.hiddenDocCache (shed
+     *   from a 3-pane state on chat-open). Pill gets the --cached
+     *   modifier and a dot badge — visually rhyming with the
+     *   pane-2 banner indicator that uses the same accent dot.
+     * - default: nothing visible in any pane.
      *
      * Pills carry data-layout-action="open-doc" so the central event
      * handler dispatches OPEN_DOC on click. The reducer decides
-     * what happens — promote layout, replace pane, recency-target. */
+     * what happens — promote layout, replace pane, recency-target,
+     * or cached↔visible swap. */
     function renderDocList() {
         if (!docList) return;
         if (availableDocIds.length === 0) {
@@ -143,17 +149,23 @@
         }
         var slot0 = state.docSlots[0] || null;
         var slot1 = state.docSlots[1] || null;
+        var cached = state.chatOpen ? (state.hiddenDocCache || null) : null;
         var parts = [];
         for (var i = 0; i < availableDocIds.length; i++) {
             var docId = availableDocIds[i];
             var label = docLabels[docId] || docId;
-            var paneNum = 0;
-            if (docId === slot0) paneNum = 2;
-            else if (docId === slot1) paneNum = 3;
-            var modifier = paneNum ? " doc-list__item--in-pane" : "";
-            var badge = paneNum
-                ? '<span class="doc-list__badge">' + paneNum + '</span>'
-                : "";
+            var modifier = "";
+            var badge = "";
+            if (docId === slot0) {
+                modifier = " doc-list__item--in-pane";
+                badge = '<span class="doc-list__badge">2</span>';
+            } else if (docId === slot1) {
+                modifier = " doc-list__item--in-pane";
+                badge = '<span class="doc-list__badge">3</span>';
+            } else if (docId === cached) {
+                modifier = " doc-list__item--cached";
+                badge = '<span class="doc-list__badge doc-list__badge--cached"></span>';
+            }
             parts.push(
                 '<button type="button" class="doc-list__item' + modifier +
                 '" data-layout-action="open-doc"' +

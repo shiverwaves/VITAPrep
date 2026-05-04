@@ -488,6 +488,25 @@ body:not([data-chat="open"]) #chat-pane {
     background: var(--color-surface);
 }
 
+.doc-list__item--cached {
+    /* Chat-open + doc is in hiddenDocCache. Same color family as
+     * the in-pane state so the user reads "this doc is associated
+     * with a pane somewhere"; dimmer to communicate "but not
+     * currently visible". The dot badge visually rhymes with the
+     * pane-2 banner indicator (same accent dot). Click brings the
+     * doc back into pane 2 (reducer's swap-with-visible logic). */
+    color: var(--color-navy);
+    border-color: var(--color-navy);
+    background: var(--color-surface);
+    opacity: 0.6;
+}
+
+.doc-list__item--cached:hover {
+    /* Lift the dim a bit on hover so it's clearly clickable. */
+    opacity: 0.85;
+    background: var(--color-border-light);
+}
+
 .doc-list__badge {
     display: inline-flex;
     align-items: center;
@@ -500,4 +519,13 @@ body:not([data-chat="open"]) #chat-pane {
     color: #fff;
     background: var(--color-navy);
     border-radius: 8px;
+}
+
+.doc-list__badge--cached {
+    /* Filled dot variant — empty span, sized as a circle, no number. */
+    min-width: 8px;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    background: var(--color-accent);
 }
