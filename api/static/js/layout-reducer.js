@@ -145,9 +145,9 @@
     /* OPEN_DOC — clicking a pill in the global doc-list bar.
      *
      * Behavior by current layout:
-     * - doc already visible in some pane → no-op (the renderer
-     *   dispatches CLOSE_DOC instead in that case; the reducer
-     *   guards as a safety net).
+     * - doc already visible in some pane → no-op. Re-clicking a
+     *   visible doc's pill is intentionally inert; closing a pane
+     *   requires clicking the X on the pane's banner.
      * - chat-open + cached doc click → swap visible ↔ cached.
      * - panes:1 (form-only) → promote to panes:2 with the new doc
      *   in slot 0. The chat-open form-only-chat variant promotes to
@@ -205,8 +205,12 @@
      *   and drop to panes:2. Pane 3's doc is now visible in pane 2;
      *   its pill badge updates from [3] to [2] on next render.
      * - panes:3, doc in slot 1 (pane 3) → drop slot 1 and go to panes:2.
-     * - chat-open + doc in slot 0 → return to form-only-chat (panes:1)
-     *   and clear the hiddenDocCache too (no third pane to restore).
+     * - chat-open + panes:2 + doc in slot 0 + a cached doc exists →
+     *   pull the cached doc into slot 0 instead of dropping panes;
+     *   the user keeps both shed-from-3-pane docs reachable, one at
+     *   a time, until they explicitly close again with no cache.
+     * - chat-open + panes:2 + doc in slot 0 + no cache → drop to
+     *   form-only-chat (panes:1).
      * - doc not in any pane → no-op. */
     function closeDoc(state, docId) {
         if (!docId) return state;
@@ -219,17 +223,28 @@
         }
         if (slotIndex === -1) return state;
 
-        /* Closing the only doc pane (slot 0) — drop to form-only.
-         * Reset paneRecency since neither slot will hold a doc.
-         * In chat-open mode, also clear the cache (the cached-doc
-         * lifecycle is bound to having a 3-pane parent state). */
+        /* Closing the only doc pane (slot 0). */
         if (state.panes === 2 && slotIndex === 0) {
+            /* Chat-open with a cached doc → pull the cache into the
+             * visible slot instead of dropping panes. The cached
+             * lifecycle is bound to having shed from 3-pane on chat
+             * open; the user gets to step through the cached doc
+             * before form-only-chat. Bump recency since slot 0 just
+             * received a new doc. */
+            if (state.chatOpen && state.hiddenDocCache !== null) {
+                return Object.assign({}, state, {
+                    docSlots: [state.hiddenDocCache],
+                    hiddenDocCache: null,
+                }, bumpRecency(state, 0));
+            }
+            /* Drop to form-only. Reset paneRecency since neither slot
+             * will hold a doc; clear cache (no place to restore it). */
             return Object.assign({}, state, {
                 panes: 1,
                 docSlots: [],
                 paneRecency: [0, 0],
                 tick: state.tick,
-                hiddenDocCache: state.chatOpen ? null : state.hiddenDocCache,
+                hiddenDocCache: null,
             });
         }
         /* Closing pane 3 (slot 1) from 3-pane → 2-pane. Reset slot 1

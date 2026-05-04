@@ -231,6 +231,44 @@ body:not([data-chat="open"]) #chat-pane {
     pointer-events: none;
 }
 
+/* Non-interactive variant of the 3-pane icon shown on pane 2 when
+   chat is open AND a third doc is cached. Same visual footprint as
+   the toggle button minus the hover / focus / cursor — purely a
+   "there's a 3rd pane in cache" signal. The dot is anchored to the
+   icon's top-right corner. */
+.doc-pane__banner-indicator {
+    flex: 0 0 auto;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: rgba(255, 255, 255, 0.55);  /* dimmer than the active button */
+    cursor: default;
+}
+
+.doc-pane__banner-indicator svg {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+
+.doc-pane__banner-indicator-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    /* Border in the banner's navy so the dot reads as floating
+     * over the icon rather than touching it. */
+    border: 1.5px solid var(--color-navy);
+    box-sizing: content-box;
+    pointer-events: none;
+}
+
 .doc-pane__frame {
     flex: 1 1 auto;
     width: 100%;
@@ -295,27 +333,11 @@ body:not([data-chat="open"]) #chat-pane {
     color: var(--color-surface);
 }
 
-/* Hidden-doc badge: a small dot anchored to the chat-toggle button.
- * Visible only when state.hiddenDocCache is set (i.e. chat is open
- * and a doc was shed from a 3-pane layout). The renderer sets a
- * tooltip on the badge identifying which doc is cached. */
-
-.hidden-doc-badge {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--color-accent);
-    border: 2px solid var(--color-surface);
-    box-sizing: content-box;
-    pointer-events: auto;  /* still hoverable for tooltip */
-}
-
-.hidden-doc-badge[hidden] {
-    display: none;
-}
+/* The chat-toggle hidden-doc badge was retired — its DOM, CSS, and
+ * renderer hook are gone. The cached-doc cue moved to pane 2's
+ * banner indicator (the dimmed 3-pane icon with a dot); the chat-
+ * toggle's badge slot is reserved for a future unread-messages
+ * indicator. */
 
 /* =========================================================================
  * Chat-pane chrome (tabs + panels + notes textarea)
