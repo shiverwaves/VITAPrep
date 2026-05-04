@@ -368,12 +368,19 @@ body:not([data-chat="open"]) #chat-pane {
 .doc-list {
     /* Sticky inside #form-pane (which has overflow:auto). When the
      * doc list is empty (zero docs in the scenario), the :empty
-     * selector below collapses it so it doesn't take vertical space. */
+     * selector below collapses it so it doesn't take vertical space.
+     *
+     * Pills wrap horizontally when they fit, but when chat is open
+     * (and the form pane shrinks to ~2/3 width) or a scenario has
+     * many docs, the strip scrolls horizontally rather than wrapping
+     * to a second row — keeps the strip a predictable single-row
+     * height and matches how the user wanted it. */
     position: sticky;
     top: 0;
     z-index: 5;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     align-items: center;
     gap: 6px;
     padding: 8px 12px;
@@ -401,6 +408,9 @@ body:not([data-chat="open"]) #chat-pane {
     border-radius: 999px;
     /* Inert today — no cursor pointer until click handlers land. */
     user-select: none;
+    /* Don't shrink when the strip is narrow; let the row scroll
+     * horizontally instead. */
+    flex-shrink: 0;
 }
 
 .doc-list__item--in-pane {
