@@ -20,7 +20,6 @@
  *   <body data-chat="open|closed">
  *
  *   #chat-toggle-btn            aria-pressed="true|false"
- *   #hidden-doc-badge           hidden unless state.hiddenDocCache is set
  *
  * Event delegation listens at the document root for any element with
  * data-layout-action="toggle-chat|open-doc|close-doc|open-third-pane|select-doc".
@@ -46,7 +45,7 @@
 
     /* -------- Module state (initialized in init()) -------- */
     var workspace, formPane, docPanes, chatPane;
-    var chatToggleBtn, hiddenDocBadge;
+    var chatToggleBtn;
     var docList;
     var scenarioId = "";
     var docUrls = {};
@@ -218,6 +217,27 @@
                 '<rect x="10" y="10" width="6" height="6" rx="1.5"/>' +
                 '</svg></button>'
             );
+        } else if (paneIndex === 0 && state.panes === 2
+                && state.chatOpen && state.hiddenDocCache) {
+            /* Chat-open + 2-pane + a cached doc exists: render the
+             * 3-pane icon as a non-interactive indicator (span, not
+             * button) with a small filled dot overlaid. Signals
+             * "there's a third pane in cache" purely visually; no
+             * click action. The cached doc itself is reachable via
+             * its pill in the global doc-list bar. */
+            var cacheLabel = docLabels[state.hiddenDocCache] || state.hiddenDocCache;
+            parts.push(
+                '<span class="doc-pane__banner-indicator"' +
+                ' title="' + escapeAttr("Cached: " + cacheLabel) + '">' +
+                '<svg viewBox="0 0 18 18" fill="none"' +
+                ' stroke="currentColor" stroke-width="1.5">' +
+                '<rect x="2" y="2" width="14" height="6" rx="1.5"/>' +
+                '<rect x="2" y="10" width="6" height="6" rx="1.5"/>' +
+                '<rect x="10" y="10" width="6" height="6" rx="1.5"/>' +
+                '</svg>' +
+                '<span class="doc-pane__banner-indicator-dot"></span>' +
+                '</span>'
+            );
         }
 
         /* Close X — present on every doc pane. Carries data-doc-id
@@ -244,21 +264,6 @@
             chatToggleBtn.setAttribute(
                 "aria-pressed", state.chatOpen ? "true" : "false"
             );
-        }
-        if (hiddenDocBadge) {
-            var cached = state.hiddenDocCache;
-            var hasHidden = cached !== null && cached !== undefined;
-            hiddenDocBadge.hidden = !hasHidden;
-            if (hasHidden) {
-                /* Tooltip identifies which doc is cached so the player
-                 * can decide whether to close chat to bring it back. */
-                var label = docLabels[cached] || cached;
-                hiddenDocBadge.setAttribute(
-                    "title", "Hidden while chat is open: " + label
-                );
-            } else {
-                hiddenDocBadge.removeAttribute("title");
-            }
         }
     }
 
@@ -293,21 +298,18 @@
                 docId: docId,
             });
         } else if (action === "open-doc") {
-            /* Click on a pill in the global doc-list bar. Toggles
-             * visibility — if the doc is currently in a pane, close
-             * that pane; otherwise open it (the reducer handles
-             * layout-promotion + recency-target logic). The cached
-             * doc (chat-open mode) is NOT in docSlots, so clicking
-             * it dispatches OPEN_DOC, which the reducer maps to a
-             * visible↔cached swap. */
+            /* Click on a pill in the global doc-list bar. Always
+             * dispatches OPEN_DOC; the reducer's openDoc no-ops
+             * when the clicked doc is already visible in some pane.
+             * Closing a pane is intentionally a separate gesture
+             * (click the close X on the pane's banner) — re-clicking
+             * a visible doc's pill is a no-op, not a close. The
+             * cached doc (chat-open mode) is NOT in docSlots, so
+             * clicking it goes through OPEN_DOC and the reducer
+             * maps that to a visible↔cached swap. */
             var openDocId = element.getAttribute("data-doc-id");
             if (!openDocId) return;
-            var inSlots = state.docSlots.indexOf(openDocId) !== -1;
-            if (inSlots) {
-                dispatch({ type: "CLOSE_DOC", docId: openDocId });
-            } else {
-                dispatch({ type: "OPEN_DOC", docId: openDocId });
-            }
+            dispatch({ type: "OPEN_DOC", docId: openDocId });
         } else if (action === "close-doc") {
             /* Click on a doc pane's banner X. The element carries the
              * doc id directly so we don't need to walk up to the pane. */
@@ -360,7 +362,6 @@
         ];
         chatPane = document.getElementById("chat-pane");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
-        hiddenDocBadge = document.getElementById("hidden-doc-badge");
         docList = document.getElementById("doc-list");
 
         scenarioId = global.SCENARIO_ID || "";

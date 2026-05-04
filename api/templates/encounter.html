@@ -63,16 +63,15 @@ html, body { height: 100%; overflow: hidden; }
    via the doc-list bar) + the pane-2-local "open pane 3" toggle in
    the doc-pane navy banner. The titlebar now carries only the
    chat toggle and the form Submit button. #}
-{# Chat-toggle button. The hidden-doc badge is anchored inside it
-   (position: absolute) and shown by the renderer when state.hiddenDocCache
-   is set. #}
+{# Chat-toggle button. The badge slot is reserved for a future
+   unread-messages indicator; the cached-doc cue moved to the
+   pane-2 banner indicator (the dimmed 3-pane icon with a dot). #}
 <button class="layout-btn" id="chat-toggle-btn" type="button"
         data-layout-action="toggle-chat"
         aria-pressed="false" aria-label="Toggle chat">
     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M3 4 H15 V12 H8 L5 15 V12 H3 Z" stroke-linejoin="round"/>
     </svg>
-    <span class="hidden-doc-badge" id="hidden-doc-badge" hidden></span>
 </button>
 <button class="btn-primary" id="submit-btn" type="submit"
         form="encounter-form">Submit</button>

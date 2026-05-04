@@ -165,19 +165,16 @@ class TestTitlebarButtons:
         assert m is not None, "chat-toggle button missing or malformed"
         assert m.group(1) == "false", "chat starts closed"
 
-    def test_hidden_doc_badge_present_and_hidden(
-        self, client: TestClient,
-    ) -> None:
-        """The hidden-doc badge lives inside the chat-toggle button and
-        starts `hidden`. The renderer un-hides it when chat is opened
-        from a 3-pane state and a doc gets cached."""
+    def test_hidden_doc_badge_retired(self, client: TestClient) -> None:
+        """The chat-toggle hidden-doc badge was retired. The cached-doc
+        cue moved to pane 2's banner (the dimmed 3-pane icon with a
+        dot), and the chat-toggle's badge slot is reserved for a
+        future unread-messages indicator. Asserting the old DOM is
+        gone keeps the retirement honest."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
-        m = re.search(
-            r'<span[^>]+id="hidden-doc-badge"[^>]*\bhidden\b',
-            body,
-        )
-        assert m is not None, "hidden-doc-badge missing or not hidden"
+        assert 'id="hidden-doc-badge"' not in body
+        assert 'hidden-doc-badge' not in body
 
     def test_submit_button_wired_to_form(self, client: TestClient) -> None:
         """2C polish: the submit-btn lives in the titlebar (out of the
