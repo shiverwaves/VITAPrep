@@ -107,8 +107,11 @@ class TestWorkspaceStructure:
             assert (
                 f'id="doc-pane-{i}" data-pane-index="{i}"' in body
             ), f"missing doc-pane-{i} skeleton"
-        # Each pane has a tabs container and an iframe.
-        assert body.count('class="doc-pane__tabs"') == 2
+        # Each pane has a navy title banner and an iframe. (The
+        # per-pane tab strip was removed in favor of a single global
+        # doc-list bar; each pane now shows just the active doc's
+        # title in its banner.)
+        assert body.count('class="doc-pane__banner"') == 2
         assert body.count('class="doc-pane__frame"') == 2
 
     def test_doc_panes_hidden_by_default(self, client: TestClient) -> None:
