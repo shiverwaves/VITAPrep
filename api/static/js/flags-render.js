@@ -76,15 +76,32 @@
 
     /* -------- Render -------- */
     /* applyState is the single DOM mutation entry point for the flag
-     * system. Phase B leaves it as a no-op scaffolding placeholder.
-     * Phases C and E fill it in with:
-     *   - flagged-field visual indicators (Phase C)
-     *   - flag-list content in the sidebar panel (Phase E)
-     *   - count badge on the Flags toggle button (Phase D / E) */
+     * system. Phase C fills in the field-level visual indicator
+     * (.f13c-flagged class on each flagged input). Phases D/E will
+     * extend this to also update the sidebar Flags panel content +
+     * the toggle button count badge. */
     function applyState() {
-        /* Intentionally empty during Phase B. The render hook is in
-         * place so dispatch() has somewhere to call; the actual DOM
-         * work lands later. */
+        if (!state) return;
+        renderFieldIndicators();
+    }
+
+    /* Sync .f13c-flagged class on every form input to match flag
+     * state. Two-pass to keep the operation O(N) where N is the
+     * input count: pass 1 sets each input's class to match its flag
+     * presence; that's the entire job for the current visual since
+     * we style the input directly (no wrapper / dot positioning). */
+    function renderFieldIndicators() {
+        var formPane = document.getElementById("form-pane");
+        if (!formPane) return;
+        var flagged = state.flags || {};
+        var inputs = formPane.querySelectorAll(
+            "input[name], textarea[name], select[name]"
+        );
+        for (var i = 0; i < inputs.length; i++) {
+            var input = inputs[i];
+            var fieldId = input.getAttribute("name");
+            input.classList.toggle("f13c-flagged", !!flagged[fieldId]);
+        }
     }
 
     /* -------- Init -------- */
