@@ -51,15 +51,39 @@
         openMenu(e.clientX, e.clientY, fieldId);
     }
 
-    /* Walk up from the click target until we hit a form input or the
-     * form pane root. Returns the input or null. */
+    /* Locate the form input associated with a click target, accepting
+     * clicks on labels, cells, or the input itself.
+     *
+     * Two-pass walk:
+     *   1. Walk up looking for a direct input click — handles "click on
+     *      the input element itself."
+     *   2. Walk up looking for the smallest ancestor that contains
+     *      exactly one named form input — handles "click on a label,
+     *      cell, label-text, or surrounding chrome."
+     *
+     * Stops at the form-pane root. Returns null if no single input is
+     * unambiguously associated with the click (e.g. the click is in
+     * a wrapper containing multiple inputs). */
     function findFormInput(node) {
-        while (node && node !== formPane) {
-            var tag = node.tagName;
+        var cursor = node;
+        while (cursor && cursor !== formPane) {
+            var tag = cursor.tagName;
             if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-                return node;
+                return cursor;
             }
-            node = node.parentNode;
+            cursor = cursor.parentNode;
+        }
+
+        cursor = node;
+        while (cursor && cursor !== formPane) {
+            if (cursor.querySelectorAll) {
+                var found = cursor.querySelectorAll(
+                    "input[name], textarea[name], select[name]"
+                );
+                if (found.length === 1) return found[0];
+                if (found.length > 1) return null;
+            }
+            cursor = cursor.parentNode;
         }
         return null;
     }
@@ -109,13 +133,23 @@
         return s && s.flags ? s.flags[fieldId] || null : null;
     }
 
+    /* Display labels per context — natural-language, easier to read
+     * than the raw enum values. The reducer / state still use the
+     * canonical "Missing" / "Confirm" / "Other" tokens; this map is
+     * presentation-only. */
+    var CONTEXT_LABELS = {
+        Missing: "Information Missing",
+        Confirm: "Needs Confirmation",
+        Other: "Other",
+    };
+
     /* Render the menu HTML for the right-clicked field. Two cases:
-     *   - Unflagged: show "Mark as Missing / Confirm / Other" items.
+     *   - Unflagged: show three Flag-as items (one per context).
      *   - Flagged: show current context, change-context options
      *     (excluding the current one), and an Unflag (danger) item.
      *
-     * The header row shows the field id; not human-friendly yet but
-     * scoped to MVP. A label registry is a future polish item. */
+     * The header row shows the raw field id for now; a human-label
+     * registry is a future polish item. */
     function renderMenuItems(fieldId, existing) {
         var parts = [];
         parts.push(
@@ -124,22 +158,20 @@
             '</div>'
         );
 
+        var contexts = ["Missing", "Confirm", "Other"];
+
         if (existing) {
-            var label = existing.context;
-            if (existing.context === "Other" && existing.context_text) {
-                label += ' — "' + existing.context_text + '"';
-            }
             parts.push(
                 '<div class="contextmenu__header" style="text-transform:none;color:var(--color-accent)">' +
-                'Flagged: ' + escapeHtml(label) +
+                'Flagged: ' + escapeHtml(CONTEXT_LABELS[existing.context] || existing.context) +
                 '</div>'
             );
-            ["Missing", "Confirm", "Other"].forEach(function (ctx) {
+            contexts.forEach(function (ctx) {
                 if (ctx !== existing.context) {
                     parts.push(
                         '<button type="button" class="contextmenu__item"' +
                         ' data-flag-action="set-context:' + ctx + '">' +
-                        'Change to ' + ctx + (ctx === "Other" ? "…" : "") +
+                        escapeHtml(CONTEXT_LABELS[ctx]) +
                         '</button>'
                     );
                 }
@@ -150,18 +182,14 @@
                 ' data-flag-action="unflag">Unflag</button>'
             );
         } else {
-            parts.push(
-                '<button type="button" class="contextmenu__item"' +
-                ' data-flag-action="flag:Missing">Mark as Missing</button>'
-            );
-            parts.push(
-                '<button type="button" class="contextmenu__item"' +
-                ' data-flag-action="flag:Confirm">Mark as Confirm</button>'
-            );
-            parts.push(
-                '<button type="button" class="contextmenu__item"' +
-                ' data-flag-action="flag:Other">Mark as Other…</button>'
-            );
+            contexts.forEach(function (ctx) {
+                parts.push(
+                    '<button type="button" class="contextmenu__item"' +
+                    ' data-flag-action="flag:' + ctx + '">' +
+                    escapeHtml(CONTEXT_LABELS[ctx]) +
+                    '</button>'
+                );
+            });
         }
         return parts.join("");
     }
@@ -177,32 +205,21 @@
             return;
         }
 
-        var prefix, ctx;
+        var actionType, ctx;
         if (action.indexOf("flag:") === 0) {
-            prefix = "FLAG_FIELD";
+            actionType = "FLAG_FIELD";
             ctx = action.slice(5);
         } else if (action.indexOf("set-context:") === 0) {
-            prefix = "SET_CONTEXT";
+            actionType = "SET_CONTEXT";
             ctx = action.slice(12);
         } else {
             return;
         }
 
-        var contextText = null;
-        if (ctx === "Other") {
-            /* MVP: native prompt for free-form text. A nicer modal is
-             * a future polish item. Cancel / empty input → no-op. */
-            contextText = window.prompt(
-                "Describe why you're flagging this field:"
-            );
-            if (!contextText) return;
-        }
-
         global.Flags.dispatch({
-            type: prefix,
+            type: actionType,
             field_id: fieldId,
             context: ctx,
-            context_text: contextText,
         });
     }
 
