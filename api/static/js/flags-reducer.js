@@ -62,12 +62,15 @@
         return (state.tick || 0) + 1;
     }
 
-    /* Add (or overwrite) a flag for field_id. Status starts at "draft". */
+    /* Add (or overwrite) a flag for field_id. Status starts at "draft".
+     *
+     * context_text is optional even for the "Other" context — it can
+     * be supplied as a free-form descriptor when set, or left null.
+     * (The MVP context menu doesn't prompt for text; a richer compose
+     * flow can populate context_text later.) */
     function flagField(state, fieldId, context, contextText) {
         if (!fieldId) return state;
         if (!VALID_CONTEXTS[context]) return state;
-        /* "Other" requires a non-empty context_text. */
-        if (context === "Other" && !contextText) return state;
 
         var tick = nextTick(state);
         var newFlags = Object.assign({}, state.flags);
@@ -75,7 +78,7 @@
         newFlags[fieldId] = {
             field_id: fieldId,
             context: context,
-            context_text: context === "Other" ? contextText : null,
+            context_text: contextText || null,
             /* Re-flagging an already-flagged field preserves its action
              * and status. Brand-new flags start as drafts. */
             action: existing ? existing.action : null,
@@ -93,21 +96,21 @@
     }
 
     /* Change the context on an existing flag. No-op if the field isn't
-     * flagged (use FLAG_FIELD to create). */
+     * flagged (use FLAG_FIELD to create). context_text is optional
+     * for any context. */
     function setContext(state, fieldId, context, contextText) {
         if (!fieldId || !state.flags[fieldId]) return state;
         if (!VALID_CONTEXTS[context]) return state;
-        if (context === "Other" && !contextText) return state;
 
         var existing = state.flags[fieldId];
-        if (existing.context === context
-                && existing.context_text === (context === "Other" ? contextText : null)) {
+        var newText = contextText || null;
+        if (existing.context === context && existing.context_text === newText) {
             return state;  /* no actual change */
         }
         var newFlags = Object.assign({}, state.flags);
         newFlags[fieldId] = Object.assign({}, existing, {
             context: context,
-            context_text: context === "Other" ? contextText : null,
+            context_text: newText,
         });
         return { flags: newFlags, tick: state.tick };
     }

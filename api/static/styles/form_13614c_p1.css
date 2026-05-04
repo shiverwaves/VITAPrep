@@ -683,18 +683,18 @@
 /* ================================================================
    Flagged-field indicator (Marked-for-Follow-Up mechanic, Phase C)
    ================================================================
-   When a form input is flagged for follow-up, it gets the
-   .f13c-flagged class added by api/static/js/flags-render.js. The
-   visual cue is the existing focus-state accent color applied as
-   a persistent border (text inputs) or outline (checkboxes), so
-   the player can see at a glance which fields they've marked
-   without needing to open the Flags review panel. */
+   When a form input is flagged for follow-up:
+   1. The input itself gets the .f13c-flagged class (orange border /
+      outline) — peripheral cue while working in that area.
+   2. A small orange dot is JS-injected as a sibling <span> after
+      the input — at-a-glance cue visible from across the form.
+
+   Both cues use the existing focus-state accent color so the
+   visual rhyme is "this needs attention" same as focus. */
 
 .f13c-form input[type="text"].f13c-flagged {
     border-bottom-color: #e87a2e;
     border-bottom-width: 2px;
-    /* Compensate for the extra 1px so the field doesn't shift its
-     * baseline relative to neighbours. */
     padding-bottom: 0;
 }
 
@@ -706,4 +706,22 @@
 .f13c-form textarea.f13c-flagged {
     border-color: #e87a2e;
     border-width: 2px;
+}
+
+/* The flag dot — JS-injected immediately after each flagged input.
+ * Inline-block + small margin places it just to the right of the
+ * input without requiring `position: relative` on a wrapper, which
+ * would risk disturbing existing form layouts. */
+.f13c-flag-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e87a2e;
+    margin: 0 0 0 5px;
+    vertical-align: middle;
+    /* Subtle white ring so the dot reads cleanly against any cell
+     * background (white client cells, gray volunteer cells). */
+    box-shadow: 0 0 0 1.5px #fff;
+    pointer-events: none;
 }

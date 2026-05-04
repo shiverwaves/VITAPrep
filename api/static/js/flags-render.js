@@ -86,10 +86,23 @@
     }
 
     /* Sync .f13c-flagged class on every form input to match flag
-     * state. Two-pass to keep the operation O(N) where N is the
-     * input count: pass 1 sets each input's class to match its flag
-     * presence; that's the entire job for the current visual since
-     * we style the input directly (no wrapper / dot positioning). */
+     * state, AND inject / remove a small orange-dot indicator near
+     * each flagged input's label.
+     *
+     * Dots are placed at the label level, not the input level —
+     * the player thinks of the field as "the question" (label text),
+     * not "the input element," and labels are larger / easier to
+     * eyeball at a glance.
+     *
+     * Anchor resolution (labelAnchorFor):
+     *   - Checkboxes inside labels → anchor to the label's last span
+     *     (the question text), so the dot trails after the question.
+     *   - Text inputs in cells → anchor to the f13c-label sibling
+     *     (the field caption), so the dot trails after the caption.
+     *   - Fallback → anchor to the input itself.
+     *
+     * Each dot carries a data-flag-for="<field_id>" attribute so we
+     * can find and remove the right one without scanning all dots. */
     function renderFieldIndicators() {
         var formPane = document.getElementById("form-pane");
         if (!formPane) return;
@@ -100,8 +113,58 @@
         for (var i = 0; i < inputs.length; i++) {
             var input = inputs[i];
             var fieldId = input.getAttribute("name");
-            input.classList.toggle("f13c-flagged", !!flagged[fieldId]);
+            var shouldBeFlagged = !!flagged[fieldId];
+            input.classList.toggle("f13c-flagged", shouldBeFlagged);
+
+            var existingDot = formPane.querySelector(
+                '.f13c-flag-dot[data-flag-for="' + cssEscape(fieldId) + '"]'
+            );
+
+            if (shouldBeFlagged && !existingDot) {
+                var anchor = labelAnchorFor(input);
+                if (anchor && anchor.parentNode) {
+                    var dot = document.createElement("span");
+                    dot.className = "f13c-flag-dot";
+                    dot.setAttribute("data-flag-for", fieldId);
+                    dot.setAttribute("aria-hidden", "true");
+                    anchor.parentNode.insertBefore(dot, anchor.nextSibling);
+                }
+            } else if (!shouldBeFlagged && existingDot) {
+                existingDot.parentNode.removeChild(existingDot);
+            }
         }
+    }
+
+    /* Pick the visual anchor for the dot — a sibling-or-near element
+     * that the dot will be inserted *after* in the DOM. */
+    function labelAnchorFor(input) {
+        var labelEl = input.closest ? input.closest("label") : null;
+        if (labelEl) {
+            /* For label-wrapping form rows (most checkboxes), prefer
+             * the label's last child element so the dot trails after
+             * the question text rather than appearing between the
+             * checkbox and its text. */
+            var lastChild = labelEl.lastElementChild;
+            if (lastChild) return lastChild;
+            return labelEl;
+        }
+        /* For cell-style text inputs (Page 1 personal-info rows),
+         * the f13c-label span sits next to the input in the same
+         * cell. Anchor the dot just after the caption. */
+        var parent = input.parentNode;
+        if (parent && parent.querySelector) {
+            var labelSpan = parent.querySelector(".f13c-label");
+            if (labelSpan) return labelSpan;
+        }
+        return input;
+    }
+
+    /* CSS.escape polyfill — older browsers don't have it, and
+     * field IDs contain dots / digits that need escaping in
+     * attribute selectors. */
+    function cssEscape(s) {
+        if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(s);
+        return String(s).replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, "\\$&");
     }
 
     /* -------- Init -------- */
