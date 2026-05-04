@@ -78,16 +78,22 @@
 
     /* Drop persisted docSlots entries whose doc_ids no longer exist
      * in this scenario (e.g. the scenario was regenerated). Otherwise
-     * we'd ask iframes to load 404 URLs. */
+     * we'd ask iframes to load 404 URLs. Also backfill paneRecency
+     * and tick for sessions persisted before Phase 2 added them, so
+     * the reducer's bumpRecency / pickRecencyTarget don't see undefined. */
     function sanitizePersistedState(persisted) {
-        if (!persisted || !persisted.docSlots) return persisted;
-        var sanitized = persisted.docSlots.map(function (id) {
-            return docUrls[id] ? id : null;
-        });
+        if (!persisted) return persisted;
+        if (persisted.docSlots) {
+            var sanitized = persisted.docSlots.map(function (id) {
+                return docUrls[id] ? id : null;
+            });
+            persisted.docSlots = sanitized;
+        }
         if (persisted.hiddenDocCache && !docUrls[persisted.hiddenDocCache]) {
             persisted.hiddenDocCache = null;
         }
-        persisted.docSlots = sanitized;
+        if (!persisted.paneRecency) persisted.paneRecency = [0, 0];
+        if (typeof persisted.tick !== "number") persisted.tick = 0;
         return persisted;
     }
 
