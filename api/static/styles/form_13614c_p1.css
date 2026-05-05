@@ -708,20 +708,28 @@
     border-width: 2px;
 }
 
-/* The flag dot — JS-injected immediately after each flagged input.
- * Inline-block + small margin places it just to the right of the
- * input without requiring `position: relative` on a wrapper, which
- * would risk disturbing existing form layouts. */
+/* The flag dot — JS-injected as a child of each flagged field's
+ * wrapper (the label / cell / sub-question container that holds
+ * the flagged input). Positioned absolute top-right of the wrapper.
+ *
+ * Wrapper gets .f13c-flagged-label which sets position: relative
+ * so this absolute child anchors correctly. */
+.f13c-flagged-label {
+    position: relative;
+}
+
 .f13c-flag-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background: #e87a2e;
-    margin: 0 0 0 5px;
-    vertical-align: middle;
-    /* Subtle white ring so the dot reads cleanly against any cell
+    /* White ring so the dot reads cleanly against any cell
      * background (white client cells, gray volunteer cells). */
     box-shadow: 0 0 0 1.5px #fff;
+    box-sizing: border-box;
     pointer-events: none;
+    z-index: 1;
 }
