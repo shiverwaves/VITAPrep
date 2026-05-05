@@ -123,49 +123,49 @@
         if (!pane) return;
 
         var flags = state.flags || {};
-        var fieldIds = Object.keys(flags);
+        var archive = state.archive || [];
+        var activeIds = Object.keys(flags);
 
-        if (fieldIds.length === 0) {
+        if (activeIds.length === 0 && archive.length === 0) {
             pane.innerHTML =
                 '<div class="flags-pane__empty">No flags yet.</div>';
             return;
         }
 
-        /* Partition: active rows (draft/ready/in_progress) on top,
-         * archived (sent) below. Within each, newest first. */
-        var active = [];
-        var archived = [];
-        fieldIds.forEach(function (fid) {
-            (flags[fid].status === "sent" ? archived : active).push(fid);
-        });
-        var byNewest = function (a, b) {
+        /* Active rows newest-first by created_at; archive newest-
+         * first by sent_at. Split into two sections separated by
+         * a divider; archive is read-only history. */
+        activeIds.sort(function (a, b) {
             return (flags[b].created_at || 0) - (flags[a].created_at || 0);
-        };
-        active.sort(byNewest);
-        archived.sort(byNewest);
+        });
+        var sortedArchive = archive.slice().sort(function (a, b) {
+            return (b.sent_at || 0) - (a.sent_at || 0);
+        });
 
-        var hasReady = active.some(function (fid) {
+        var hasReady = activeIds.some(function (fid) {
             return flags[fid].status === "ready";
         });
 
         var html = '<div class="flags-pane__body">';
-        active.forEach(function (fid) {
-            html += renderChainRow(fid, flags[fid]);
+        activeIds.forEach(function (fid) {
+            html += renderChainRow(flags[fid], false);
         });
-        if (archived.length > 0) {
+        if (sortedArchive.length > 0) {
             html += '<div class="flags-pane__divider">Sent</div>';
-            archived.forEach(function (fid) {
-                html += renderChainRow(fid, flags[fid]);
+            sortedArchive.forEach(function (entry, i) {
+                /* Archive entries are unique by (field_id, sent_at);
+                 * use index as the data-archive-index so the row's
+                 * data-field-id can stay the bare field id. */
+                html += renderChainRow(entry, true, i);
             });
         }
         html += '</div>';
         html += renderFooter(hasReady);
         pane.innerHTML = html;
 
-        /* Rehydrate open dropdown after innerHTML wipe. */
         if (openDropdown) {
             var stillExists = flags[openDropdown.fieldId];
-            if (!stillExists || stillExists.status === "sent") {
+            if (!stillExists) {
                 openDropdown = null;
             } else {
                 showDropdown(openDropdown.fieldId, openDropdown.pillKey);
@@ -173,18 +173,22 @@
         }
     }
 
-    function renderChainRow(fieldId, flag) {
-        var isSent = flag.status === "sent";
-        var isReady = flag.status === "ready";
+    function renderChainRow(flag, isSent, archiveIndex) {
+        var fieldId = flag.field_id;
         var complete = global.FlagsReducer.isChainComplete(flag);
+        var isReady = !isSent && flag.status === "ready";
 
         var modifiers = " flags-pane__row--chain";
         if (isSent) modifiers += " flags-pane__row--sent";
         if (isReady) modifiers += " flags-pane__row--ready";
 
+        var rowAttrs = ' data-field-id="' + escapeAttr(fieldId) + '"';
+        if (isSent) {
+            rowAttrs += ' data-archive-index="' + archiveIndex + '"';
+        }
+
         var parts = [
-            '<div class="flags-pane__row' + modifiers +
-            '" data-field-id="' + escapeAttr(fieldId) + '">',
+            '<div class="flags-pane__row' + modifiers + '"' + rowAttrs + '>',
             '<div class="flags-pane__row-field">' + escapeHtml(fieldId) + '</div>',
             '<div class="flags-pane__chain">',
             renderPill(fieldId, "verb", flag.verb, VERB_LABELS, isSent),
@@ -607,27 +611,33 @@
         applyState();
     }
 
-    /* Drop persisted flags from the legacy shape (had `context` /
-     * `action` fields) — they don't fit the chain-link schema and
-     * carrying them forward would render garbage. */
+    /* Sanitize persisted state for shape compatibility. Drops legacy
+     * flags (the pre-chain shape with `context` / `action`) and
+     * splits any sent flags out into the archive (the active map
+     * is now strictly draft + ready). */
     function sanitizePersisted(persisted) {
         if (!persisted || !persisted.flags) return persisted;
-        var clean = {};
-        var changed = false;
+        var activeMap = {};
+        var archive = (persisted.archive || []).slice();
         Object.keys(persisted.flags).forEach(function (fid) {
             var f = persisted.flags[fid];
-            if (f && typeof f.verb === "string"
-                    && (f.target === null || typeof f.target === "string")
-                    && (f.channel === null || typeof f.channel === "string")) {
-                clean[fid] = f;
+            var validShape = f && typeof f.verb === "string"
+                && (f.target === null || typeof f.target === "string")
+                && (f.channel === null || typeof f.channel === "string");
+            if (!validShape) return;  /* drop legacy entries */
+            if (f.status === "sent") {
+                archive.push(Object.assign({}, f, {
+                    sent_at: f.sent_at || f.created_at || 0,
+                }));
             } else {
-                changed = true;
+                activeMap[fid] = f;
             }
         });
-        if (changed) {
-            return { flags: clean, tick: persisted.tick || 0 };
-        }
-        return persisted;
+        return {
+            flags: activeMap,
+            archive: archive,
+            tick: persisted.tick || 0,
+        };
     }
 
     /* -------- Helpers -------- */
