@@ -346,9 +346,18 @@
         /* Closing (prev non-null → next null). */
         var closeUpdate = { sidebarTool: null, chatOpen: false };
         if (state.hiddenDocCache !== null) {
-            closeUpdate.panes = 3;
-            closeUpdate.docSlots = state.docSlots.concat([state.hiddenDocCache]);
-            closeUpdate.hiddenDocCache = null;
+            if (state.markedOpen) {
+                /* Marked owns the workspace while open — docs can't
+                 * surface here. Move the chat-shed cache into the
+                 * marked cache so it'll restore when Marked closes. */
+                closeUpdate.markedDocCache =
+                    (state.markedDocCache || []).concat([state.hiddenDocCache]);
+                closeUpdate.hiddenDocCache = null;
+            } else {
+                closeUpdate.panes = 3;
+                closeUpdate.docSlots = state.docSlots.concat([state.hiddenDocCache]);
+                closeUpdate.hiddenDocCache = null;
+            }
         }
         return Object.assign({}, state, closeUpdate);
     }
@@ -386,6 +395,19 @@
             var cache = state.markedDocCache || [];
             if (cache.length === 0) {
                 return Object.assign({}, state, { markedOpen: false });
+            }
+            /* Chat-open forbids 3-pane (h2-chat is the cap). If the
+             * marked cache has 2 docs and chat is open, restore one
+             * to docSlots and spill the other to hiddenDocCache so
+             * it surfaces when chat closes. */
+            if (state.chatOpen && cache.length > 1) {
+                return Object.assign({}, state, {
+                    markedOpen: false,
+                    panes: 2,
+                    docSlots: [cache[0]],
+                    hiddenDocCache: cache[1],
+                    markedDocCache: [],
+                });
             }
             return Object.assign({}, state, {
                 markedOpen: false,
