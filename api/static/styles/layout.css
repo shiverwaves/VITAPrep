@@ -415,6 +415,8 @@ body:not([data-sidebar="chat"]) #chat-pane {
  *     pill itself is the surface you're inside."
  */
 .titlebar__pill {
+    /* Anchor for the cached-doc dot indicator (::after). */
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -427,6 +429,25 @@ body:not([data-sidebar="chat"]) #chat-pane {
     user-select: none;
     color: #fff;
     transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+/* Cached-doc indicator — small orange dot anchored to the pill's
+ * top-right corner. Visible only when docs were open at the moment
+ * Marked was triggered (they'll restore when Marked closes). The
+ * navy ring around the dot makes it read as floating over the
+ * pill rather than touching it, regardless of pill state. */
+.titlebar__pill--has-cache::after {
+    content: "";
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    border: 1.5px solid var(--color-navy);
+    box-sizing: content-box;
+    pointer-events: none;
 }
 
 .titlebar__pill:hover {

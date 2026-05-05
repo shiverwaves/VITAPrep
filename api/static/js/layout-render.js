@@ -306,6 +306,13 @@
             markedPill.setAttribute(
                 "aria-pressed", state.markedOpen ? "true" : "false"
             );
+            /* Cached-doc indicator: orange dot when at least one
+             * doc is in markedDocCache (i.e. docs were open when
+             * Marked was triggered and will restore on close). */
+            var cacheCount = (state.markedDocCache || []).length;
+            markedPill.classList.toggle(
+                "titlebar__pill--has-cache", cacheCount > 0
+            );
         }
     }
 
