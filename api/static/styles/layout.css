@@ -338,27 +338,26 @@ body:not([data-sidebar="flags"]) #flags-pane {
 }
 
 /* =========================================================================
- * Flags toggle button count badge
+ * Flags toggle button dot indicator
  * =========================================================================
- * Small numbered badge on the titlebar Flags icon showing the number
- * of currently flagged fields. Hidden when count is 0. */
+ * Small accent dot on the titlebar Flags icon that signals "something
+ * is flagged" without showing a number. The textual count lives in
+ * the status bar's #status-flags. The dot appears when count > 0 and
+ * is removed (DOM removal) when count returns to 0.
+ *
+ * Visual rhyme: same accent color + white ring as the field-level
+ * flag dot, so the player reads "this icon refers to the orange
+ * dots on the form." */
 
 .flags-toggle-badge {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
-    border-radius: 7px;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     background: #e87a2e;
-    color: #fff;
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 14px;
-    text-align: center;
-    border: 1.5px solid var(--color-surface);
-    box-sizing: content-box;
+    box-shadow: 0 0 0 1.5px var(--color-surface);
     pointer-events: none;
 }
 

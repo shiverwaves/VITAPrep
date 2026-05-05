@@ -233,12 +233,22 @@
         );
     }
 
-    /* Update the count badge on the Flags toggle button. Hidden when
-     * count is 0. */
+    /* Surface the flag count to the player in two places:
+     *   1. The status-bar's #status-flags text (textual count).
+     *   2. A small dot indicator on the #flags-toggle-btn that just
+     *      signals "something is flagged" — the actual number lives
+     *      in the status bar.
+     * The dot appears when count > 0 and is removed when count is 0. */
     function renderFlagsCountBadge() {
+        var count = Object.keys(state.flags || {}).length;
+
+        var statusFlags = document.getElementById("status-flags");
+        if (statusFlags) {
+            statusFlags.textContent = count + (count === 1 ? " flag" : " flags");
+        }
+
         var btn = document.getElementById("flags-toggle-btn");
         if (!btn) return;
-        var count = Object.keys(state.flags || {}).length;
         var badge = btn.querySelector(".flags-toggle-badge");
         if (count === 0) {
             if (badge) badge.parentNode.removeChild(badge);
@@ -247,9 +257,9 @@
         if (!badge) {
             badge = document.createElement("span");
             badge.className = "flags-toggle-badge";
+            badge.setAttribute("aria-hidden", "true");
             btn.appendChild(badge);
         }
-        badge.textContent = String(count);
     }
 
     /* -------- Panel event delegation -------- */
