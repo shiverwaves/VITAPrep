@@ -60,16 +60,21 @@
         return {
             panes: 1,
             docSlots: [],
-            /* sidebarTool is the source of truth for which sidebar
-             * tool occupies the right column ("chat" / "flags" /
-             * null). chatOpen is kept as a derived boolean for the
-             * "any sidebar tool open" predicate that the layout
-             * logic uses (3-pane shed, layout-name computation,
-             * various guards). The two stay in sync via
-             * setSidebarTool. */
+            /* sidebarTool drives which tool occupies the right column
+             * ("chat" | null today). chatOpen is the derived "any
+             * sidebar tool open" boolean used by the layout logic
+             * (3-pane shed, layout-name computation). The two stay
+             * in sync via setSidebarTool. */
             sidebarTool: null,
             chatOpen: false,
             hiddenDocCache: null,
+            /* Marked-for-follow-up panel state. Marked occupies the
+             * top 1/3 of the workspace and forces all doc panes
+             * into markedDocCache (the workspace can't show docs
+             * AND marked simultaneously — the "max 3 surfaces"
+             * rule). When Marked closes, cached docs restore. */
+            markedOpen: false,
+            markedDocCache: [],
             paneRecency: [0, 0],
             tick: 0,
             formState: { currentPage: 1 },
@@ -358,6 +363,49 @@
         return setSidebarTool(state, next);
     }
 
+    /* TOGGLE_MARKED — opens or closes the Marked top panel. Marked
+     * occupies the top 1/3 of the workspace; doc panes can't
+     * coexist with it, so opening Marked auto-caches the visible
+     * docs into markedDocCache and drops to panes:1. Closing
+     * restores from the cache.
+     *
+     * Mutual exclusion is one-way: Marked auto-sheds docs but
+     * doesn't touch chat. Chat can be open or closed independently
+     * while Marked is active — the "max 3 surfaces" rule (form +
+     * marked + chat = 3) holds because docs are out of the picture. */
+    function toggleMarked(state) {
+        if (state.markedOpen) {
+            /* Closing — restore docs from markedDocCache. */
+            var cache = state.markedDocCache || [];
+            if (cache.length === 0) {
+                return Object.assign({}, state, {
+                    markedOpen: false,
+                });
+            }
+            return Object.assign({}, state, {
+                markedOpen: false,
+                panes: 1 + cache.length,
+                docSlots: cache.slice(),
+                markedDocCache: [],
+            });
+        }
+        /* Opening — cache visible docs and drop to panes:1. The
+         * existing hiddenDocCache (chat-shed) is left untouched;
+         * it'll restore when chat closes if Marked has closed by
+         * then. Edge case (chat closes while Marked is still open
+         * with hiddenDocCache populated) is handled when reached;
+         * for Phase 1 the common path is the focus. */
+        var cachedDocs = (state.docSlots || []).filter(function (id) {
+            return id !== null && id !== undefined;
+        });
+        return Object.assign({}, state, {
+            markedOpen: true,
+            panes: 1,
+            docSlots: [],
+            markedDocCache: cachedDocs,
+        });
+    }
+
     /* SELECT_DOC — direct slot-targeted assignment, dispatched by
      * the per-pane dropdown (Phase 4). Bumps paneRecency for the
      * touched slot so the OPEN_DOC alternation in 3-pane mode
@@ -389,6 +437,8 @@
                 return toggleChat(state);
             case "TOGGLE_SIDEBAR_TOOL":
                 return toggleSidebarTool(state, action.tool);
+            case "TOGGLE_MARKED":
+                return toggleMarked(state);
             case "SELECT_DOC":
                 return selectDoc(state, action.slotIndex, action.docId);
             case "OPEN_DOC":
