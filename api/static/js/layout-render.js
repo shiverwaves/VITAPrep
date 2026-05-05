@@ -44,8 +44,8 @@
     "use strict";
 
     /* -------- Module state (initialized in init()) -------- */
-    var workspace, formPane, docPanes, chatPane;
-    var chatToggleBtn;
+    var workspace, formPane, docPanes, chatPane, flagsPane;
+    var chatToggleBtn, flagsToggleBtn;
     var docList;
     var scenarioId = "";
     var docUrls = {};
@@ -78,8 +78,9 @@
     /* Drop persisted docSlots entries whose doc_ids no longer exist
      * in this scenario (e.g. the scenario was regenerated). Otherwise
      * we'd ask iframes to load 404 URLs. Also backfill paneRecency
-     * and tick for sessions persisted before Phase 2 added them, so
-     * the reducer's bumpRecency / pickRecencyTarget don't see undefined. */
+     * and tick for sessions persisted before Phase 2 added them, and
+     * migrate sidebarTool for sessions persisted before Phase D
+     * added the sidebar-tool generalization. */
     function sanitizePersistedState(persisted) {
         if (!persisted) return persisted;
         if (persisted.docSlots) {
@@ -93,6 +94,11 @@
         }
         if (!persisted.paneRecency) persisted.paneRecency = [0, 0];
         if (typeof persisted.tick !== "number") persisted.tick = 0;
+        /* Phase D migration: pre-Phase-D state had only chatOpen:bool.
+         * Derive sidebarTool from it. */
+        if (typeof persisted.sidebarTool === "undefined") {
+            persisted.sidebarTool = persisted.chatOpen ? "chat" : null;
+        }
         return persisted;
     }
 
@@ -120,11 +126,15 @@
     function applyState() {
         if (!workspace) return;
         workspace.setAttribute("data-layout", computeLayoutName(state));
-        document.body.setAttribute("data-chat", state.chatOpen ? "open" : "closed");
+        /* body[data-sidebar] takes "chat" / "flags" / "closed". Both
+         * tools occupy the same right-column real estate; the value
+         * just tells CSS which pane content to show. */
+        var sidebarValue = state.sidebarTool || "closed";
+        document.body.setAttribute("data-sidebar", sidebarValue);
         updateDocPane(0, state.docSlots[0] || null);
         updateDocPane(1, state.docSlots[1] || null);
         renderDocList();
-        updateChatToggleButton();
+        updateSidebarToggleButtons();
     }
 
     /* Render the sticky doc-list bar at the top of #form-pane.
@@ -271,10 +281,18 @@
         banner.innerHTML = parts.join("");
     }
 
-    function updateChatToggleButton() {
+    /* Sync aria-pressed on each sidebar-tool toggle button to reflect
+     * which tool is currently active. Both buttons read from
+     * state.sidebarTool so exactly one (or neither) shows pressed. */
+    function updateSidebarToggleButtons() {
         if (chatToggleBtn) {
             chatToggleBtn.setAttribute(
-                "aria-pressed", state.chatOpen ? "true" : "false"
+                "aria-pressed", state.sidebarTool === "chat" ? "true" : "false"
+            );
+        }
+        if (flagsToggleBtn) {
+            flagsToggleBtn.setAttribute(
+                "aria-pressed", state.sidebarTool === "flags" ? "true" : "false"
             );
         }
     }
@@ -373,7 +391,9 @@
             document.getElementById("doc-pane-1"),
         ];
         chatPane = document.getElementById("chat-pane");
+        flagsPane = document.getElementById("flags-pane");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
+        flagsToggleBtn = document.getElementById("flags-toggle-btn");
         docList = document.getElementById("doc-list");
 
         scenarioId = global.SCENARIO_ID || "";

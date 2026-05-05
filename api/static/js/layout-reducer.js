@@ -60,6 +60,14 @@
         return {
             panes: 1,
             docSlots: [],
+            /* sidebarTool is the source of truth for which sidebar
+             * tool occupies the right column ("chat" / "flags" /
+             * null). chatOpen is kept as a derived boolean for the
+             * "any sidebar tool open" predicate that the layout
+             * logic uses (3-pane shed, layout-name computation,
+             * various guards). The two stay in sync via
+             * setSidebarTool. */
+            sidebarTool: null,
             chatOpen: false,
             hiddenDocCache: null,
             paneRecency: [0, 0],
@@ -287,30 +295,67 @@
         }, bumpRecency(state, 1));
     }
 
-    function toggleChat(state) {
-        if (!state.chatOpen) {
-            /* Open. Caching is only needed when shedding from 3 panes;
-             * 1- and 2-pane states keep their pane structure under chat. */
+    /* setSidebarTool is the single source of truth for "what
+     * occupies the right column." Three transitions matter:
+     *   - null → tool: opening. If panes:3, shed the third doc to
+     *     hiddenDocCache and drop to panes:2. chatOpen becomes true.
+     *   - tool → null: closing. Restore hiddenDocCache to panes:3
+     *     if one was cached. chatOpen becomes false.
+     *   - toolA → toolB (switching): no layout change; just swap
+     *     the tool. The right column was already shrunk; the new
+     *     tool takes over the same real estate.
+     *
+     * chatOpen tracks "any tool open" so the rest of the layout
+     * logic (cyclePanes guard, openThirdPane guard, OPEN_DOC's
+     * cached-swap branch) doesn't need to know about specific
+     * tools. */
+    function setSidebarTool(state, nextTool) {
+        var prevTool = state.sidebarTool;
+        if (prevTool === nextTool) return state;
+
+        /* Switching between two tools: just swap. Right column was
+         * already in occupied state; layout doesn't change. */
+        if (prevTool && nextTool) {
+            return Object.assign({}, state, { sidebarTool: nextTool });
+        }
+
+        /* Opening (prev null → next non-null). */
+        if (!prevTool && nextTool) {
+            var openUpdate = { sidebarTool: nextTool, chatOpen: true };
             if (state.panes === 3) {
-                return Object.assign({}, state, {
-                    chatOpen: true,
-                    panes: 2,
-                    docSlots: state.docSlots.slice(0, 1),
-                    hiddenDocCache: state.docSlots[1],
-                });
+                openUpdate.panes = 2;
+                openUpdate.docSlots = state.docSlots.slice(0, 1);
+                openUpdate.hiddenDocCache = state.docSlots[1];
             }
-            return Object.assign({}, state, { chatOpen: true });
+            return Object.assign({}, state, openUpdate);
         }
-        /* Close. Restore the cached doc if we shed one when opening. */
+
+        /* Closing (prev non-null → next null). */
+        var closeUpdate = { sidebarTool: null, chatOpen: false };
         if (state.hiddenDocCache !== null) {
-            return Object.assign({}, state, {
-                chatOpen: false,
-                panes: 3,
-                docSlots: state.docSlots.concat([state.hiddenDocCache]),
-                hiddenDocCache: null,
-            });
+            closeUpdate.panes = 3;
+            closeUpdate.docSlots = state.docSlots.concat([state.hiddenDocCache]);
+            closeUpdate.hiddenDocCache = null;
         }
-        return Object.assign({}, state, { chatOpen: false });
+        return Object.assign({}, state, closeUpdate);
+    }
+
+    /* Legacy entry point used by the chat-toggle button. Toggles the
+     * "chat" sidebar tool specifically — same semantics as before
+     * the multi-tool generalization. */
+    function toggleChat(state) {
+        var next = state.sidebarTool === "chat" ? null : "chat";
+        return setSidebarTool(state, next);
+    }
+
+    /* Generic toggle for any sidebar tool. Dispatched by the new
+     * Flags toggle button (and any future sidebar-tool toggles).
+     * If the requested tool is already active, closes the sidebar;
+     * otherwise switches to (or opens) the requested tool. */
+    function toggleSidebarTool(state, tool) {
+        if (!tool) return state;
+        var next = state.sidebarTool === tool ? null : tool;
+        return setSidebarTool(state, next);
     }
 
     /* SELECT_DOC — direct slot-targeted assignment, dispatched by
@@ -342,6 +387,8 @@
                 return cyclePanes(state, action.availableDocs || []);
             case "TOGGLE_CHAT":
                 return toggleChat(state);
+            case "TOGGLE_SIDEBAR_TOOL":
+                return toggleSidebarTool(state, action.tool);
             case "SELECT_DOC":
                 return selectDoc(state, action.slotIndex, action.docId);
             case "OPEN_DOC":

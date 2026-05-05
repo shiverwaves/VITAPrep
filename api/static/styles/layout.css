@@ -4,13 +4,18 @@
  * The renderer (api/static/js/layout-render.js) sets two attributes
  * the styles below key off:
  *
- *     <body data-chat="open|closed">
+ *     <body data-sidebar="chat|flags|closed">
  *     <div id="workspace" data-layout="form-only|h2|h3|form-only-chat|h2-chat">
+ *
+ * Sidebar tools (chat / flags / future) are mutually exclusive — only
+ * one occupies the right column at a time. Both produce the same
+ * workspace squeeze (h2-chat is a misnomer kept for back-compat with
+ * existing tests / test names; semantically it's "h2 with sidebar").
  *
  * Five grid configurations, single horizontal axis, no vertical splits
  * (the form is 980px wide; vertical splits would squeeze it below
- * readable width). 3-pane is forbidden when chat is open — opening
- * chat from a 3-pane state caches one doc and drops to h2-chat.
+ * readable width). 3-pane is forbidden when any sidebar tool is open —
+ * opening one from a 3-pane state caches one doc and drops to h2-chat.
  *
  * Default `data-layout="form-only"` is server-rendered so the no-JS
  * first paint is form-only-full-width; the JS hydration just confirms
@@ -42,26 +47,44 @@
     overflow: hidden;
 }
 
-body[data-chat="open"] .app-main {
+body[data-sidebar="chat"] .app-main,
+body[data-sidebar="flags"] .app-main {
     grid-template-columns: 2fr 1fr;
 }
 
 /* =========================================================================
- * Chat pane
+ * Sidebar panes (chat + flags) — share the right-column real estate
  * =========================================================================
+ * Mutually exclusive: body[data-sidebar] picks one to display; the
+ * other is display:none. Both panes occupy the same grid cell when
+ * shown.
  */
 
-#chat-pane {
+#chat-pane,
+#flags-pane {
     background: var(--color-surface);
     border-left: 1px solid var(--color-border);
     overflow: auto;
     display: flex;
     flex-direction: column;
     min-width: 0;
+    grid-column: 2;
+    grid-row: 1;
 }
 
-body:not([data-chat="open"]) #chat-pane {
+body:not([data-sidebar="chat"]) #chat-pane {
     display: none;
+}
+
+body:not([data-sidebar="flags"]) #flags-pane {
+    display: none;
+}
+
+.flags-pane__empty {
+    padding: var(--spacing-lg) var(--spacing-md);
+    color: var(--color-text-muted);
+    font-style: italic;
+    text-align: center;
 }
 
 /* =========================================================================
