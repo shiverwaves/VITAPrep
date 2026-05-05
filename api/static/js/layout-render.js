@@ -114,12 +114,13 @@
 
     /* -------- Render -------- */
     function computeLayoutName(s) {
-        /* Marked open → workspace switches to a top-1/3 marked +
-         * bottom-2/3 form grid. Docs are auto-cached by the reducer
-         * when Marked opens, so the layout never combines marked
-         * with doc panes. Chat coexists at the .app-main level
-         * (right column) and doesn't change the workspace template. */
-        if (s.markedOpen) return "form-only-marked";
+        /* Marked-mode templates: top 1/3 is the marked panel, bottom
+         * 2/3 holds the form (and optionally a single doc when chat
+         * is closed). Chat coexists at the .app-main level. */
+        if (s.markedOpen) {
+            if (s.panes === 2) return "h2-marked";
+            return "form-only-marked";
+        }
         if (s.chatOpen) {
             return s.panes === 1 ? "form-only-chat" : "h2-chat";
         }
@@ -159,14 +160,39 @@
      * or cached↔visible swap. */
     function renderDocList() {
         if (!docList) return;
-        if (availableDocIds.length === 0) {
-            docList.innerHTML = "";
-            return;
-        }
         var slot0 = state.docSlots[0] || null;
         var slot1 = state.docSlots[1] || null;
-        var cached = state.chatOpen ? (state.hiddenDocCache || null) : null;
-        var parts = [];
+        /* Cache visualization sources:
+         *   - chat-open: hiddenDocCache (single doc shed when chat opened)
+         *   - marked-open: pre-marked docs not currently visible
+         * Both can apply at once. The cache-dot UI doesn't disambiguate
+         * between sources — the player just sees "this doc is queued
+         * to come back when something closes". */
+        var cachedSet = {};
+        if (state.chatOpen && state.hiddenDocCache) {
+            cachedSet[state.hiddenDocCache] = true;
+        }
+        if (state.markedOpen && state.preMarkedSnapshot) {
+            var snapDocs = state.preMarkedSnapshot.docSlots || [];
+            for (var k = 0; k < snapDocs.length; k++) {
+                var sid = snapDocs[k];
+                if (sid && sid !== slot0 && sid !== slot1) {
+                    cachedSet[sid] = true;
+                }
+            }
+        }
+
+        /* Form pill — always rendered at position 0, distinct
+         * styling. The form itself is always visible in the
+         * workspace (Phase 1; Phase 2 adds the dual-mode swap),
+         * so the pill is shown as in-pane / inert. */
+        var parts = [
+            '<button type="button" class="doc-list__item doc-list__item--form doc-list__item--in-pane"' +
+            ' aria-current="true" tabindex="-1">' +
+            'Form 13614-C' +
+            '</button>',
+        ];
+
         for (var i = 0; i < availableDocIds.length; i++) {
             var docId = availableDocIds[i];
             var label = docLabels[docId] || docId;
@@ -178,7 +204,7 @@
             } else if (docId === slot1) {
                 modifier = " doc-list__item--in-pane";
                 badge = '<span class="doc-list__badge">3</span>';
-            } else if (docId === cached) {
+            } else if (cachedSet[docId]) {
                 modifier = " doc-list__item--cached";
                 badge = '<span class="doc-list__badge doc-list__badge--cached"></span>';
             }
@@ -306,24 +332,13 @@
             markedPill.setAttribute(
                 "aria-pressed", state.markedOpen ? "true" : "false"
             );
-            /* Cached-doc indicator: orange dot + tooltip listing
-             * the cached doc labels. Shown whenever at least one
-             * doc is in markedDocCache (i.e. docs were open when
-             * Marked was triggered and will restore on close). */
-            var cache = state.markedDocCache || [];
-            markedPill.classList.toggle(
-                "titlebar__pill--has-cache", cache.length > 0
-            );
-            if (cache.length > 0) {
-                var labels = cache.map(function (id) {
-                    return docLabels[id] || id;
-                });
-                markedPill.setAttribute(
-                    "title", "Cached: " + labels.join(", ")
-                );
-            } else {
-                markedPill.removeAttribute("title");
-            }
+            /* Cached-doc indicator on the marked pill is being
+             * retired (Phase 3) — the doc-list pills carry the
+             * cache visualization now. Clear any leftover state
+             * defensively so persisted-state hydration can't leave
+             * a stale dot. */
+            markedPill.classList.remove("titlebar__pill--has-cache");
+            markedPill.removeAttribute("title");
         }
     }
 
