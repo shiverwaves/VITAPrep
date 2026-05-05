@@ -356,25 +356,26 @@ body:not([data-sidebar="flags"]) #flags-pane {
  */
 
 .titlebar__pill {
+    /* Base styling matches the .titlebar__scenario-trigger so all
+     * titlebar pills (Marked, future grade, future case-clock)
+     * read as the same family of clickable indicators. */
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--spacing-xs);
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: var(--radius-sm);
-    color: rgba(255, 255, 255, 0.55);
+    color: #fff;
     font: inherit;
     font-size: var(--font-size-sm);
     cursor: pointer;
     user-select: none;
-    /* Subtle transition between greyed and illuminated states. */
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .titlebar__pill:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
 }
 
 .titlebar__pill:focus-visible {
@@ -382,31 +383,47 @@ body:not([data-sidebar="flags"]) #flags-pane {
     outline-offset: 1px;
 }
 
+/* Greyed (Marked: 0) — keep the button shape but de-emphasize the
+ * text and count to signal "empty, nothing to review yet." */
+.titlebar__pill--marked:not(.titlebar__pill--has-flags) {
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.titlebar__pill--marked:not(.titlebar__pill--has-flags):hover {
+    color: #fff;
+}
+
+/* Illuminated (Marked: ≥1) — accent-colored fill + bright text +
+ * heavier weight. Reads as "you have flagged things, click to
+ * review." Uses 45% accent so it's clearly different from the
+ * fully-pressed state below. */
 .titlebar__pill--has-flags {
-    background: rgba(232, 122, 46, 0.18);
-    border-color: rgba(232, 122, 46, 0.5);
+    background: rgba(232, 122, 46, 0.45);
+    border-color: #e87a2e;
     color: #fff;
     font-weight: 600;
 }
 
 .titlebar__pill--has-flags:hover {
-    background: rgba(232, 122, 46, 0.28);
+    background: rgba(232, 122, 46, 0.6);
 }
 
-/* Pressed state — the corresponding panel is open. Stronger fill so
- * the player knows the pill IS the surface they're currently in. */
+/* Pressed (panel is open) — solid accent fill so the player knows
+ * THIS pill is the surface they're currently inside. Highest-
+ * intensity state; one rung above illuminated. */
 .titlebar__pill[aria-pressed="true"] {
-    background: rgba(232, 122, 46, 0.55);
+    background: #e87a2e;
     border-color: #e87a2e;
     color: #fff;
+    font-weight: 600;
 }
 
 .titlebar__pill[aria-pressed="true"]:hover {
-    background: rgba(232, 122, 46, 0.7);
+    background: #d96d20;
 }
 
-/* The numeric count inside the pill — slightly tabular so it
- * doesn't shift the pill width as it changes from 0 to 9 to 99. */
+/* The numeric count inside the pill — tabular-nums so it doesn't
+ * shift the pill width as it changes from 0 to 9 to "9+". */
 .titlebar__pill > span {
     font-variant-numeric: tabular-nums;
     min-width: 1ch;
