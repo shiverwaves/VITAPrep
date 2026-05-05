@@ -123,7 +123,10 @@
             existingWrappers[j].classList.remove("f13c-flagged-label");
         }
 
-        /* Pass 2: re-mark currently-flagged fields. */
+        /* Pass 2: re-mark currently-flagged fields. Always inject a
+         * dot somewhere visible — primary path is the wrapper found
+         * by flagWrapperFor; fallback is the input's immediate
+         * parent so we never silently fail to show the indicator. */
         var inputs = formPane.querySelectorAll(
             "input[name], textarea[name], select[name]"
         );
@@ -135,7 +138,11 @@
             if (!shouldBeFlagged) continue;
 
             var wrapper = flagWrapperFor(input, formPane);
-            if (!wrapper) continue;
+            if (!wrapper) {
+                /* Fallback: input's immediate parent always exists. */
+                wrapper = input.parentNode;
+            }
+            if (!wrapper) continue;  /* truly broken — bail */
             wrapper.classList.add("f13c-flagged-label");
             var dot = document.createElement("span");
             dot.className = "f13c-flag-dot";
