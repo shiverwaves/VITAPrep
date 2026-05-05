@@ -114,11 +114,10 @@
 
     /* -------- Render -------- */
     function computeLayoutName(s) {
-        /* Marked panel takes priority — when it's open, all docs
-         * are cached and the workspace shows form (bottom 2/3) +
-         * marked panel (top 1/3). Chat coexists at the .app-main
-         * level; workspace doesn't differentiate. */
-        if (s.markedOpen) return "form-only-marked";
+        /* Marked is a CSS overlay (absolute-positioned), not a grid
+         * area — it doesn't change the workspace layout name. The
+         * marked-open state is conveyed via body[data-marked="open"]
+         * which the marked-pane styles key off independently. */
         if (s.chatOpen) {
             return s.panes === 1 ? "form-only-chat" : "h2-chat";
         }

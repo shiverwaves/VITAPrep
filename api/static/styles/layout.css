@@ -5,12 +5,17 @@
  * the styles below key off:
  *
  *     <body data-sidebar="chat|flags|closed">
+ *     <body data-marked="open|closed">
  *     <div id="workspace" data-layout="form-only|h2|h3|form-only-chat|h2-chat">
  *
  * Sidebar tools (chat / flags / future) are mutually exclusive — only
  * one occupies the right column at a time. Both produce the same
  * workspace squeeze (h2-chat is a misnomer kept for back-compat with
  * existing tests / test names; semantically it's "h2 with sidebar").
+ *
+ * Marked is a separate axis: an overlay anchored to the top of
+ * #workspace, floating on top of whatever the current layout shows.
+ * It does NOT change the data-layout value — only data-marked.
  *
  * Five grid configurations, single horizontal axis, no vertical splits
  * (the form is 980px wide; vertical splits would squeeze it below
@@ -350,36 +355,38 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * lives.
  */
 
+/* Two-layer construction, mirroring .titlebar__scenario-trigger:
+ *   .titlebar__pill         outer shell — faint white border + bg
+ *                           on navy titlebar; carries the chevron.
+ *   .titlebar__pill-tag     inner pill — the actual colored
+ *                           "Marked: N" badge that picks up state.
+ *
+ * Three visual states, layered:
+ *   - Default (greyed): inner tag has muted white-on-faint look.
+ *   - --has-flags (illuminated): inner tag flips to solid accent
+ *     fill with white text — flipped from the previous light-bg-
+ *     dark-text variant so it stands out against the navy bar.
+ *   - aria-pressed="true" (active): the outer shell goes solid white
+ *     and the inner tag deepens to a darker accent. Reads as "the
+ *     pill itself is the surface you're inside."
+ */
 .titlebar__pill {
-    /* Tag-style aesthetic — same family as the .tag--encounter /
-     * .tag--practice pills inside the scenario trigger button.
-     * Compact, uppercase, bold, rounded. Lives standalone in the
-     * titlebar (not nested in another button) so it doubles as a
-     * click target for its associated panel. */
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
+    gap: 6px;
+    padding: 3px 8px 3px 4px;
     font: inherit;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: var(--radius-sm);
-    border: 1px solid transparent;
     cursor: pointer;
     user-select: none;
-    /* Default greyed look — faint pill on the navy titlebar so it
-     * reads as "empty / nothing to review yet" while still looking
-     * like a clickable button. */
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.55);
-    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    color: #fff;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .titlebar__pill:hover {
-    background: rgba(255, 255, 255, 0.16);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
 }
 
 .titlebar__pill:focus-visible {
@@ -387,35 +394,59 @@ body:not([data-sidebar="chat"]) #chat-pane {
     outline-offset: 1px;
 }
 
-/* Illuminated (count > 0) — light accent background + dark accent
- * text, mirroring the .tag--encounter / .tag--practice pattern
- * (light bg, dark text matching the bg hue). */
-.titlebar__pill--has-flags {
-    background: #ffe0c8;
-    color: #b35a17;
-}
-
-.titlebar__pill--has-flags:hover {
-    background: #ffd4b3;
-    color: #b35a17;
-}
-
-/* Pressed (panel is open) — solid accent fill + white text so the
- * pill clearly reads as "this is the surface I'm currently inside."
- * Highest-intensity rung; one above illuminated. */
+/* Pressed — shell goes solid so the pill itself reads as "this
+ * surface is active." Chevron tint shifts dark to stay legible. */
 .titlebar__pill[aria-pressed="true"] {
-    background: #e87a2e;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(255, 255, 255, 0.95);
+    color: var(--color-navy);
 }
 
 .titlebar__pill[aria-pressed="true"]:hover {
-    background: #d96d20;
+    background: #fff;
+}
+
+.titlebar__pill-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    /* Greyed default — faint white-on-translucent so the pill reads
+     * "empty / nothing to review yet" while still looking like a
+     * tag. */
+    background: rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.7);
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+/* Illuminated (count > 0) — solid accent fill with white text.
+ * Flipped from the prior light-bg-dark-text variant so the tag
+ * pops harder against the navy titlebar. */
+.titlebar__pill--has-flags .titlebar__pill-tag {
+    background: var(--color-accent);
     color: #fff;
 }
 
-/* The numeric count inside the pill — tabular-nums so the pill
- * width doesn't shift as the count changes from 0 to 9 to "9+". */
-#marked-pill-count {
+/* Pressed + illuminated — deepen the accent so the inner tag is
+ * still visible against the now-light shell. */
+.titlebar__pill[aria-pressed="true"] .titlebar__pill-tag {
+    background: #c25d12;
+    color: #fff;
+}
+
+/* Pressed + greyed (panel open with zero flags — possible state) —
+ * keep the tag muted but darken so it's legible on the white shell. */
+.titlebar__pill[aria-pressed="true"]:not(.titlebar__pill--has-flags) .titlebar__pill-tag {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--color-text-muted);
+}
+
+.titlebar__pill-tag-count {
     font-variant-numeric: tabular-nums;
     min-width: 1ch;
     text-align: center;
@@ -423,12 +454,12 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 /* Chevron only appears when the pill is illuminated or pressed —
  * signals "click to open." Same affordance pattern as the scenario
- * trigger's chevron. Hidden in greyed state since there's nothing
- * to drop into. */
+ * trigger's chevron. */
 .titlebar__pill-chevron {
     display: none;
     font-size: 9px;
     line-height: 1;
+    color: inherit;
 }
 
 .titlebar__pill--has-flags .titlebar__pill-chevron,
@@ -492,27 +523,38 @@ body:not([data-sidebar="chat"]) #chat-pane {
     grid-template-columns: 1fr;
 }
 
-/* Marked-open layout — top 1/3 is the marked panel, bottom 2/3 is
- * the form. Doc panes are excluded (they're cached in
- * state.markedDocCache when Marked opens). Chat is independent —
- * if open, .app-main's 2fr 1fr grid puts chat in the right column
- * and the workspace (with this layout) takes the left 2/3. */
-#workspace[data-layout="form-only-marked"] {
-    grid-template-areas:
-        "m"
-        "f";
-    grid-template-rows: 1fr 2fr;
-    grid-template-columns: 1fr;
+/* =========================================================================
+ * Marked panel — overlay anchored to the top of #workspace
+ * =========================================================================
+ * Position-absolute drop-down that floats over the top 1/3 of the
+ * workspace area when state.markedOpen is true. It does NOT alter
+ * the underlying grid — the form and any doc panes keep their
+ * normal geometry and interactivity. The panel just sits on top of
+ * whatever's underneath (typically the doc-list strip + the upper
+ * portion of the form, or doc panes in an h2/h3 layout).
+ *
+ * Form interactivity is intentionally preserved: a player can mark
+ * additional fields with the panel open and watch flags appear in
+ * the list in real time. The panel is a HUD, not a modal.
+ */
+
+#workspace {
+    /* Anchor for #marked-pane's absolute positioning. The overlay
+     * is contained inside the workspace so it doesn't bleed over
+     * the chat pane sibling or the titlebar above. */
+    position: relative;
 }
 
-/* =========================================================================
- * Marked panel — top of workspace when state.markedOpen is true
- * ========================================================================= */
-
 #marked-pane {
-    grid-area: m;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 33.333%;
+    z-index: 20;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -522,25 +564,6 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 body:not([data-marked="open"]) #marked-pane {
     display: none;
-}
-
-/* Form lock — while Marked is open, the form-pane is fully
- * non-interactive (clicks blocked, scroll blocked via overflow,
- * focus blocked via inert-equivalent pointer-events). The renderer
- * scrolls programmatically via formPane.scrollTop in later phases;
- * for Phase 1 the form is a static backdrop. */
-body[data-marked="open"] #form-pane {
-    pointer-events: none;
-    overflow: hidden;
-    user-select: none;
-}
-
-body[data-marked="open"] #form-pane * {
-    /* Belt-and-braces — child scroll containers are also locked.
-     * The pointer-events:none on the parent already cascades via
-     * inheritance unless overridden, but explicit reinforcement
-     * keeps form inputs un-interactable. */
-    pointer-events: none;
 }
 
 /* =========================================================================
