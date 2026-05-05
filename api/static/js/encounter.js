@@ -53,35 +53,28 @@
 
     /* Locate the form input associated with a click target.
      *
-     * Direct clicks on inputs / textareas / checkboxes are NOT handled
-     * — the browser's default context menu fires instead. The custom
-     * Flag menu only opens when the player right-clicks a label,
-     * caption, or other surrounding wrapper. This keeps the input
-     * element interactable in the normal browser-native way (cursor
-     * placement, spell-check menu on text inputs, etc.).
+     * Input-only rule: the custom Flag menu fires when the click
+     * target IS (or descends from) a form input — text input,
+     * textarea, checkbox, radio, select. Right-click on a label,
+     * caption, cell padding, or any other surrounding wrapper
+     * lets the browser's default menu fire instead.
      *
-     * Walks up from the click target looking for the smallest ancestor
-     * that contains exactly one named form input. Stops at the form-
-     * pane root. Returns null if the click is on an input directly,
-     * or if no single input is unambiguously associated with the
-     * click target. */
+     * Crystal clear discoverability: "right-click the input itself
+     * to flag it." No walk-up to ambiguous wrappers, no shared
+     * heading edge cases, no need to think about which labels are
+     * flag-clickable. Trade-off is loss of browser-default
+     * right-click on text inputs (paste, spell-check), which is a
+     * minor cost for this app's data-from-documents workflow.
+     *
+     * Walks up the ancestor chain rather than just checking the
+     * click target directly, in case the click landed on a child
+     * node of an input (e.g., text node inside a textarea). */
     function findFormInput(node) {
-        if (node && node.nodeType === 1) {
-            var directTag = node.tagName;
-            if (directTag === "INPUT"
-                    || directTag === "TEXTAREA"
-                    || directTag === "SELECT") {
-                return null;
-            }
-        }
         var cursor = node;
         while (cursor && cursor !== formPane) {
-            if (cursor.querySelectorAll) {
-                var found = cursor.querySelectorAll(
-                    "input[name], textarea[name], select[name]"
-                );
-                if (found.length === 1) return found[0];
-                if (found.length > 1) return null;
+            var tag = cursor.tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+                return cursor;
             }
             cursor = cursor.parentNode;
         }
