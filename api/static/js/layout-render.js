@@ -114,17 +114,13 @@
 
     /* -------- Render -------- */
     function computeLayoutName(s) {
-        /* Marked-mode templates: top 1/3 is the marked panel, bottom
-         * 2/3 holds either the form, a doc, or form|doc split.
-         * Chat coexists at the .app-main level (right column). */
+        /* Marked-mode is uniformly single-slot: form-only-marked
+         * (form below marked) or doc-only-marked (doc below marked,
+         * form hidden). Chat-open vs chat-closed doesn't change the
+         * workspace template — chat just slides into its right
+         * column independently. */
         if (s.markedOpen) {
-            if (s.chatOpen && s.docSlots.length > 0) {
-                /* Dual mode (marked + chat) with form swapped out:
-                 * doc occupies the single bottom-2/3 slot, form is
-                 * cached. */
-                return "doc-only-marked";
-            }
-            if (s.panes === 2) return "h2-marked";
+            if (s.docSlots.length > 0) return "doc-only-marked";
             return "form-only-marked";
         }
         if (s.chatOpen) {
@@ -168,27 +164,36 @@
         if (!docList) return;
         var slot0 = state.docSlots[0] || null;
         var slot1 = state.docSlots[1] || null;
-        /* Cache visualization: a doc is "cached" only when it lives
-         * in hiddenDocCache (chat-shed). The marked-mode workspace
-         * shows whatever docSlots currently holds; pills not in the
-         * slot but available are just non-pinned options in the list,
-         * not "cached" in the displaced sense. */
+        /* Cache visualization sources:
+         *   - chat-shed: hiddenDocCache (single doc displaced when
+         *     chat opened from a 3-pane state)
+         *   - marked-shed: markedCache (pre-marked visible docs that
+         *     will restore on close; only those not currently
+         *     visible get the dot) */
         var cachedSet = {};
         if (state.chatOpen && state.hiddenDocCache) {
             cachedSet[state.hiddenDocCache] = true;
         }
+        if (state.markedOpen) {
+            var mc = state.markedCache || [];
+            for (var k = 0; k < mc.length; k++) {
+                var mid = mc[k];
+                if (mid && mid !== slot0 && mid !== slot1) {
+                    cachedSet[mid] = true;
+                }
+            }
+        }
 
         /* Form pill — always rendered at position 0, distinct
-         * styling. In normal modes the form is always visible and
-         * the pill is inert. In marked+chat dual mode, the bottom
-         * slot holds either form OR a doc; clicking the form pill
-         * (when a doc is visible) restores the form via SHOW_FORM. */
-        var inDualMode = state.markedOpen && state.chatOpen;
-        var formCached = inDualMode && state.docSlots.length > 0;
+         * styling. In marked mode with a doc visible, the form is
+         * "cached" (hidden behind the doc); clicking the form pill
+         * dispatches SHOW_FORM to restore it. Outside marked mode
+         * the form is always visible and the pill is inert. */
+        var formCached = state.markedOpen && state.docSlots.length > 0;
         var formPillClasses = "doc-list__item doc-list__item--form";
         if (!formCached) formPillClasses += " doc-list__item--in-pane";
         if (formCached) formPillClasses += " doc-list__item--cached";
-        var formPillAttrs = inDualMode
+        var formPillAttrs = state.markedOpen
             ? ' data-layout-action="show-form"'
             : ' tabindex="-1" aria-current="true"';
         var formPillBadge = formCached
