@@ -85,7 +85,7 @@
         if (!state) return;
         renderFieldIndicators();
         renderFlagsPanel();
-        renderFlagsCountBadge();
+        renderMarkedPill();
     }
 
     /* -------- Sidebar Flags panel -------- */
@@ -233,28 +233,22 @@
         );
     }
 
-    /* Render a numbered notification-style badge on the #flags-toggle-btn
-     * showing the count of flagged fields. Hidden (DOM removed) when
-     * count is 0. The badge is positioned to overhang the button's
-     * top-right corner so it doesn't obscure the underlying icon. */
-    function renderFlagsCountBadge() {
-        var btn = document.getElementById("flags-toggle-btn");
-        if (!btn) return;
+    /* Update the titlebar "Marked: N" pill — both the count and the
+     * "has flags" state class. The pill is always present (greyed
+     * when count is 0); the .titlebar__pill--has-flags class flips
+     * it to the accent-illuminated state when count > 0.
+     *
+     * The pill itself carries data-layout-action="toggle-sidebar-tool"
+     * so clicking it opens / closes the flag panel via the layout-
+     * render dispatcher. aria-pressed is managed by layout-render
+     * (mirrors state.sidebarTool === "flags"). */
+    function renderMarkedPill() {
+        var pill = document.getElementById("marked-pill");
+        if (!pill) return;
         var count = Object.keys(state.flags || {}).length;
-        var badge = btn.querySelector(".flags-toggle-badge");
-        if (count === 0) {
-            if (badge) badge.parentNode.removeChild(badge);
-            return;
-        }
-        if (!badge) {
-            badge = document.createElement("span");
-            badge.className = "flags-toggle-badge";
-            badge.setAttribute("aria-hidden", "true");
-            btn.appendChild(badge);
-        }
-        /* Cap displayed count at "9+" so two-digit counts don't blow
-         * out the badge width. */
-        badge.textContent = count > 9 ? "9+" : String(count);
+        var countSpan = document.getElementById("marked-pill-count");
+        if (countSpan) countSpan.textContent = String(count);
+        pill.classList.toggle("titlebar__pill--has-flags", count > 0);
     }
 
     /* -------- Panel event delegation -------- */

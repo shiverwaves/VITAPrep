@@ -56,6 +56,16 @@ html, body { height: 100%; overflow: hidden; }
     <span class="tag tag--practice">practice</span>
     <span>&#9662;</span>
 </button>
+{# Marked pill — counter + clickable toggle for the flag review panel.
+   Greyed when count is 0, accent-illuminated when ≥1. Pressed state
+   reflects whether the flags pane is currently open. Replaces the
+   former titlebar flag icon button + corner badge. #}
+<button class="titlebar__pill titlebar__pill--marked"
+        id="marked-pill" type="button"
+        data-layout-action="toggle-sidebar-tool" data-tool="flags"
+        aria-pressed="false" aria-label="Marked for follow-up">
+    Marked: <span id="marked-pill-count">0</span>
+</button>
 {% endset %}
 
 {% set titlebar_right_html %}
@@ -73,17 +83,9 @@ html, body { height: 100%; overflow: hidden; }
         <path d="M3 4 H15 V12 H8 L5 15 V12 H3 Z" stroke-linejoin="round"/>
     </svg>
 </button>
-{# Flags-toggle button. Mutually exclusive with chat: clicking either
-   sidebar tool toggle sets the right column to that tool's content
-   (or closes if the same tool is already active). The flag pole SVG
-   matches the field-flag mechanic visually. #}
-<button class="layout-btn" id="flags-toggle-btn" type="button"
-        data-layout-action="toggle-sidebar-tool" data-tool="flags"
-        aria-pressed="false" aria-label="Toggle flags">
-    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M5 3 V16 M5 3 H14 L11 6 L14 9 H5" stroke-linejoin="round" stroke-linecap="round"/>
-    </svg>
-</button>
+{# Flag-toggle icon button retired in favor of the titlebar
+   "Marked: N" pill, which carries both the count and the click
+   target for opening the flag review panel. #}
 <button class="btn-primary" id="submit-btn" type="submit"
         form="encounter-form">Submit</button>
 {% endset %}

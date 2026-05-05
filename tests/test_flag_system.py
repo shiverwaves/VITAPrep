@@ -67,17 +67,31 @@ def _make_scenario(client: TestClient) -> str:
 class TestFlagSystemDom:
     """The encounter view must emit the DOM the flag JS expects."""
 
-    def test_flags_toggle_button_present(self, client: TestClient) -> None:
-        """Flags icon next to chat-toggle, with the right
-        data-layout-action and data-tool attributes so the layout
+    def test_marked_pill_present(self, client: TestClient) -> None:
+        """The titlebar carries a 'Marked: N' pill that displays the
+        flag count and toggles the flag review panel. Replaces the
+        former titlebar flag icon button + corner badge.
+
+        The pill is wired with the same data-layout-action +
+        data-tool attributes as a sidebar-tool toggle so the layout
         renderer's TOGGLE_SIDEBAR_TOOL handler picks it up."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
-        assert 'id="flags-toggle-btn"' in body
+        assert 'id="marked-pill"' in body
         assert 'data-layout-action="toggle-sidebar-tool"' in body
         assert 'data-tool="flags"' in body
-        # Pressed state should default to false on initial render.
+        # Pressed state defaults to false on initial render.
         assert 'aria-pressed="false"' in body
+        # Inner count span starts at 0.
+        assert 'id="marked-pill-count"' in body
+
+    def test_flags_toggle_icon_button_retired(self, client: TestClient) -> None:
+        """The standalone flag toggle icon button was retired in
+        favor of the titlebar Marked pill. Pin the removal so future
+        changes don't reintroduce duplicate affordances."""
+        sid = _make_scenario(client)
+        body = client.get(f"/scenarios/{sid}").text
+        assert 'id="flags-toggle-btn"' not in body
 
     def test_chat_toggle_still_works(self, client: TestClient) -> None:
         """Chat toggle didn't break in the sidebar-tool migration —

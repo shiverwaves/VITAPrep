@@ -338,39 +338,79 @@ body:not([data-sidebar="flags"]) #flags-pane {
 }
 
 /* =========================================================================
- * Flags toggle button counter badge
+ * Titlebar pills (Marked: N + future grade pill, case-clock pill, ...)
  * =========================================================================
- * Notification-style numbered badge on the titlebar Flags icon.
- * Positioned to overhang the button's top-right corner so it doesn't
- * obscure the underlying SVG icon — most of the badge sits OUTSIDE
- * the button's content rectangle. Hidden (DOM removed) when count
- * is 0.
+ * Pills sit in .titlebar__center next to the scenario button. Each
+ * pill is its own clickable indicator + menu trigger — the Marked
+ * pill toggles the flag review panel; future pills (grade summary,
+ * case clock) will follow the same pattern with their own panels.
  *
- * Single-digit counts get a circular badge; double digits and "9+"
- * widen the pill via min-width + horizontal padding. The accent
- * color + white-ring outline matches the field-level flag dot so
- * the visual rhyme reads as "this icon refers to the orange-dotted
- * fields on the form." */
+ * Three visual states, applied in layers:
+ *   - Default (greyed): empty / no count, low contrast.
+ *   - --has-flags (illuminated): count > 0, accent color picks it up.
+ *   - aria-pressed="true" (active): the corresponding panel is open.
+ *
+ * The pill is always rendered — never hidden — so the affordance is
+ * stable across state changes. Players orient by knowing where it
+ * lives.
+ */
 
-.flags-toggle-badge {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    border-radius: 8px;
-    background: #e87a2e;
+.titlebar__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    color: rgba(255, 255, 255, 0.55);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    user-select: none;
+    /* Subtle transition between greyed and illuminated states. */
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.titlebar__pill:hover {
+    background: rgba(255, 255, 255, 0.12);
     color: #fff;
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 16px;
+}
+
+.titlebar__pill:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+.titlebar__pill--has-flags {
+    background: rgba(232, 122, 46, 0.18);
+    border-color: rgba(232, 122, 46, 0.5);
+    color: #fff;
+    font-weight: 600;
+}
+
+.titlebar__pill--has-flags:hover {
+    background: rgba(232, 122, 46, 0.28);
+}
+
+/* Pressed state — the corresponding panel is open. Stronger fill so
+ * the player knows the pill IS the surface they're currently in. */
+.titlebar__pill[aria-pressed="true"] {
+    background: rgba(232, 122, 46, 0.55);
+    border-color: #e87a2e;
+    color: #fff;
+}
+
+.titlebar__pill[aria-pressed="true"]:hover {
+    background: rgba(232, 122, 46, 0.7);
+}
+
+/* The numeric count inside the pill — slightly tabular so it
+ * doesn't shift the pill width as it changes from 0 to 9 to 99. */
+.titlebar__pill > span {
+    font-variant-numeric: tabular-nums;
+    min-width: 1ch;
     text-align: center;
-    /* Surface-color ring so the badge reads cleanly against the
-     * titlebar background and clearly belongs to the button. */
-    border: 1.5px solid var(--color-surface);
-    box-sizing: content-box;
-    pointer-events: none;
 }
 
 /* =========================================================================
