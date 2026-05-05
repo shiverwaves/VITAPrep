@@ -350,13 +350,6 @@
             markedPill.setAttribute(
                 "aria-pressed", state.markedOpen ? "true" : "false"
             );
-            /* Cached-doc indicator on the marked pill is being
-             * retired (Phase 3) — the doc-list pills carry the
-             * cache visualization now. Clear any leftover state
-             * defensively so persisted-state hydration can't leave
-             * a stale dot. */
-            markedPill.classList.remove("titlebar__pill--has-cache");
-            markedPill.removeAttribute("title");
         }
     }
 

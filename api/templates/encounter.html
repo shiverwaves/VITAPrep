@@ -111,11 +111,12 @@ html, body { height: 100%; overflow: hidden; }
         <div id="workspace" data-layout="form-only">
             {# --- Marked panel (top 1/3 when body has data-marked="open") ---
                Lives inside #workspace's grid as the 'm' area; CSS grid
-               templates (form-only-marked, etc.) place it across the
-               top 1/3 with the form pane occupying the bottom 2/3.
-               Hidden via display:none when data-marked is closed.
-               Mutually exclusive with doc panes — opening Marked
-               auto-caches docs to markedDocCache; closing restores.
+               templates (form-only-marked, h2-marked, doc-only-marked)
+               place it across the top 1/3 with the form / form|doc /
+               doc occupying the bottom 2/3 depending on chat + doc
+               state. Hidden via display:none when data-marked is
+               closed. The pre-marked workspace is captured into
+               state.preMarkedSnapshot on open and restored on close.
                The CSS class name .flags-pane__* on inner content
                stays for back-compat with the existing render code;
                only the container ID changes. #}
