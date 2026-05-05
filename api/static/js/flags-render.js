@@ -76,13 +76,266 @@
 
     /* -------- Render -------- */
     /* applyState is the single DOM mutation entry point for the flag
-     * system. Phase C fills in the field-level visual indicator
-     * (.f13c-flagged class on each flagged input). Phases D/E will
-     * extend this to also update the sidebar Flags panel content +
-     * the toggle button count badge. */
+     * system. Two responsibilities:
+     *   - field-level visual indicators (Phase C: .f13c-flagged class +
+     *     dot in the field's wrapper)
+     *   - sidebar Flags panel content + count badge on the toggle
+     *     (Phase E: list view, per-row detail submenu, batch actions) */
     function applyState() {
         if (!state) return;
         renderFieldIndicators();
+        renderFlagsPanel();
+        renderFlagsCountBadge();
+    }
+
+    /* -------- Sidebar Flags panel -------- */
+    /* Internal panel UI state — NOT persisted, NOT in flag-state.
+     * Just transient view-model for which subview the user is in. */
+    var panelView = "list";          /* "list" | "detail" */
+    var panelDetailFieldId = null;   /* the row being edited in detail view */
+
+    var CONTEXT_LABELS = {
+        Missing: "Missing Information",
+        Confirm: "Needs Confirmation",
+        Other: "Other",
+    };
+    var ACTION_LABELS = {
+        Email: "Email",
+        Chat: "Chat",
+        AskVida: "Ask Vida",
+        Other: "Other",
+    };
+    var CONTEXTS = ["Missing", "Confirm", "Other"];
+    var ACTIONS = ["Email", "Chat", "AskVida", "Other"];
+
+    /* Render the entire #flags-pane content based on flag-state +
+     * panelView. Always renders (even when the pane is hidden via
+     * body[data-sidebar]) so opening the pane shows fresh content. */
+    function renderFlagsPanel() {
+        var pane = document.getElementById("flags-pane");
+        if (!pane) return;
+
+        var flags = state.flags || {};
+        var fieldIds = Object.keys(flags);
+
+        /* If we were in detail view but the field got dismissed
+         * elsewhere, fall back to the list. */
+        if (panelView === "detail" && !flags[panelDetailFieldId]) {
+            panelView = "list";
+            panelDetailFieldId = null;
+        }
+
+        if (fieldIds.length === 0) {
+            pane.innerHTML =
+                '<div class="flags-pane__empty">No flags yet.<br>' +
+                'Right-click any form field to flag it for follow-up.</div>';
+            return;
+        }
+
+        if (panelView === "detail" && flags[panelDetailFieldId]) {
+            pane.innerHTML = renderDetailView(panelDetailFieldId, flags[panelDetailFieldId]);
+        } else {
+            pane.innerHTML = renderListView(fieldIds, flags);
+        }
+    }
+
+    function renderListView(fieldIds, flags) {
+        /* Sort by created_at so flags appear in flag-order. */
+        fieldIds.sort(function (a, b) {
+            return (flags[a].created_at || 0) - (flags[b].created_at || 0);
+        });
+
+        var rows = fieldIds.map(function (fieldId) {
+            var f = flags[fieldId];
+            var contextBadge = '<span class="flags-pane__badge flags-pane__badge--context">' +
+                escapeHtml(CONTEXT_LABELS[f.context] || f.context) + '</span>';
+            var actionBadge = f.action
+                ? '<span class="flags-pane__badge flags-pane__badge--action">' +
+                  escapeHtml(ACTION_LABELS[f.action] || f.action) + '</span>'
+                : '<span class="flags-pane__badge flags-pane__badge--placeholder">No action</span>';
+            return (
+                '<button type="button" class="flags-pane__row"' +
+                ' data-flag-action="open-detail" data-field-id="' + escapeAttr(fieldId) + '">' +
+                '<span class="flags-pane__row-field">' + escapeHtml(fieldId) + '</span>' +
+                '<span class="flags-pane__row-meta">' + contextBadge + actionBadge + '</span>' +
+                '</button>'
+            );
+        }).join("");
+
+        return (
+            '<div class="flags-pane__header">' +
+                '<span class="flags-pane__title">Marked for Follow Up</span>' +
+                '<span class="flags-pane__count">' + fieldIds.length + '</span>' +
+            '</div>' +
+            '<div class="flags-pane__body">' + rows + '</div>' +
+            '<div class="flags-pane__footer">' +
+                '<button type="button" class="flags-pane__btn"' +
+                ' data-flag-action="clear-all">Clear all</button>' +
+                /* Send all is a placeholder for now — wired when the
+                 * probe-send pipeline lands. */
+                '<button type="button" class="flags-pane__btn flags-pane__btn--primary"' +
+                ' data-flag-action="send-all" disabled' +
+                ' title="Coming soon — probe sending lands in a future sprint">' +
+                'Send all</button>' +
+            '</div>'
+        );
+    }
+
+    function renderDetailView(fieldId, flag) {
+        var contextOptions = CONTEXTS.map(function (ctx) {
+            var isActive = flag.context === ctx;
+            return (
+                '<button type="button" class="flags-pane__option' +
+                (isActive ? " flags-pane__option--active" : "") + '"' +
+                ' data-flag-action="set-context" data-context="' + ctx + '">' +
+                escapeHtml(CONTEXT_LABELS[ctx]) +
+                '</button>'
+            );
+        }).join("");
+
+        var actionOptions = ACTIONS.map(function (act) {
+            var isActive = flag.action === act;
+            return (
+                '<button type="button" class="flags-pane__option' +
+                (isActive ? " flags-pane__option--active" : "") + '"' +
+                ' data-flag-action="set-action" data-action="' + act + '">' +
+                escapeHtml(ACTION_LABELS[act]) +
+                '</button>'
+            );
+        }).join("");
+        /* Allow clearing the action — sets status back to draft. */
+        actionOptions +=
+            '<button type="button" class="flags-pane__option flags-pane__option--clear"' +
+            ' data-flag-action="clear-action">No action yet</button>';
+
+        return (
+            '<div class="flags-pane__header">' +
+                '<button type="button" class="flags-pane__back"' +
+                ' data-flag-action="back-to-list" aria-label="Back to list">' +
+                '&#8592;</button>' +
+                '<span class="flags-pane__title">' + escapeHtml(fieldId) + '</span>' +
+            '</div>' +
+            '<div class="flags-pane__body">' +
+                '<div class="flags-pane__section">' +
+                    '<div class="flags-pane__section-title">Context</div>' +
+                    contextOptions +
+                '</div>' +
+                '<div class="flags-pane__section">' +
+                    '<div class="flags-pane__section-title">Action</div>' +
+                    actionOptions +
+                '</div>' +
+            '</div>' +
+            '<div class="flags-pane__footer">' +
+                '<button type="button" class="flags-pane__btn flags-pane__btn--danger"' +
+                ' data-flag-action="dismiss" data-field-id="' + escapeAttr(fieldId) + '">' +
+                'Dismiss flag</button>' +
+            '</div>'
+        );
+    }
+
+    /* Update the count badge on the Flags toggle button. Hidden when
+     * count is 0. */
+    function renderFlagsCountBadge() {
+        var btn = document.getElementById("flags-toggle-btn");
+        if (!btn) return;
+        var count = Object.keys(state.flags || {}).length;
+        var badge = btn.querySelector(".flags-toggle-badge");
+        if (count === 0) {
+            if (badge) badge.parentNode.removeChild(badge);
+            return;
+        }
+        if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "flags-toggle-badge";
+            btn.appendChild(badge);
+        }
+        badge.textContent = String(count);
+    }
+
+    /* -------- Panel event delegation -------- */
+    /* One click listener on #flags-pane. Each interactive element
+     * carries data-flag-action; the dispatcher routes accordingly. */
+    function handlePanelClick(e) {
+        var target = e.target;
+        while (target && target.nodeType === 1) {
+            var action = target.getAttribute("data-flag-action");
+            if (action) {
+                e.preventDefault();
+                handlePanelAction(action, target);
+                return;
+            }
+            target = target.parentNode;
+        }
+    }
+
+    function handlePanelAction(action, element) {
+        var fieldId;
+        switch (action) {
+            case "open-detail":
+                fieldId = element.getAttribute("data-field-id");
+                if (!fieldId) return;
+                panelView = "detail";
+                panelDetailFieldId = fieldId;
+                renderFlagsPanel();
+                return;
+
+            case "back-to-list":
+                panelView = "list";
+                panelDetailFieldId = null;
+                renderFlagsPanel();
+                return;
+
+            case "set-context":
+                if (!panelDetailFieldId) return;
+                var ctx = element.getAttribute("data-context");
+                dispatch({
+                    type: "SET_CONTEXT",
+                    field_id: panelDetailFieldId,
+                    context: ctx,
+                });
+                return;
+
+            case "set-action":
+                if (!panelDetailFieldId) return;
+                var act = element.getAttribute("data-action");
+                dispatch({
+                    type: "SET_ACTION",
+                    field_id: panelDetailFieldId,
+                    action: act,
+                });
+                return;
+
+            case "clear-action":
+                if (!panelDetailFieldId) return;
+                dispatch({
+                    type: "SET_ACTION",
+                    field_id: panelDetailFieldId,
+                    action: null,
+                });
+                return;
+
+            case "dismiss":
+                fieldId = element.getAttribute("data-field-id") || panelDetailFieldId;
+                if (!fieldId) return;
+                dispatch({ type: "UNFLAG_FIELD", field_id: fieldId });
+                /* Bounce back to list since the detail target is gone. */
+                panelView = "list";
+                panelDetailFieldId = null;
+                renderFlagsPanel();
+                return;
+
+            case "clear-all":
+                if (window.confirm("Remove all flags? This cannot be undone.")) {
+                    dispatch({ type: "CLEAR_ALL" });
+                    panelView = "list";
+                    panelDetailFieldId = null;
+                }
+                return;
+
+            case "send-all":
+                /* Placeholder — probe-send pipeline hasn't landed yet. */
+                return;
+        }
     }
 
     /* Sync .f13c-flagged class on every form input to match flag
@@ -181,7 +434,32 @@
         var persisted = loadPersistedState();
         state = persisted || global.FlagsReducer.initialState();
 
+        /* Wire one click listener on the flags pane for panel
+         * interactions. Outside the pane, no flag-action attributes
+         * exist so clicks fall through to other handlers. */
+        var pane = document.getElementById("flags-pane");
+        if (pane) pane.addEventListener("click", handlePanelClick);
+
         applyState();
+    }
+
+    /* -------- Helpers -------- */
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return {
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#39;",
+            }[c];
+        });
+    }
+
+    function escapeAttr(s) {
+        /* Same character set as escapeHtml — attribute values need
+         * the same escapes. */
+        return escapeHtml(s);
     }
 
     /* -------- Public surface -------- */
