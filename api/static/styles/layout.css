@@ -6,16 +6,17 @@
  *
  *     <body data-sidebar="chat|flags|closed">
  *     <body data-marked="open|closed">
- *     <div id="workspace" data-layout="form-only|h2|h3|form-only-chat|h2-chat">
+ *     <div id="workspace" data-layout="form-only|h2|h3|form-only-chat|h2-chat|form-only-marked">
  *
  * Sidebar tools (chat / flags / future) are mutually exclusive — only
  * one occupies the right column at a time. Both produce the same
  * workspace squeeze (h2-chat is a misnomer kept for back-compat with
  * existing tests / test names; semantically it's "h2 with sidebar").
  *
- * Marked is a separate axis: an overlay anchored to the top of
- * #workspace, floating on top of whatever the current layout shows.
- * It does NOT change the data-layout value — only data-marked.
+ * Marked is its own layout axis. When open, the workspace switches
+ * to form-only-marked (top 1/3 marked + bottom 2/3 form) and any
+ * doc panes are auto-cached by the reducer so the marked panel
+ * never has to share the workspace with doc panes.
  *
  * Five grid configurations, single horizontal axis, no vertical splits
  * (the form is 980px wide; vertical splits would squeeze it below
@@ -567,37 +568,31 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* =========================================================================
- * Marked panel — overlay anchored to the top of #workspace
+ * Marked panel — grid area at the top of #workspace
  * =========================================================================
- * Position-absolute drop-down that floats over the top 1/3 of the
- * workspace area when state.markedOpen is true. It does NOT alter
- * the underlying grid — the form and any doc panes keep their
- * normal geometry and interactivity. The panel just sits on top of
- * whatever's underneath (typically the doc-list strip + the upper
- * portion of the form, or doc panes in an h2/h3 layout).
+ * When state.markedOpen is true, the workspace switches to the
+ * form-only-marked grid template: top 1/3 is the marked panel, bottom
+ * 2/3 is the form. Doc panes are auto-cached by the reducer when
+ * Marked opens, so the marked + form layout never has to coexist
+ * with doc panes — the cached docs restore when Marked closes.
  *
- * Form interactivity is intentionally preserved: a player can mark
- * additional fields with the panel open and watch flags appear in
- * the list in real time. The panel is a HUD, not a modal.
+ * The form keeps full interactivity (no pointer-events lock); a
+ * player can mark fields, scroll the form, and watch the marked
+ * panel update in real time. It's a HUD layer, not a modal.
  */
 
-#workspace {
-    /* Anchor for #marked-pane's absolute positioning. The overlay
-     * is contained inside the workspace so it doesn't bleed over
-     * the chat pane sibling or the titlebar above. */
-    position: relative;
+#workspace[data-layout="form-only-marked"] {
+    grid-template-areas:
+        "m"
+        "f";
+    grid-template-rows: 1fr 2fr;
+    grid-template-columns: 1fr;
 }
 
 #marked-pane {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 33.333%;
-    z-index: 20;
+    grid-area: m;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     overflow: auto;
     display: flex;
     flex-direction: column;
