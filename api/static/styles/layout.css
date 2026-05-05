@@ -594,6 +594,21 @@ body:not([data-sidebar="chat"]) #chat-pane {
     grid-template-columns: 1fr 1fr;
 }
 
+/* Marked + chat dual mode with form cached — single slot in the
+ * bottom 2/3 holds a doc (form is hidden). The doc-only-marked
+ * grid uses d0 (not f) for that slot, and form-pane is hidden. */
+#workspace[data-layout="doc-only-marked"] {
+    grid-template-areas:
+        "m"
+        "d0";
+    grid-template-rows: 1fr 2fr;
+    grid-template-columns: 1fr;
+}
+
+#workspace[data-layout="doc-only-marked"] #form-pane {
+    display: none;
+}
+
 #marked-pane {
     grid-area: m;
     background: var(--color-surface);
@@ -978,19 +993,30 @@ body:not([data-marked="open"]) #marked-pane {
 }
 
 /* Form pill — pinned at position 0, bolder than doc pills so it
- * reads as the privileged "main" surface. Always inert (the form
- * is always visible in Phase 1; Phase 2 adds the dual-mode swap). */
+ * reads as the privileged "main" surface. In normal modes it's
+ * inert (the form is always visible). In marked+chat dual mode it
+ * becomes clickable to restore the form when a doc is in the slot;
+ * the cached modifier dims it the same way as cached doc pills. */
 .doc-list__item--form {
     font-weight: 800;
     background: var(--color-navy);
     color: #fff;
     border-color: var(--color-navy);
-    cursor: default;
 }
 
 .doc-list__item--form:hover {
     background: var(--color-navy);
     color: #fff;
+}
+
+/* Dimmed cached state — applied when form is swapped out for a doc
+ * in dual mode. Same opacity treatment as cached doc pills. */
+.doc-list__item--form.doc-list__item--cached {
+    opacity: 0.6;
+}
+
+.doc-list__item--form.doc-list__item--cached:hover {
+    opacity: 0.85;
 }
 
 .doc-list__item--cached {

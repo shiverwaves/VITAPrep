@@ -179,14 +179,19 @@
     function openDoc(state, docId) {
         if (!docId) return state;
         if (state.markedOpen) {
-            /* Marked-mode single-slot behavior. Chat-open + marked
-             * leaves no room for a doc (Phase 2 adds form-vs-doc
-             * swap); chat-closed + marked allows exactly one doc
-             * which gets replaced by the clicked one. The pre-
-             * marked snapshot stays untouched so closing Marked
-             * restores the original layout. */
-            if (state.chatOpen) return state;
+            /* Marked-mode single-slot behavior. Two sub-cases:
+             *   - chat closed: bottom 2/3 is form|doc split (h2-marked).
+             *     Clicking a doc pill replaces the visible doc.
+             *   - chat open: bottom 2/3 is a single slot (form OR doc).
+             *     Clicking a doc pill puts that doc in the slot,
+             *     caching the form. The reverse (clicking form pill
+             *     to restore form) goes through SHOW_FORM. */
             if (state.docSlots[0] === docId) return state;
+            if (state.chatOpen) {
+                return Object.assign({}, state, {
+                    docSlots: [docId],
+                }, bumpRecency(state, 0));
+            }
             return Object.assign({}, state, {
                 panes: 2,
                 docSlots: [docId],
@@ -358,13 +363,12 @@
         if (!prevTool && nextTool) {
             var openUpdate = { sidebarTool: nextTool, chatOpen: true };
             if (state.markedOpen && state.panes === 2) {
-                /* Marked-mode single-slot rule (Phase 1): opening
-                 * chat while marked has form + 1 doc collapses the
-                 * doc into hiddenDocCache so chat fits. The doc
-                 * comes back when chat closes. */
+                /* Marked + 1 doc → dual mode. The doc stays visible;
+                 * the bottom 2/3 just collapses from form|doc split
+                 * to a single slot (the doc occupies it, form is
+                 * cached). Dropping panes to 1 triggers the layout
+                 * switch to doc-only-marked. */
                 openUpdate.panes = 1;
-                openUpdate.docSlots = [];
-                openUpdate.hiddenDocCache = state.docSlots[0];
             } else if (state.panes === 3) {
                 openUpdate.panes = 2;
                 openUpdate.docSlots = state.docSlots.slice(0, 1);
@@ -375,11 +379,16 @@
 
         /* Closing (prev non-null → next null). */
         var closeUpdate = { sidebarTool: null, chatOpen: false };
-        if (state.hiddenDocCache !== null) {
+        if (state.markedOpen && state.docSlots.length > 0) {
+            /* Dual mode → marked-only with the doc visible. Promote
+             * panes back to 2 so layout switches from doc-only-marked
+             * to h2-marked (form|doc split below marked). */
+            closeUpdate.panes = 2;
+        } else if (state.hiddenDocCache !== null) {
             if (state.markedOpen) {
-                /* Marked-mode (Phase 1): chat-closed + marked allows
-                 * form + 1 doc. Restore the cached doc into the
-                 * single visible slot. */
+                /* Edge case: a doc was shed to hiddenDocCache earlier
+                 * (chat opened from a panes:3 state pre-marked, etc.).
+                 * Restore it into the single visible slot. */
                 closeUpdate.panes = 2;
                 closeUpdate.docSlots = [state.hiddenDocCache];
                 closeUpdate.hiddenDocCache = null;
@@ -508,6 +517,18 @@
         });
     }
 
+    /* SHOW_FORM — restore form visibility in marked+chat dual mode.
+     * In that mode the bottom 2/3 has a single slot (form OR doc);
+     * SHOW_FORM clears docSlots so the form takes the slot. No-op
+     * outside dual mode (form is always visible there). */
+    function showForm(state) {
+        if (!state.markedOpen || !state.chatOpen) return state;
+        if (state.docSlots.length === 0) return state;
+        return Object.assign({}, state, {
+            docSlots: [],
+        });
+    }
+
     function reduce(state, action) {
         if (!action || typeof action.type !== "string") return state;
         switch (action.type) {
@@ -519,6 +540,8 @@
                 return toggleSidebarTool(state, action.tool);
             case "TOGGLE_MARKED":
                 return toggleMarked(state);
+            case "SHOW_FORM":
+                return showForm(state);
             case "SELECT_DOC":
                 return selectDoc(state, action.slotIndex, action.docId);
             case "OPEN_DOC":

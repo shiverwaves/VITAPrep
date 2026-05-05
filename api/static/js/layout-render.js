@@ -115,9 +115,15 @@
     /* -------- Render -------- */
     function computeLayoutName(s) {
         /* Marked-mode templates: top 1/3 is the marked panel, bottom
-         * 2/3 holds the form (and optionally a single doc when chat
-         * is closed). Chat coexists at the .app-main level. */
+         * 2/3 holds either the form, a doc, or form|doc split.
+         * Chat coexists at the .app-main level (right column). */
         if (s.markedOpen) {
+            if (s.chatOpen && s.docSlots.length > 0) {
+                /* Dual mode (marked + chat) with form swapped out:
+                 * doc occupies the single bottom-2/3 slot, form is
+                 * cached. */
+                return "doc-only-marked";
+            }
             if (s.panes === 2) return "h2-marked";
             return "form-only-marked";
         }
@@ -183,13 +189,25 @@
         }
 
         /* Form pill — always rendered at position 0, distinct
-         * styling. The form itself is always visible in the
-         * workspace (Phase 1; Phase 2 adds the dual-mode swap),
-         * so the pill is shown as in-pane / inert. */
+         * styling. In normal modes the form is always visible and
+         * the pill is inert. In marked+chat dual mode, the bottom
+         * slot holds either form OR a doc; clicking the form pill
+         * (when a doc is visible) restores the form via SHOW_FORM. */
+        var inDualMode = state.markedOpen && state.chatOpen;
+        var formCached = inDualMode && state.docSlots.length > 0;
+        var formPillClasses = "doc-list__item doc-list__item--form";
+        if (!formCached) formPillClasses += " doc-list__item--in-pane";
+        if (formCached) formPillClasses += " doc-list__item--cached";
+        var formPillAttrs = inDualMode
+            ? ' data-layout-action="show-form"'
+            : ' tabindex="-1" aria-current="true"';
+        var formPillBadge = formCached
+            ? '<span class="doc-list__badge doc-list__badge--cached"></span>'
+            : "";
         var parts = [
-            '<button type="button" class="doc-list__item doc-list__item--form doc-list__item--in-pane"' +
-            ' aria-current="true" tabindex="-1">' +
-            'Form 13614-C' +
+            '<button type="button" class="' + formPillClasses + '"' +
+            formPillAttrs + '>' +
+            'Form 13614-C' + formPillBadge +
             '</button>',
         ];
 
@@ -364,6 +382,11 @@
              * pill. The reducer's TOGGLE_MARKED handler caches /
              * restores docs and updates state.markedOpen. */
             dispatch({ type: "TOGGLE_MARKED" });
+        } else if (action === "show-form") {
+            /* Form pill click in marked+chat dual mode — restores
+             * the form into the bottom slot, caching whichever doc
+             * was there. No-op outside dual mode. */
+            dispatch({ type: "SHOW_FORM" });
         } else if (action === "select-doc") {
             var paneEl = closest(element, "[data-pane-index]");
             if (!paneEl) return;
