@@ -423,37 +423,61 @@
             });
             var visible = state.docSlots && state.docSlots[0]
                 ? state.docSlots[0] : null;
-            var newSlots;
+            var newSlots, hidden;
             if (state.chatOpen) {
                 /* Chat-open caps panes at 2 (form + 1 doc). Visible
                  * doc takes priority since the player explicitly
-                 * surfaced it during marked mode. */
-                newSlots = visible ? [visible] : (cache.length > 0 ? [cache[0]] : []);
+                 * surfaced it during marked mode. Any leftover cache
+                 * spills into hiddenDocCache so it'll restore when
+                 * chat closes — no data loss. */
+                if (visible) {
+                    newSlots = [visible];
+                    var extras = cache.filter(function (id) {
+                        return id !== visible;
+                    });
+                    hidden = extras.length > 0 ? extras[0] : null;
+                } else {
+                    newSlots = cache.length > 0 ? [cache[0]] : [];
+                    hidden = cache.length > 1 ? cache[1] : null;
+                }
             } else {
                 /* Chat-closed: cache restores in full; visible doc
                  * appends only if cache has room and isn't already
-                 * holding it. */
+                 * holding it. hiddenDocCache stays null (the marked-
+                 * open invariant). */
                 newSlots = cache.slice(0, 2);
                 if (visible && newSlots.length < 2 && newSlots.indexOf(visible) === -1) {
                     newSlots.push(visible);
                 }
+                hidden = null;
             }
             return Object.assign({}, state, {
                 markedOpen: false,
                 markedCache: [],
                 panes: 1 + newSlots.length,
                 docSlots: newSlots,
+                hiddenDocCache: hidden,
             });
         }
-        /* Opening — snapshot current docs, default to form visible. */
+        /* Opening — consolidate every displaced doc into markedCache.
+         * Pre-marked docSlots is the primary source; if hiddenDocCache
+         * holds a chat-shed doc, fold it in too so we don't carry a
+         * stale parallel cache through marked mode. After this,
+         * hiddenDocCache is null (invariant: only non-null while
+         * chatOpen AND markedOpen is false). */
         var preDocs = (state.docSlots || []).filter(function (id) {
             return id !== null && id !== undefined;
         });
+        var fullCache = preDocs.slice();
+        if (state.hiddenDocCache && fullCache.indexOf(state.hiddenDocCache) === -1) {
+            fullCache.push(state.hiddenDocCache);
+        }
         return Object.assign({}, state, {
             markedOpen: true,
-            markedCache: preDocs,
+            markedCache: fullCache,
             panes: 1,
             docSlots: [],
+            hiddenDocCache: null,
         });
     }
 
