@@ -45,7 +45,7 @@
 
     /* -------- Module state (initialized in init()) -------- */
     var workspace, formPane, docPanes, chatPane, flagsPane;
-    var chatToggleBtn, flagsToggleBtn;
+    var chatToggleBtn, markedPill;
     var docList;
     var scenarioId = "";
     var docUrls = {};
@@ -281,17 +281,20 @@
         banner.innerHTML = parts.join("");
     }
 
-    /* Sync aria-pressed on each sidebar-tool toggle button to reflect
-     * which tool is currently active. Both buttons read from
-     * state.sidebarTool so exactly one (or neither) shows pressed. */
+    /* Sync aria-pressed on each sidebar-tool toggle to reflect which
+     * tool is currently active. Two elements participate: the
+     * chat-toggle button (icon, titlebar right) and the marked pill
+     * (titlebar center, doubles as flag-panel toggle). Each reads
+     * from state.sidebarTool so exactly one (or neither) shows
+     * pressed. */
     function updateSidebarToggleButtons() {
         if (chatToggleBtn) {
             chatToggleBtn.setAttribute(
                 "aria-pressed", state.sidebarTool === "chat" ? "true" : "false"
             );
         }
-        if (flagsToggleBtn) {
-            flagsToggleBtn.setAttribute(
+        if (markedPill) {
+            markedPill.setAttribute(
                 "aria-pressed", state.sidebarTool === "flags" ? "true" : "false"
             );
         }
@@ -393,7 +396,7 @@
         chatPane = document.getElementById("chat-pane");
         flagsPane = document.getElementById("flags-pane");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
-        flagsToggleBtn = document.getElementById("flags-toggle-btn");
+        markedPill = document.getElementById("marked-pill");
         docList = document.getElementById("doc-list");
 
         scenarioId = global.SCENARIO_ID || "";
