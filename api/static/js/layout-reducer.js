@@ -68,14 +68,17 @@
             sidebarTool: null,
             chatOpen: false,
             hiddenDocCache: null,
-            /* Marked-for-follow-up panel state. Marked is a top-of-
-             * workspace overlay; while open, doc panes are not
-             * shown — they go into markedDocCache so the workspace
-             * collapses to form-only and the player sees only form
-             * + marked (chat is the lone exception, allowed to
-             * coexist). When Marked closes, cached docs restore. */
+            /* Marked-for-follow-up panel state. While open, the
+             * workspace shows marked top + (form + optional 1 doc)
+             * bottom; chat-open + marked-open caps the bottom at a
+             * single slot (form by default, doc-swappable in Phase 2).
+             *
+             * preMarkedSnapshot captures the pre-marked workspace
+             * (panes / docSlots / hiddenDocCache) so closing Marked
+             * restores the player's prior layout exactly — any
+             * mid-marked doc-browsing doesn't persist. */
             markedOpen: false,
-            markedDocCache: [],
+            preMarkedSnapshot: null,
             paneRecency: [0, 0],
             tick: 0,
             formState: { currentPage: 1 },
@@ -175,11 +178,25 @@
      */
     function openDoc(state, docId) {
         if (!docId) return state;
-        /* Marked overlay claims the workspace top — docs are
-         * inaccessible while it's open. The doc-list pills should
-         * be visually hidden in this state too (CSS), but guard
-         * here as a safety net. */
-        if (state.markedOpen) return state;
+        if (state.markedOpen) {
+            /* Marked-mode single-slot behavior. Two sub-cases:
+             *   - chat closed: bottom 2/3 is form|doc split (h2-marked).
+             *     Clicking a doc pill replaces the visible doc.
+             *   - chat open: bottom 2/3 is a single slot (form OR doc).
+             *     Clicking a doc pill puts that doc in the slot,
+             *     caching the form. The reverse (clicking form pill
+             *     to restore form) goes through SHOW_FORM. */
+            if (state.docSlots[0] === docId) return state;
+            if (state.chatOpen) {
+                return Object.assign({}, state, {
+                    docSlots: [docId],
+                }, bumpRecency(state, 0));
+            }
+            return Object.assign({}, state, {
+                panes: 2,
+                docSlots: [docId],
+            }, bumpRecency(state, 0));
+        }
         if (isDocInSlots(docId, state.docSlots)) return state;
 
         /* Chat-open + cached-doc click → swap. The previously-cached
@@ -242,6 +259,16 @@
             }
         }
         if (slotIndex === -1) return state;
+
+        /* Marked-mode close: drop to form-only (panes:1) regardless
+         * of which slot. Single-slot semantics. Snapshot is
+         * untouched. */
+        if (state.markedOpen) {
+            return Object.assign({}, state, {
+                panes: 1,
+                docSlots: [],
+            });
+        }
 
         /* Closing the only doc pane (slot 0). */
         if (state.panes === 2 && slotIndex === 0) {
@@ -335,7 +362,14 @@
         /* Opening (prev null → next non-null). */
         if (!prevTool && nextTool) {
             var openUpdate = { sidebarTool: nextTool, chatOpen: true };
-            if (state.panes === 3) {
+            if (state.markedOpen && state.panes === 2) {
+                /* Marked + 1 doc → dual mode. The doc stays visible;
+                 * the bottom 2/3 just collapses from form|doc split
+                 * to a single slot (the doc occupies it, form is
+                 * cached). Dropping panes to 1 triggers the layout
+                 * switch to doc-only-marked. */
+                openUpdate.panes = 1;
+            } else if (state.panes === 3) {
                 openUpdate.panes = 2;
                 openUpdate.docSlots = state.docSlots.slice(0, 1);
                 openUpdate.hiddenDocCache = state.docSlots[1];
@@ -345,10 +379,24 @@
 
         /* Closing (prev non-null → next null). */
         var closeUpdate = { sidebarTool: null, chatOpen: false };
-        if (state.hiddenDocCache !== null) {
-            closeUpdate.panes = 3;
-            closeUpdate.docSlots = state.docSlots.concat([state.hiddenDocCache]);
-            closeUpdate.hiddenDocCache = null;
+        if (state.markedOpen && state.docSlots.length > 0) {
+            /* Dual mode → marked-only with the doc visible. Promote
+             * panes back to 2 so layout switches from doc-only-marked
+             * to h2-marked (form|doc split below marked). */
+            closeUpdate.panes = 2;
+        } else if (state.hiddenDocCache !== null) {
+            if (state.markedOpen) {
+                /* Edge case: a doc was shed to hiddenDocCache earlier
+                 * (chat opened from a panes:3 state pre-marked, etc.).
+                 * Restore it into the single visible slot. */
+                closeUpdate.panes = 2;
+                closeUpdate.docSlots = [state.hiddenDocCache];
+                closeUpdate.hiddenDocCache = null;
+            } else {
+                closeUpdate.panes = 3;
+                closeUpdate.docSlots = state.docSlots.concat([state.hiddenDocCache]);
+                closeUpdate.hiddenDocCache = null;
+            }
         }
         return Object.assign({}, state, closeUpdate);
     }
@@ -371,38 +419,79 @@
         return setSidebarTool(state, next);
     }
 
-    /* TOGGLE_MARKED — opens/closes the Marked overlay panel. While
-     * open, doc panes are inaccessible — opening Marked drops all
-     * visible docs into markedDocCache and collapses the workspace
-     * to panes:1 so the form has the full area underneath the
-     * overlay. Closing restores the cached docs.
+    /* TOGGLE_MARKED — opens/closes the Marked panel. Marked occupies
+     * the top 1/3 of the workspace; the bottom 2/3 holds the form
+     * plus optionally one doc pane (when chat is closed). When
+     * chat is open AND marked is open, the bottom 2/3 has only the
+     * single main slot — phase 2 wires the form-vs-doc swap there.
      *
-     * The form keeps full interactivity; only docs are shed. Chat
-     * is independent — it can be open or closed before / during /
-     * after Marked is toggled. */
+     * Layout while marked is open:
+     *   - chat closed, no docs   → panes:1 (just form below marked)
+     *   - chat closed, ≥1 doc    → panes:2 (form + 1 doc below marked;
+     *                              other docs reachable via the doc-list
+     *                              and recoverable from preMarkedSnapshot
+     *                              on close)
+     *   - chat open              → panes:1 (form below marked; chat in
+     *                              the right column. Phase 2 adds the
+     *                              form-vs-doc swap for this combo)
+     */
+    /* TOGGLE_MARKED — opens/closes the Marked panel.
+     *
+     * On open: snapshot the pre-marked workspace (panes / docSlots /
+     * hiddenDocCache) into preMarkedSnapshot. The marked-mode layout
+     * is then derived from the chat state and currently-visible docs:
+     *   - chat closed, ≥1 doc visible → panes:2 with the first doc
+     *     kept in the slot (layout A: marked top, form|doc split).
+     *   - chat closed, no docs        → panes:1 (form below marked).
+     *   - chat open                   → panes:1 (form-only-marked
+     *     inside the chat-narrowed workspace; Phase 2 adds the
+     *     form-vs-doc swap for this combo).
+     *
+     * On close: restore from preMarkedSnapshot exactly. Mid-marked
+     * doc browsing is ephemeral — closing Marked reverts to the
+     * player's pre-marked layout. */
     function toggleMarked(state) {
         if (state.markedOpen) {
-            /* Closing — restore docs from markedDocCache. */
-            var cache = state.markedDocCache || [];
-            if (cache.length === 0) {
-                return Object.assign({}, state, { markedOpen: false });
+            var snap = state.preMarkedSnapshot;
+            if (!snap) {
+                /* Defensive fallback — shouldn't happen, but if the
+                 * snapshot is somehow missing just clear the flag. */
+                return Object.assign({}, state, {
+                    markedOpen: false,
+                    preMarkedSnapshot: null,
+                });
             }
             return Object.assign({}, state, {
                 markedOpen: false,
-                panes: 1 + cache.length,
-                docSlots: cache.slice(),
-                markedDocCache: [],
+                panes: snap.panes,
+                docSlots: snap.docSlots.slice(),
+                hiddenDocCache: snap.hiddenDocCache,
+                preMarkedSnapshot: null,
             });
         }
-        /* Opening — cache visible docs and drop to panes:1. */
-        var cachedDocs = (state.docSlots || []).filter(function (id) {
+        /* Opening — snapshot first, then compute initial marked-mode
+         * layout based on chat + docs. */
+        var snapshot = {
+            panes: state.panes,
+            docSlots: (state.docSlots || []).slice(),
+            hiddenDocCache: state.hiddenDocCache,
+        };
+        var visible = (state.docSlots || []).filter(function (id) {
             return id !== null && id !== undefined;
         });
+        if (state.chatOpen || visible.length === 0) {
+            return Object.assign({}, state, {
+                markedOpen: true,
+                panes: 1,
+                docSlots: [],
+                preMarkedSnapshot: snapshot,
+            });
+        }
         return Object.assign({}, state, {
             markedOpen: true,
-            panes: 1,
-            docSlots: [],
-            markedDocCache: cachedDocs,
+            panes: 2,
+            docSlots: [visible[0]],
+            preMarkedSnapshot: snapshot,
         });
     }
 
@@ -428,6 +517,18 @@
         });
     }
 
+    /* SHOW_FORM — restore form visibility in marked+chat dual mode.
+     * In that mode the bottom 2/3 has a single slot (form OR doc);
+     * SHOW_FORM clears docSlots so the form takes the slot. No-op
+     * outside dual mode (form is always visible there). */
+    function showForm(state) {
+        if (!state.markedOpen || !state.chatOpen) return state;
+        if (state.docSlots.length === 0) return state;
+        return Object.assign({}, state, {
+            docSlots: [],
+        });
+    }
+
     function reduce(state, action) {
         if (!action || typeof action.type !== "string") return state;
         switch (action.type) {
@@ -439,6 +540,8 @@
                 return toggleSidebarTool(state, action.tool);
             case "TOGGLE_MARKED":
                 return toggleMarked(state);
+            case "SHOW_FORM":
+                return showForm(state);
             case "SELECT_DOC":
                 return selectDoc(state, action.slotIndex, action.docId);
             case "OPEN_DOC":

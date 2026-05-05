@@ -114,12 +114,19 @@
 
     /* -------- Render -------- */
     function computeLayoutName(s) {
-        /* Marked open → workspace switches to a top-1/3 marked +
-         * bottom-2/3 form grid. Docs are auto-cached by the reducer
-         * when Marked opens, so the layout never combines marked
-         * with doc panes. Chat coexists at the .app-main level
-         * (right column) and doesn't change the workspace template. */
-        if (s.markedOpen) return "form-only-marked";
+        /* Marked-mode templates: top 1/3 is the marked panel, bottom
+         * 2/3 holds either the form, a doc, or form|doc split.
+         * Chat coexists at the .app-main level (right column). */
+        if (s.markedOpen) {
+            if (s.chatOpen && s.docSlots.length > 0) {
+                /* Dual mode (marked + chat) with form swapped out:
+                 * doc occupies the single bottom-2/3 slot, form is
+                 * cached. */
+                return "doc-only-marked";
+            }
+            if (s.panes === 2) return "h2-marked";
+            return "form-only-marked";
+        }
         if (s.chatOpen) {
             return s.panes === 1 ? "form-only-chat" : "h2-chat";
         }
@@ -159,14 +166,51 @@
      * or cached↔visible swap. */
     function renderDocList() {
         if (!docList) return;
-        if (availableDocIds.length === 0) {
-            docList.innerHTML = "";
-            return;
-        }
         var slot0 = state.docSlots[0] || null;
         var slot1 = state.docSlots[1] || null;
-        var cached = state.chatOpen ? (state.hiddenDocCache || null) : null;
-        var parts = [];
+        /* Cache visualization sources:
+         *   - chat-open: hiddenDocCache (single doc shed when chat opened)
+         *   - marked-open: pre-marked docs not currently visible
+         * Both can apply at once. The cache-dot UI doesn't disambiguate
+         * between sources — the player just sees "this doc is queued
+         * to come back when something closes". */
+        var cachedSet = {};
+        if (state.chatOpen && state.hiddenDocCache) {
+            cachedSet[state.hiddenDocCache] = true;
+        }
+        if (state.markedOpen && state.preMarkedSnapshot) {
+            var snapDocs = state.preMarkedSnapshot.docSlots || [];
+            for (var k = 0; k < snapDocs.length; k++) {
+                var sid = snapDocs[k];
+                if (sid && sid !== slot0 && sid !== slot1) {
+                    cachedSet[sid] = true;
+                }
+            }
+        }
+
+        /* Form pill — always rendered at position 0, distinct
+         * styling. In normal modes the form is always visible and
+         * the pill is inert. In marked+chat dual mode, the bottom
+         * slot holds either form OR a doc; clicking the form pill
+         * (when a doc is visible) restores the form via SHOW_FORM. */
+        var inDualMode = state.markedOpen && state.chatOpen;
+        var formCached = inDualMode && state.docSlots.length > 0;
+        var formPillClasses = "doc-list__item doc-list__item--form";
+        if (!formCached) formPillClasses += " doc-list__item--in-pane";
+        if (formCached) formPillClasses += " doc-list__item--cached";
+        var formPillAttrs = inDualMode
+            ? ' data-layout-action="show-form"'
+            : ' tabindex="-1" aria-current="true"';
+        var formPillBadge = formCached
+            ? '<span class="doc-list__badge doc-list__badge--cached"></span>'
+            : "";
+        var parts = [
+            '<button type="button" class="' + formPillClasses + '"' +
+            formPillAttrs + '>' +
+            'Form 13614-C' + formPillBadge +
+            '</button>',
+        ];
+
         for (var i = 0; i < availableDocIds.length; i++) {
             var docId = availableDocIds[i];
             var label = docLabels[docId] || docId;
@@ -178,7 +222,7 @@
             } else if (docId === slot1) {
                 modifier = " doc-list__item--in-pane";
                 badge = '<span class="doc-list__badge">3</span>';
-            } else if (docId === cached) {
+            } else if (cachedSet[docId]) {
                 modifier = " doc-list__item--cached";
                 badge = '<span class="doc-list__badge doc-list__badge--cached"></span>';
             }
@@ -306,24 +350,6 @@
             markedPill.setAttribute(
                 "aria-pressed", state.markedOpen ? "true" : "false"
             );
-            /* Cached-doc indicator: orange dot + tooltip listing
-             * the cached doc labels. Shown whenever at least one
-             * doc is in markedDocCache (i.e. docs were open when
-             * Marked was triggered and will restore on close). */
-            var cache = state.markedDocCache || [];
-            markedPill.classList.toggle(
-                "titlebar__pill--has-cache", cache.length > 0
-            );
-            if (cache.length > 0) {
-                var labels = cache.map(function (id) {
-                    return docLabels[id] || id;
-                });
-                markedPill.setAttribute(
-                    "title", "Cached: " + labels.join(", ")
-                );
-            } else {
-                markedPill.removeAttribute("title");
-            }
         }
     }
 
@@ -349,6 +375,11 @@
              * pill. The reducer's TOGGLE_MARKED handler caches /
              * restores docs and updates state.markedOpen. */
             dispatch({ type: "TOGGLE_MARKED" });
+        } else if (action === "show-form") {
+            /* Form pill click in marked+chat dual mode — restores
+             * the form into the bottom slot, caching whichever doc
+             * was there. No-op outside dual mode. */
+            dispatch({ type: "SHOW_FORM" });
         } else if (action === "select-doc") {
             var paneEl = closest(element, "[data-pane-index]");
             if (!paneEl) return;
