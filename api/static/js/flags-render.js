@@ -97,7 +97,6 @@
 
     var VERB_LABELS = {
         RequestInfo: "Request Information",
-        RequestConfirmation: "Request Confirmation",
     };
     var TARGET_LABELS = {
         Vida: "Vida",

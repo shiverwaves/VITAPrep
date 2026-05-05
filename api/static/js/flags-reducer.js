@@ -19,7 +19,7 @@
  *
  *     {
  *         field_id: string,
- *         verb: "RequestInfo" | "RequestConfirmation",
+ *         verb: "RequestInfo",
  *         target: "Vida" | "Client" | null,
  *         channel: "Email" | "Message" | null,
  *         status: "draft" | "ready",
@@ -68,7 +68,7 @@
      * new option is a one-line edit here. Labels live in OPTIONS
      * separately so the token (used in state) and the display
      * string can diverge. */
-    var VERB_TOKENS = ["RequestInfo", "RequestConfirmation"];
+    var VERB_TOKENS = ["RequestInfo"];
     var TARGET_TOKENS = ["Vida", "Client"];
     var CHANNEL_TOKENS = ["Email", "Message"];
     var ARCHIVE_STATUSES = { sent: 1, delivered: 1, expired: 1 };
