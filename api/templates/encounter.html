@@ -65,7 +65,10 @@ html, body { height: 100%; overflow: hidden; }
         id="marked-pill" type="button"
         data-layout-action="toggle-marked"
         aria-pressed="false" aria-label="Marked for follow-up">
-    Marked: <span id="marked-pill-count">0</span>
+    <span class="titlebar__pill-tag">
+        <span class="titlebar__pill-tag-label">Marked</span>
+        <span class="titlebar__pill-tag-count" id="marked-pill-count">0</span>
+    </span>
     <span class="titlebar__pill-chevron" aria-hidden="true">&#9662;</span>
 </button>
 {% endset %}

@@ -68,13 +68,13 @@
             sidebarTool: null,
             chatOpen: false,
             hiddenDocCache: null,
-            /* Marked-for-follow-up panel state. Marked occupies the
-             * top 1/3 of the workspace and forces all doc panes
-             * into markedDocCache (the workspace can't show docs
-             * AND marked simultaneously — the "max 3 surfaces"
-             * rule). When Marked closes, cached docs restore. */
+            /* Marked-for-follow-up panel state. Marked is a top-of-
+             * workspace overlay (absolute-positioned in CSS) that
+             * floats over whatever's underneath without disturbing
+             * the underlying layout — docs stay in their grid slots
+             * and the form keeps its full geometry / interactivity.
+             * State is just the open/closed flag. */
             markedOpen: false,
-            markedDocCache: [],
             paneRecency: [0, 0],
             tick: 0,
             formState: { currentPage: 1 },
@@ -363,47 +363,14 @@
         return setSidebarTool(state, next);
     }
 
-    /* TOGGLE_MARKED — opens or closes the Marked top panel. Marked
-     * occupies the top 1/3 of the workspace; doc panes can't
-     * coexist with it, so opening Marked auto-caches the visible
-     * docs into markedDocCache and drops to panes:1. Closing
-     * restores from the cache.
-     *
-     * Mutual exclusion is one-way: Marked auto-sheds docs but
-     * doesn't touch chat. Chat can be open or closed independently
-     * while Marked is active — the "max 3 surfaces" rule (form +
-     * marked + chat = 3) holds because docs are out of the picture. */
+    /* TOGGLE_MARKED — flips the Marked panel open/closed. The panel
+     * is a CSS overlay anchored to the top of #workspace; it floats
+     * on top of whatever's underneath (form + doc-list, or doc panes
+     * in h2/h3 layouts) without changing the workspace grid. Docs
+     * stay in their slots and the form keeps its interactivity, so
+     * there's no cache to manage — just the boolean flag. */
     function toggleMarked(state) {
-        if (state.markedOpen) {
-            /* Closing — restore docs from markedDocCache. */
-            var cache = state.markedDocCache || [];
-            if (cache.length === 0) {
-                return Object.assign({}, state, {
-                    markedOpen: false,
-                });
-            }
-            return Object.assign({}, state, {
-                markedOpen: false,
-                panes: 1 + cache.length,
-                docSlots: cache.slice(),
-                markedDocCache: [],
-            });
-        }
-        /* Opening — cache visible docs and drop to panes:1. The
-         * existing hiddenDocCache (chat-shed) is left untouched;
-         * it'll restore when chat closes if Marked has closed by
-         * then. Edge case (chat closes while Marked is still open
-         * with hiddenDocCache populated) is handled when reached;
-         * for Phase 1 the common path is the focus. */
-        var cachedDocs = (state.docSlots || []).filter(function (id) {
-            return id !== null && id !== undefined;
-        });
-        return Object.assign({}, state, {
-            markedOpen: true,
-            panes: 1,
-            docSlots: [],
-            markedDocCache: cachedDocs,
-        });
+        return Object.assign({}, state, { markedOpen: !state.markedOpen });
     }
 
     /* SELECT_DOC — direct slot-targeted assignment, dispatched by
