@@ -281,7 +281,9 @@ class TestFlagsReducer:
         """)
         assert "PASS" in out
 
-    def test_changing_pill_demotes_ready_when_chain_breaks(self) -> None:
+    def test_set_pill_blocked_while_ready(self) -> None:
+        """Pills are locked once the row is in ready state — the
+        player must toggle Ready off (back to draft) to edit them."""
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
@@ -289,8 +291,13 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
             s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
             eq(s.flags['a'].status, 'ready', 'should be ready');
-            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: null });
-            eq(s.flags['a'].status, 'draft', 'incomplete → demoted to draft');
+            var before = JSON.stringify(s);
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
+            eq(JSON.stringify(s), before, 'set-pill on ready row is no-op');
+            // toggle off and try again — should now succeed.
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
+            eq(s.flags['a'].target, 'Vida', 'set-pill works after toggle off');
         """)
         assert "PASS" in out
 

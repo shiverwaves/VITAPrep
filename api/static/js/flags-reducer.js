@@ -133,20 +133,20 @@
     }
 
     /* setPill — change a pill's value on an active flag. If the
-     * change makes the chain incomplete, ready demotes to draft. */
+     * change makes the chain incomplete, ready demotes to draft.
+     * Pills are locked while a row is in the ready state — the
+     * player must toggle Ready off to edit. */
     function setPill(state, fieldId, pillKey, value, validMap) {
         if (!fieldId || !state.flags[fieldId]) return state;
         if (value !== null && !validMap[value]) return state;
 
         var existing = state.flags[fieldId];
+        if (existing.status === "ready") return state;  /* locked */
         if (existing[pillKey] === value) return state;
 
         var update = {};
         update[pillKey] = value;
         var next = Object.assign({}, existing, update);
-        if (next.status === "ready" && !isChainComplete(next)) {
-            next.status = "draft";
-        }
         var newFlags = Object.assign({}, state.flags);
         newFlags[fieldId] = next;
         return withState(state, { flags: newFlags });
