@@ -956,6 +956,13 @@ body:not([data-marked="open"]) #marked-pane {
     display: none;
 }
 
+/* While Marked is open, doc panes are cached and the doc-list bar
+ * has no relevant function — hide it so the form occupies the full
+ * bottom 2/3 cleanly. Restored on Marked close. */
+body[data-marked="open"] .doc-list {
+    display: none;
+}
+
 .doc-list__item {
     /* Rendered as a <button type="button"> for keyboard / a11y;
      * reset browser button defaults (font, line-height, padding). */
