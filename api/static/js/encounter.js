@@ -127,11 +127,10 @@
     }
 
     /* Display labels per verb. The reducer / state stores the
-     * canonical token ("RequestInfo" / "RequestConfirmation"); this
-     * map is presentation-only. */
+     * canonical token; this map is presentation-only. The verb
+     * list will expand again during the upcoming vocab revamp. */
     var VERB_LABELS = {
         RequestInfo: "Request Information",
-        RequestConfirmation: "Request Confirmation",
     };
 
     /* Render the menu HTML for the right-clicked field. Two cases:
@@ -147,7 +146,7 @@
             '</div>'
         );
 
-        var verbs = ["RequestInfo", "RequestConfirmation"];
+        var verbs = ["RequestInfo"];
 
         if (existing) {
             parts.push(

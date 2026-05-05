@@ -205,9 +205,9 @@ class TestFlagsReducer:
     def test_flag_field_adds_with_verb(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'income.wages', verb: 'RequestConfirmation' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'income.wages', verb: 'RequestInfo' });
             if (!s.flags['income.wages']) throw new Error('flag not added');
-            eq(s.flags['income.wages'].verb, 'RequestConfirmation', 'verb');
+            eq(s.flags['income.wages'].verb, 'RequestInfo', 'verb');
             eq(s.flags['income.wages'].target, null, 'target starts null');
             eq(s.flags['income.wages'].channel, null, 'channel starts null');
             eq(s.flags['income.wages'].status, 'draft', 'status starts draft');
@@ -228,7 +228,7 @@ class TestFlagsReducer:
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'UNFLAG_FIELD', field_id: 'a' });
             if (s.flags['a']) throw new Error('flag a should be removed');
             if (!s.flags['b']) throw new Error('flag b should remain');
@@ -326,7 +326,7 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
             s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SEND_ALL' });
             if (s.flags['a']) throw new Error('a (ready) should have moved to archive');
             if (!s.flags['b']) throw new Error('b (draft) should remain in flags');
@@ -344,9 +344,9 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
             s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestConfirmation' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             if (!s.flags['a']) throw new Error('a should be back in flags');
-            eq(s.flags['a'].verb, 'RequestConfirmation', 'fresh verb');
+            eq(s.flags['a'].verb, 'RequestInfo', 'fresh verb');
             eq(s.flags['a'].target, null, 'fresh target null');
             eq(s.flags['a'].channel, null, 'fresh channel null');
             eq(s.flags['a'].status, 'draft', 'fresh status draft');
@@ -360,7 +360,7 @@ class TestFlagsReducer:
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
             var json = JSON.stringify(s);
@@ -390,8 +390,8 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
             s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
             eq(s.flags['a'].status, 'ready', 'ready before re-flag');
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestConfirmation' });
-            eq(s.flags['a'].verb, 'RequestConfirmation', 'verb updated');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            eq(s.flags['a'].verb, 'RequestInfo', 'verb updated');
             eq(s.flags['a'].target, 'Client', 'target preserved');
             eq(s.flags['a'].channel, 'Email', 'channel preserved');
             eq(s.flags['a'].status, 'ready', 'status preserved');

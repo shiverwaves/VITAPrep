@@ -97,7 +97,6 @@
 
     var VERB_LABELS = {
         RequestInfo: "Request Information",
-        RequestConfirmation: "Request Confirmation",
     };
     var TARGET_LABELS = {
         Vida: "Vida",
@@ -223,8 +222,12 @@
 
     function renderConfirm(fieldId, flag, complete, isSent) {
         if (isSent) {
+            var sentStatus = flag.status || "sent";
+            var labelMap = { sent: "Sent", delivered: "Delivered", expired: "Expired" };
             return (
-                '<span class="flags-pane__sent-tag">Sent</span>'
+                '<span class="flags-pane__sent-tag flags-pane__sent-tag--' + sentStatus + '">' +
+                escapeHtml(labelMap[sentStatus] || "Sent") +
+                '</span>'
             );
         }
         var disabled = !complete;
@@ -232,13 +235,17 @@
         var primaryClass = "flags-pane__confirm-primary";
         if (pressed) primaryClass += " flags-pane__confirm-primary--pressed";
         var primaryAttrs = disabled ? ' disabled aria-disabled="true"' : '';
+        /* Single label "Ready" for both states — pressed/unpressed is
+         * conveyed by the navy fill + checkmark, not by changing the
+         * word. Keeps the language separate from the "Approve" /
+         * "Approve all" verbs that fire the row. */
         return (
             '<span class="flags-pane__confirm">' +
             '<button type="button" class="' + primaryClass + '"' +
             ' data-flag-action="toggle-confirm"' +
             ' aria-pressed="' + (pressed ? "true" : "false") + '"' +
             primaryAttrs + '>' +
-            (pressed ? "Confirmed" : "Confirm") +
+            (pressed ? "Ready &#10003;" : "Ready") +
             '</button>' +
             '<button type="button" class="flags-pane__confirm-menu"' +
             ' data-flag-action="open-confirm-menu"' +
@@ -256,7 +263,7 @@
             '<div class="flags-pane__footer">' +
             '<button type="button" class="flags-pane__btn flags-pane__btn--primary"' +
             ' data-flag-action="send-all"' + attrs + '>' +
-            'Send all' +
+            'Approve all' +
             '</button>' +
             '</div>'
         );
@@ -343,7 +350,7 @@
         menu.id = "flags-pane-dropdown";
         menu.innerHTML =
             '<button type="button" class="flags-pane__dropdown-item"' +
-            ' data-flag-action="execute"' + executeAttrs + '>Execute</button>' +
+            ' data-flag-action="execute"' + executeAttrs + '>Approve</button>' +
             '<button type="button" class="flags-pane__dropdown-item flags-pane__dropdown-item--danger"' +
             ' data-flag-action="discard">Discard</button>';
         document.body.appendChild(menu);

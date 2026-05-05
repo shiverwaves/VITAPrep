@@ -114,10 +114,12 @@
 
     /* -------- Render -------- */
     function computeLayoutName(s) {
-        /* Marked is a CSS overlay (absolute-positioned), not a grid
-         * area — it doesn't change the workspace layout name. The
-         * marked-open state is conveyed via body[data-marked="open"]
-         * which the marked-pane styles key off independently. */
+        /* Marked open → workspace switches to a top-1/3 marked +
+         * bottom-2/3 form grid. Docs are auto-cached by the reducer
+         * when Marked opens, so the layout never combines marked
+         * with doc panes. Chat coexists at the .app-main level
+         * (right column) and doesn't change the workspace template. */
+        if (s.markedOpen) return "form-only-marked";
         if (s.chatOpen) {
             return s.panes === 1 ? "form-only-chat" : "h2-chat";
         }
@@ -303,6 +305,13 @@
              * panel state. */
             markedPill.setAttribute(
                 "aria-pressed", state.markedOpen ? "true" : "false"
+            );
+            /* Cached-doc indicator: orange dot when at least one
+             * doc is in markedDocCache (i.e. docs were open when
+             * Marked was triggered and will restore on close). */
+            var cacheCount = (state.markedDocCache || []).length;
+            markedPill.classList.toggle(
+                "titlebar__pill--has-cache", cacheCount > 0
             );
         }
     }

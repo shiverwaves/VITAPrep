@@ -19,19 +19,29 @@
  *
  *     {
  *         field_id: string,
- *         verb: "RequestInfo" | "RequestConfirmation",
+ *         verb: "RequestInfo",
  *         target: "Vida" | "Client" | null,
  *         channel: "Email" | "Message" | null,
  *         status: "draft" | "ready",
  *         created_at: number,
  *     }
  *
- * Sent flag (in archive) shape — same as active plus `sent_at`.
- * Once a flag fires (Execute or Send all), it's removed from
- * `flags` and pushed to `archive`. The form-side dot + .f13c-flagged
- * class clear automatically because they read from `flags` only.
- * The field can then be re-flagged, producing a fresh active entry
- * while the archived entry remains in the panel as history.
+ * Sent flag (in archive) shape — same as active plus `sent_at`,
+ * with `status` ∈ { "sent" | "delivered" | "expired" }:
+ *
+ *   - sent       fired, no response yet (default on Execute / Send all)
+ *   - delivered  client received & responded
+ *   - expired    client never responded / message timed out
+ *
+ * The transition sent → delivered/expired is currently driven only
+ * by the SET_ARCHIVE_STATUS action; future scenario events (or a
+ * client-response simulation) will dispatch it automatically.
+ *
+ * Once a flag fires, it's removed from `flags` and pushed to
+ * `archive`. The form-side dot + .f13c-flagged class clear
+ * automatically because they read from `flags` only. The field
+ * can then be re-flagged, producing a fresh active entry while
+ * the archived entry remains in the panel as history.
  *
  * The chain is complete when verb + target + channel are all set.
  * Confirm (status:ready) is only allowed on a complete chain;
@@ -45,8 +55,9 @@
  *     SET_TARGET       { field_id, target }         (target may be null)
  *     SET_CHANNEL      { field_id, channel }        (channel may be null)
  *     TOGGLE_CONFIRM   { field_id }                 (draft ↔ ready)
- *     EXECUTE_FLAG     { field_id }                 (→ sent)
- *     SEND_ALL         {}                           (all ready → sent)
+ *     EXECUTE_FLAG     { field_id }                 (→ archive, status:sent)
+ *     SEND_ALL         {}                           (all ready → archive)
+ *     SET_ARCHIVE_STATUS { archive_index, status }  (sent → delivered|expired)
  */
 
 (function (global) {
@@ -57,9 +68,10 @@
      * new option is a one-line edit here. Labels live in OPTIONS
      * separately so the token (used in state) and the display
      * string can diverge. */
-    var VERB_TOKENS = ["RequestInfo", "RequestConfirmation"];
+    var VERB_TOKENS = ["RequestInfo"];
     var TARGET_TOKENS = ["Vida", "Client"];
     var CHANNEL_TOKENS = ["Email", "Message"];
+    var ARCHIVE_STATUSES = { sent: 1, delivered: 1, expired: 1 };
 
     var VALID_VERBS = {};
     VERB_TOKENS.forEach(function (t) { VALID_VERBS[t] = 1; });
@@ -215,6 +227,21 @@
         });
     }
 
+    /* SET_ARCHIVE_STATUS — transition an archive entry's status
+     * (sent → delivered | expired). Identified by archive_index
+     * since (field_id, sent_at) isn't a unique key — same field
+     * may appear multiple times. */
+    function setArchiveStatus(state, archiveIndex, status) {
+        var archive = state.archive || [];
+        if (archiveIndex < 0 || archiveIndex >= archive.length) return state;
+        if (!ARCHIVE_STATUSES[status]) return state;
+        var existing = archive[archiveIndex];
+        if (existing.status === status) return state;
+        var newArchive = archive.slice();
+        newArchive[archiveIndex] = Object.assign({}, existing, { status: status });
+        return withState(state, { archive: newArchive });
+    }
+
     function reduce(state, action) {
         if (!action || typeof action.type !== "string") return state;
         switch (action.type) {
@@ -234,6 +261,8 @@
                 return executeFlag(state, action.field_id);
             case "SEND_ALL":
                 return sendAll(state);
+            case "SET_ARCHIVE_STATUS":
+                return setArchiveStatus(state, action.archive_index, action.status);
             default:
                 return state;
         }
