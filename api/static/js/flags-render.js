@@ -176,6 +176,9 @@
         var fieldId = flag.field_id;
         var complete = global.FlagsReducer.isChainComplete(flag);
         var isReady = !isSent && flag.status === "ready";
+        /* Pills are locked when the row is sent (immutable archive
+         * entry) or ready (player must toggle Ready off to edit). */
+        var pillsLocked = isSent || isReady;
 
         var modifiers = " flags-pane__row--chain";
         if (isSent) modifiers += " flags-pane__row--sent";
@@ -190,11 +193,11 @@
             '<div class="flags-pane__row' + modifiers + '"' + rowAttrs + '>',
             '<div class="flags-pane__row-field">' + escapeHtml(fieldId) + '</div>',
             '<div class="flags-pane__chain">',
-            renderPill(fieldId, "verb", flag.verb, VERB_LABELS, isSent),
+            renderPill(fieldId, "verb", flag.verb, VERB_LABELS, pillsLocked),
             '<span class="flags-pane__chain-connector">from</span>',
-            renderPill(fieldId, "target", flag.target, TARGET_LABELS, isSent),
+            renderPill(fieldId, "target", flag.target, TARGET_LABELS, pillsLocked),
             '<span class="flags-pane__chain-connector">via</span>',
-            renderPill(fieldId, "channel", flag.channel, CHANNEL_LABELS, isSent),
+            renderPill(fieldId, "channel", flag.channel, CHANNEL_LABELS, pillsLocked),
             renderConfirm(fieldId, flag, complete, isSent),
             '</div>',
             '</div>',
@@ -202,20 +205,20 @@
         return parts.join("");
     }
 
-    function renderPill(fieldId, pillKey, value, labelMap, isSent) {
+    function renderPill(fieldId, pillKey, value, labelMap, locked) {
         var label = value
             ? (labelMap[value] || value)
             : PILL_PLACEHOLDERS[pillKey];
         var classes = "flags-pane__pill";
         if (!value) classes += " flags-pane__pill--placeholder";
-        if (isSent) classes += " flags-pane__pill--sent";
-        var attrs = isSent
+        if (locked) classes += " flags-pane__pill--locked";
+        var attrs = locked
             ? ' disabled aria-disabled="true"'
             : ' data-flag-action="open-pill" data-pill="' + pillKey + '"';
         return (
             '<button type="button" class="' + classes + '"' + attrs + '>' +
             '<span class="flags-pane__pill-label">' + escapeHtml(label) + '</span>' +
-            (isSent ? '' : '<span class="flags-pane__pill-chevron" aria-hidden="true">&#9662;</span>') +
+            (locked ? '' : '<span class="flags-pane__pill-chevron" aria-hidden="true">&#9662;</span>') +
             '</button>'
         );
     }

@@ -173,7 +173,7 @@ body:not([data-sidebar="chat"]) #chat-pane {
     background: var(--color-border-light);
 }
 
-.flags-pane__pill--sent,
+.flags-pane__pill--locked,
 .flags-pane__pill:disabled {
     cursor: default;
     opacity: 0.7;
@@ -517,19 +517,14 @@ body:not([data-sidebar="chat"]) #chat-pane {
     text-align: center;
 }
 
-/* Chevron only appears when the pill is illuminated or pressed —
- * signals "click to open." Same affordance pattern as the scenario
- * trigger's chevron. */
+/* Chevron is always visible — signals "click to open" so the pill
+ * reads as interactable even at count 0. Same affordance pattern
+ * as the scenario trigger's chevron. */
 .titlebar__pill-chevron {
-    display: none;
+    display: inline;
     font-size: 9px;
     line-height: 1;
     color: inherit;
-}
-
-.titlebar__pill--has-flags .titlebar__pill-chevron,
-.titlebar__pill[aria-pressed="true"] .titlebar__pill-chevron {
-    display: inline;
 }
 
 /* =========================================================================
@@ -953,6 +948,13 @@ body:not([data-marked="open"]) #marked-pane {
 }
 
 .doc-list:empty {
+    display: none;
+}
+
+/* While Marked is open, doc panes are cached and the doc-list bar
+ * has no relevant function — hide it so the form occupies the full
+ * bottom 2/3 cleanly. Restored on Marked close. */
+body[data-marked="open"] .doc-list {
     display: none;
 }
 

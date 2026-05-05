@@ -306,13 +306,24 @@
             markedPill.setAttribute(
                 "aria-pressed", state.markedOpen ? "true" : "false"
             );
-            /* Cached-doc indicator: orange dot when at least one
+            /* Cached-doc indicator: orange dot + tooltip listing
+             * the cached doc labels. Shown whenever at least one
              * doc is in markedDocCache (i.e. docs were open when
              * Marked was triggered and will restore on close). */
-            var cacheCount = (state.markedDocCache || []).length;
+            var cache = state.markedDocCache || [];
             markedPill.classList.toggle(
-                "titlebar__pill--has-cache", cacheCount > 0
+                "titlebar__pill--has-cache", cache.length > 0
             );
+            if (cache.length > 0) {
+                var labels = cache.map(function (id) {
+                    return docLabels[id] || id;
+                });
+                markedPill.setAttribute(
+                    "title", "Cached: " + labels.join(", ")
+                );
+            } else {
+                markedPill.removeAttribute("title");
+            }
         }
     }
 
