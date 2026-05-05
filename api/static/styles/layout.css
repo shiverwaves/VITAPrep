@@ -89,11 +89,12 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* =========================================================================
- * Marked panel content (display-only)
+ * Marked panel — chain-link rows
  * =========================================================================
- * The marked panel currently shows a simple list of flagged field
- * names, no header / footer / per-row controls. Detail submenu
- * and batch actions were retired pending a workflow redesign.
+ * Each row is a sentence chain:
+ *   [field] [verb ▾] from [target ▾] via [channel ▾] [Confirm | ▾]
+ * Pills are <button> dropdowns; the split-button at the right edge
+ * is the Confirm primary + the menu (Execute / Discard).
  */
 
 .flags-pane__body {
@@ -104,7 +105,9 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 .flags-pane__row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
     border-bottom: 1px solid var(--color-border-light);
@@ -118,6 +121,247 @@ body:not([data-sidebar="chat"]) #chat-pane {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.flags-pane__chain {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.flags-pane__chain-connector {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.flags-pane__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px 3px 10px;
+    font: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    background: rgba(232, 122, 46, 0.15);
+    color: #b35a17;
+    border: 1px solid rgba(232, 122, 46, 0.4);
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.flags-pane__pill:hover:not(:disabled) {
+    background: rgba(232, 122, 46, 0.25);
+}
+
+.flags-pane__pill:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+.flags-pane__pill--placeholder {
+    background: transparent;
+    color: var(--color-text-muted);
+    border: 1px dashed var(--color-border);
+    font-style: italic;
+}
+
+.flags-pane__pill--placeholder:hover:not(:disabled) {
+    background: var(--color-border-light);
+}
+
+.flags-pane__pill--sent,
+.flags-pane__pill:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.flags-pane__pill-chevron {
+    font-size: 9px;
+    line-height: 1;
+}
+
+/* Confirm split-button — primary toggle + menu trigger. */
+
+.flags-pane__confirm {
+    display: inline-flex;
+    margin-left: auto;
+    border-radius: var(--radius-sm, 4px);
+    overflow: hidden;
+    border: 1px solid var(--color-navy);
+}
+
+.flags-pane__confirm-primary,
+.flags-pane__confirm-menu {
+    padding: 4px 10px;
+    font: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    background: var(--color-bg);
+    color: var(--color-navy);
+    border: none;
+    cursor: pointer;
+}
+
+.flags-pane__confirm-primary {
+    border-right: 1px solid var(--color-navy);
+}
+
+.flags-pane__confirm-primary:hover:not(:disabled),
+.flags-pane__confirm-menu:hover {
+    background: var(--color-border-light);
+}
+
+.flags-pane__confirm-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.flags-pane__confirm-primary--pressed {
+    background: var(--color-navy);
+    color: #fff;
+}
+
+.flags-pane__confirm-primary--pressed:hover:not(:disabled) {
+    background: var(--color-navy);
+    opacity: 0.9;
+}
+
+.flags-pane__confirm-menu {
+    padding: 4px 8px;
+}
+
+/* Sent rows — dimmed, with a small Sent tag instead of the
+ * Confirm split button. */
+
+.flags-pane__row--sent {
+    opacity: 0.6;
+}
+
+.flags-pane__sent-tag {
+    margin-left: auto;
+    padding: 3px 10px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+}
+
+/* Active / archived divider. */
+.flags-pane__divider {
+    padding: 8px var(--spacing-md) 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg);
+}
+
+/* Dropdown popover — appended to <body> so it escapes the panel's
+ * overflow:auto clipping. Position is set inline (top/left) by the
+ * renderer based on the trigger element's bounding rect. */
+.flags-pane__dropdown {
+    z-index: 1000;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    padding: 4px;
+    min-width: 140px;
+    max-width: 240px;
+}
+
+.flags-pane__dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+}
+
+.flags-pane__dropdown-item:hover:not(:disabled) {
+    background: var(--color-border-light);
+}
+
+.flags-pane__dropdown-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.flags-pane__dropdown-item--active {
+    background: var(--color-navy);
+    color: #fff;
+    font-weight: 600;
+}
+
+.flags-pane__dropdown-item--active:hover {
+    background: var(--color-navy);
+    opacity: 0.9;
+}
+
+.flags-pane__dropdown-item--danger {
+    color: var(--color-error);
+}
+
+.flags-pane__dropdown-item--danger:hover:not(:disabled) {
+    background: var(--color-error);
+    color: #fff;
+}
+
+/* Footer — Send all batch trigger. */
+
+.flags-pane__footer {
+    flex: 0 0 auto;
+    display: flex;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.flags-pane__btn {
+    flex: 1 1 auto;
+    padding: 8px 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.flags-pane__btn:hover:not(:disabled) {
+    background: var(--color-border-light);
+}
+
+.flags-pane__btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.flags-pane__btn--primary {
+    background: var(--color-navy);
+    color: #fff;
+    border-color: var(--color-navy);
+}
+
+.flags-pane__btn--primary:hover:not(:disabled) {
+    background: var(--color-navy);
+    opacity: 0.85;
 }
 
 /* =========================================================================
