@@ -248,8 +248,24 @@ body:not([data-sidebar="chat"]) #chat-pane {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--color-text-muted);
+    background: transparent;
     border: 1px solid var(--color-border);
     border-radius: 999px;
+}
+
+/* Archive sub-status colors. Sent = neutral grey (default).
+ * Delivered = green (client received & replied).
+ * Expired = muted red (no response). */
+.flags-pane__sent-tag--delivered {
+    color: #2e7d32;
+    background: #e8f5e9;
+    border-color: #2e7d32;
+}
+
+.flags-pane__sent-tag--expired {
+    color: #b3261e;
+    background: #fdecea;
+    border-color: #b3261e;
 }
 
 /* Active / archived divider. */
