@@ -510,9 +510,17 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * Workspace grid layouts
  * =========================================================================
  * Each layout is a CSS Grid template with named areas:
+ *   dl = doc-list strip (always at the top of #workspace)
+ *   m  = marked panel
  *   f  = form pane
  *   d0 = document pane 0
  *   d1 = document pane 1
+ *
+ * The doc-list lives at workspace level (not inside form-pane) so
+ * it stays visible across every layout — including doc-only-marked
+ * where form-pane is hidden. Every grid template reserves a "dl"
+ * row at the top with auto height (the bar is 32px tall, fits its
+ * content); the remaining rows split as before.
  */
 
 #workspace {
@@ -524,24 +532,28 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 #workspace[data-layout="form-only"] {
-    grid-template-areas: "f";
-    grid-template-rows: 1fr;
+    grid-template-areas:
+        "dl"
+        "f";
+    grid-template-rows: auto 1fr;
     grid-template-columns: 1fr;
 }
 
 #workspace[data-layout="h2"] {
     grid-template-areas:
+        "dl"
         "f"
         "d0";
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 1fr;
 }
 
 #workspace[data-layout="h3"] {
     grid-template-areas:
+        "dl dl"
         "f  f"
         "d0 d1";
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 1fr 1fr;
 }
 
@@ -549,16 +561,19 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * .app-main; same structure as the chat-closed counterparts. */
 
 #workspace[data-layout="form-only-chat"] {
-    grid-template-areas: "f";
-    grid-template-rows: 1fr;
+    grid-template-areas:
+        "dl"
+        "f";
+    grid-template-rows: auto 1fr;
     grid-template-columns: 1fr;
 }
 
 #workspace[data-layout="h2-chat"] {
     grid-template-areas:
+        "dl"
         "f"
         "d0";
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 1fr;
 }
 
@@ -578,9 +593,10 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 #workspace[data-layout="form-only-marked"] {
     grid-template-areas:
+        "dl"
         "m"
         "f";
-    grid-template-rows: 1fr 2fr;
+    grid-template-rows: auto 1fr 2fr;
     grid-template-columns: 1fr;
 }
 
@@ -588,9 +604,10 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * form and the visible doc share the bottom 2/3 side-by-side. */
 #workspace[data-layout="h2-marked"] {
     grid-template-areas:
+        "dl dl"
         "m  m"
         "f  d0";
-    grid-template-rows: 1fr 2fr;
+    grid-template-rows: auto 1fr 2fr;
     grid-template-columns: 1fr 1fr;
 }
 
@@ -599,9 +616,10 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * grid uses d0 (not f) for that slot, and form-pane is hidden. */
 #workspace[data-layout="doc-only-marked"] {
     grid-template-areas:
+        "dl"
         "m"
         "d0";
-    grid-template-rows: 1fr 2fr;
+    grid-template-rows: auto 1fr 2fr;
     grid-template-columns: 1fr;
 }
 
@@ -933,12 +951,13 @@ body:not([data-marked="open"]) #marked-pane {
  */
 
 .doc-list {
-    /* Sticky inside #form-pane (which has overflow:auto). When the
-     * doc list is empty (zero docs in the scenario), the :empty
-     * selector below collapses it so it doesn't take vertical space. */
-    position: sticky;
-    top: 0;
-    z-index: 5;
+    /* Workspace-level strip — sits in the "dl" grid area at the top
+     * of every layout. Always visible, including doc-only-marked
+     * where form-pane is hidden. The :empty selector collapses
+     * the strip when no docs (and no form pill) are rendered, but
+     * with the form pill always present this is effectively a
+     * minimum-height-on-content row. */
+    grid-area: dl;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -946,9 +965,6 @@ body:not([data-marked="open"]) #marked-pane {
     padding: 8px 12px;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
-    /* Subtle drop shadow once content scrolls underneath, communicating
-     * that the strip is pinned. */
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
 }
 
 .doc-list:empty {

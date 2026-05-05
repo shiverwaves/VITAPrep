@@ -168,24 +168,14 @@
         if (!docList) return;
         var slot0 = state.docSlots[0] || null;
         var slot1 = state.docSlots[1] || null;
-        /* Cache visualization sources:
-         *   - chat-open: hiddenDocCache (single doc shed when chat opened)
-         *   - marked-open: pre-marked docs not currently visible
-         * Both can apply at once. The cache-dot UI doesn't disambiguate
-         * between sources — the player just sees "this doc is queued
-         * to come back when something closes". */
+        /* Cache visualization: a doc is "cached" only when it lives
+         * in hiddenDocCache (chat-shed). The marked-mode workspace
+         * shows whatever docSlots currently holds; pills not in the
+         * slot but available are just non-pinned options in the list,
+         * not "cached" in the displaced sense. */
         var cachedSet = {};
         if (state.chatOpen && state.hiddenDocCache) {
             cachedSet[state.hiddenDocCache] = true;
-        }
-        if (state.markedOpen && state.preMarkedSnapshot) {
-            var snapDocs = state.preMarkedSnapshot.docSlots || [];
-            for (var k = 0; k < snapDocs.length; k++) {
-                var sid = snapDocs[k];
-                if (sid && sid !== slot0 && sid !== slot1) {
-                    cachedSet[sid] = true;
-                }
-            }
         }
 
         /* Form pill — always rendered at position 0, distinct

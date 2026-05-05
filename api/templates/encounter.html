@@ -123,15 +123,14 @@ html, body { height: 100%; overflow: hidden; }
             <aside id="marked-pane">
                 <div class="flags-pane__empty">No flags yet.</div>
             </aside>
+            {# Doc list — workspace-level strip, always visible across
+               every layout (including doc-only-marked where the form
+               pane is hidden). Lists every document generated for the
+               scenario plus a pinned "Form 13614-C" pill at position 0;
+               clicking pills switches the bottom slot. Lives outside
+               the <form> so its buttons don't get submitted. #}
+            <div class="doc-list" id="doc-list"></div>
             <div id="form-pane">
-                {# Doc list — sticky bar at the top of the form pane.
-                   Lists every document generated for the scenario; each
-                   pill-chip shows a [2] / [3] badge when its doc is
-                   currently visible in the corresponding doc pane.
-                   Inert today — switching docs / promoting layout on
-                   click is a future sprint. Lives outside the
-                   <form> so it doesn't get submitted. #}
-                <div class="doc-list" id="doc-list"></div>
                 {# Form wraps the entire sheet so the titlebar Submit
                    button (out-of-tree, with form="encounter-form")
                    posts every input across all four pages. The
