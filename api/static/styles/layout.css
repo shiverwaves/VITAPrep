@@ -356,26 +356,35 @@ body:not([data-sidebar="flags"]) #flags-pane {
  */
 
 .titlebar__pill {
-    /* Base styling matches the .titlebar__scenario-trigger so all
-     * titlebar pills (Marked, future grade, future case-clock)
-     * read as the same family of clickable indicators. */
+    /* Tag-style aesthetic — same family as the .tag--encounter /
+     * .tag--practice pills inside the scenario trigger button.
+     * Compact, uppercase, bold, rounded. Lives standalone in the
+     * titlebar (not nested in another button) so it doubles as a
+     * click target for its associated panel. */
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-xs);
-    padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: var(--radius-sm);
-    color: #fff;
+    gap: 5px;
+    padding: 3px 10px;
     font: inherit;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
     cursor: pointer;
     user-select: none;
+    /* Default greyed look — faint pill on the navy titlebar so it
+     * reads as "empty / nothing to review yet" while still looking
+     * like a clickable button. */
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.55);
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .titlebar__pill:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
 }
 
 .titlebar__pill:focus-visible {
@@ -383,51 +392,53 @@ body:not([data-sidebar="flags"]) #flags-pane {
     outline-offset: 1px;
 }
 
-/* Greyed (Marked: 0) — keep the button shape but de-emphasize the
- * text and count to signal "empty, nothing to review yet." */
-.titlebar__pill--marked:not(.titlebar__pill--has-flags) {
-    color: rgba(255, 255, 255, 0.65);
-}
-
-.titlebar__pill--marked:not(.titlebar__pill--has-flags):hover {
-    color: #fff;
-}
-
-/* Illuminated (Marked: ≥1) — accent-colored fill + bright text +
- * heavier weight. Reads as "you have flagged things, click to
- * review." Uses 45% accent so it's clearly different from the
- * fully-pressed state below. */
+/* Illuminated (count > 0) — light accent background + dark accent
+ * text, mirroring the .tag--encounter / .tag--practice pattern
+ * (light bg, dark text matching the bg hue). */
 .titlebar__pill--has-flags {
-    background: rgba(232, 122, 46, 0.45);
-    border-color: #e87a2e;
-    color: #fff;
-    font-weight: 600;
+    background: #ffe0c8;
+    color: #b35a17;
 }
 
 .titlebar__pill--has-flags:hover {
-    background: rgba(232, 122, 46, 0.6);
+    background: #ffd4b3;
+    color: #b35a17;
 }
 
-/* Pressed (panel is open) — solid accent fill so the player knows
- * THIS pill is the surface they're currently inside. Highest-
- * intensity state; one rung above illuminated. */
+/* Pressed (panel is open) — solid accent fill + white text so the
+ * pill clearly reads as "this is the surface I'm currently inside."
+ * Highest-intensity rung; one above illuminated. */
 .titlebar__pill[aria-pressed="true"] {
     background: #e87a2e;
-    border-color: #e87a2e;
     color: #fff;
-    font-weight: 600;
 }
 
 .titlebar__pill[aria-pressed="true"]:hover {
     background: #d96d20;
+    color: #fff;
 }
 
-/* The numeric count inside the pill — tabular-nums so it doesn't
- * shift the pill width as it changes from 0 to 9 to "9+". */
-.titlebar__pill > span {
+/* The numeric count inside the pill — tabular-nums so the pill
+ * width doesn't shift as the count changes from 0 to 9 to "9+". */
+#marked-pill-count {
     font-variant-numeric: tabular-nums;
     min-width: 1ch;
     text-align: center;
+}
+
+/* Chevron only appears when the pill is illuminated or pressed —
+ * signals "click to open." Same affordance pattern as the scenario
+ * trigger's chevron. Hidden in greyed state since there's nothing
+ * to drop into. */
+.titlebar__pill-chevron {
+    display: none;
+    font-size: 9px;
+    line-height: 1;
+}
+
+.titlebar__pill--has-flags .titlebar__pill-chevron,
+.titlebar__pill[aria-pressed="true"] .titlebar__pill-chevron {
+    display: inline;
 }
 
 /* =========================================================================

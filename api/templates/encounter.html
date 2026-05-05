@@ -58,13 +58,15 @@ html, body { height: 100%; overflow: hidden; }
 </button>
 {# Marked pill — counter + clickable toggle for the flag review panel.
    Greyed when count is 0, accent-illuminated when ≥1. Pressed state
-   reflects whether the flags pane is currently open. Replaces the
-   former titlebar flag icon button + corner badge. #}
+   reflects whether the flags pane is currently open. Chevron appears
+   when illuminated/pressed, signaling "click to open" — same affordance
+   pattern as the scenario trigger to its left. #}
 <button class="titlebar__pill titlebar__pill--marked"
         id="marked-pill" type="button"
         data-layout-action="toggle-sidebar-tool" data-tool="flags"
         aria-pressed="false" aria-label="Marked for follow-up">
     Marked: <span id="marked-pill-count">0</span>
+    <span class="titlebar__pill-chevron" aria-hidden="true">&#9662;</span>
 </button>
 {% endset %}
 
