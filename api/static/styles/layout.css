@@ -89,71 +89,12 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* =========================================================================
- * Flags pane content (Phase E)
+ * Marked panel content (display-only)
  * =========================================================================
- * The pane is a vertical column with three regions:
- *   .flags-pane__header   sticky-ish title strip with count badge
- *   .flags-pane__body     scrollable content (list rows or detail submenu)
- *   .flags-pane__footer   batch actions (Clear all / Send all)
- *
- * Two views render into __body:
- *   - List: one .flags-pane__row per flag, click to drill in.
- *   - Detail: per-flag editor (set context / set action / dismiss).
+ * The marked panel currently shows a simple list of flagged field
+ * names, no header / footer / per-row controls. Detail submenu
+ * and batch actions were retired pending a workflow redesign.
  */
-
-.flags-pane__header {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-navy);
-    color: #fff;
-    font-weight: 700;
-    font-size: var(--font-size-md);
-    min-height: 32px;
-}
-
-.flags-pane__title {
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
-
-.flags-pane__count {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 11px;
-    background: #e87a2e;
-    color: #fff;
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-}
-
-.flags-pane__back {
-    flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm, 4px);
-    color: #fff;
-    font-size: 18px;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.flags-pane__back:hover {
-    background: rgba(255, 255, 255, 0.15);
-}
 
 .flags-pane__body {
     flex: 1 1 auto;
@@ -161,30 +102,13 @@ body:not([data-sidebar="chat"]) #chat-pane {
     padding: var(--spacing-xs) 0;
 }
 
-/* List rows */
-
 .flags-pane__row {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
+    align-items: center;
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
-    background: transparent;
-    border: none;
     border-bottom: 1px solid var(--color-border-light);
-    cursor: pointer;
-    text-align: left;
     font: inherit;
-}
-
-.flags-pane__row:hover {
-    background: var(--color-border-light);
-}
-
-.flags-pane__row:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
 }
 
 .flags-pane__row-field {
@@ -194,147 +118,6 @@ body:not([data-sidebar="chat"]) #chat-pane {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.flags-pane__row-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.flags-pane__badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 10.5px;
-    font-weight: 600;
-    line-height: 1.4;
-}
-
-.flags-pane__badge--context {
-    background: rgba(232, 122, 46, 0.15);
-    color: #b35a17;
-    border: 1px solid rgba(232, 122, 46, 0.4);
-}
-
-.flags-pane__badge--action {
-    background: var(--color-navy);
-    color: #fff;
-}
-
-.flags-pane__badge--placeholder {
-    background: transparent;
-    color: var(--color-text-muted);
-    border: 1px dashed var(--color-border);
-    font-style: italic;
-}
-
-/* Detail view sections */
-
-.flags-pane__section {
-    padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.flags-pane__section + .flags-pane__section {
-    border-top: 1px solid var(--color-border-light);
-}
-
-.flags-pane__section-title {
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--color-text-muted);
-    margin-bottom: var(--spacing-xs);
-}
-
-.flags-pane__option {
-    display: block;
-    width: 100%;
-    padding: 6px 10px;
-    margin-bottom: 4px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    font: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    cursor: pointer;
-    text-align: left;
-}
-
-.flags-pane__option:hover {
-    background: var(--color-border-light);
-}
-
-.flags-pane__option--active {
-    background: var(--color-navy);
-    color: #fff;
-    border-color: var(--color-navy);
-    font-weight: 600;
-}
-
-.flags-pane__option--clear {
-    background: transparent;
-    border: 1px dashed var(--color-border);
-    color: var(--color-text-muted);
-    font-style: italic;
-}
-
-/* Footer */
-
-.flags-pane__footer {
-    flex: 0 0 auto;
-    display: flex;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-top: 1px solid var(--color-border);
-    background: var(--color-surface);
-}
-
-.flags-pane__btn {
-    flex: 1 1 auto;
-    padding: 8px 12px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    font: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    cursor: pointer;
-}
-
-.flags-pane__btn:hover:not(:disabled) {
-    background: var(--color-border-light);
-}
-
-.flags-pane__btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
-.flags-pane__btn--primary {
-    background: var(--color-navy);
-    color: #fff;
-    border-color: var(--color-navy);
-}
-
-.flags-pane__btn--primary:hover:not(:disabled) {
-    background: var(--color-navy);
-    opacity: 0.85;
-}
-
-.flags-pane__btn--danger {
-    background: transparent;
-    color: var(--color-error);
-    border-color: var(--color-error);
-}
-
-.flags-pane__btn--danger:hover:not(:disabled) {
-    background: var(--color-error);
-    color: #fff;
 }
 
 /* =========================================================================
