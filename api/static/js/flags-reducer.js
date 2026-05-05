@@ -5,8 +5,7 @@
  * transition; never mutates inputs.
  *
  * Wired up by api/static/js/flags-render.js, which dispatches actions
- * and persists state to sessionStorage. This module just decides the
- * next state shape.
+ * and persists state to sessionStorage.
  *
  * State shape:
  *
@@ -15,40 +14,51 @@
  *         tick: number,                 // monotonic counter for created_at
  *     }
  *
- * Flag shape:
+ * Flag shape (chain-link redesign):
  *
  *     {
- *         field_id: string,             // duplicated from map key for convenience
- *         context: "Missing" | "Confirm" | "Other",
- *         context_text: string | null,  // required when context = "Other"
- *         action: "Email" | "Chat" | "AskVida" | "Other" | null,
- *         status: "draft" | "ready" | "sent" | "answered" | "applied" | "dismissed",
- *         created_at: number,           // tick value when first flagged
+ *         field_id: string,
+ *         verb: "RequestInfo" | "RequestConfirmation",
+ *         target: "Vida" | "Client" | null,
+ *         channel: "Email" | "Message" | null,
+ *         status: "draft" | "ready" | "in_progress" | "sent",
+ *         created_at: number,           // tick when first flagged
  *     }
+ *
+ * The chain is complete when verb + target + channel are all set.
+ * Confirm (status:ready) is only allowed on a complete chain;
+ * Execute likewise. Send all batch-fires every ready row.
  *
  * Action types:
  *
- *     FLAG_FIELD       { field_id, context, context_text? }
- *     UNFLAG_FIELD     { field_id }
- *     SET_CONTEXT      { field_id, context, context_text? }
- *     SET_ACTION       { field_id, action }           (action may be null to clear)
- *     CLEAR_ALL        {}
- *
- * Status lifecycle (placeholder beyond MVP):
- *
- *     draft (just flagged, no action)
- *       → ready (action chosen)
- *       → sent / answered / applied / dismissed (later sprints)
- *
- * For MVP only "draft" and "ready" actually fire; the later states are
- * reserved for when the probe-send pipeline lands.
+ *     FLAG_FIELD       { field_id, verb }
+ *     UNFLAG_FIELD     { field_id }                 (Discard)
+ *     SET_VERB         { field_id, verb }
+ *     SET_TARGET       { field_id, target }         (target may be null)
+ *     SET_CHANNEL      { field_id, channel }        (channel may be null)
+ *     TOGGLE_CONFIRM   { field_id }                 (draft ↔ ready)
+ *     EXECUTE_FLAG     { field_id }                 (→ sent)
+ *     SEND_ALL         {}                           (all ready → sent)
  */
 
 (function (global) {
     "use strict";
 
-    var VALID_CONTEXTS = { Missing: 1, Confirm: 1, Other: 1 };
-    var VALID_ACTIONS = { Email: 1, Chat: 1, AskVida: 1, Other: 1 };
+    /* Pill option lists. Each is the source of truth for what's a
+     * legal value AND the display order in the dropdown. Adding a
+     * new option is a one-line edit here. Labels live in OPTIONS
+     * separately so the token (used in state) and the display
+     * string can diverge. */
+    var VERB_TOKENS = ["RequestInfo", "RequestConfirmation"];
+    var TARGET_TOKENS = ["Vida", "Client"];
+    var CHANNEL_TOKENS = ["Email", "Message"];
+
+    var VALID_VERBS = {};
+    VERB_TOKENS.forEach(function (t) { VALID_VERBS[t] = 1; });
+    var VALID_TARGETS = {};
+    TARGET_TOKENS.forEach(function (t) { VALID_TARGETS[t] = 1; });
+    var VALID_CHANNELS = {};
+    CHANNEL_TOKENS.forEach(function (t) { VALID_CHANNELS[t] = 1; });
 
     function initialState() {
         return {
@@ -57,31 +67,29 @@
         };
     }
 
-    /* Bump the monotonic tick. Returns the next tick value. */
     function nextTick(state) {
         return (state.tick || 0) + 1;
     }
 
-    /* Add (or overwrite) a flag for field_id. Status starts at "draft".
-     *
-     * context_text is optional even for the "Other" context — it can
-     * be supplied as a free-form descriptor when set, or left null.
-     * (The MVP context menu doesn't prompt for text; a richer compose
-     * flow can populate context_text later.) */
-    function flagField(state, fieldId, context, contextText) {
+    function isChainComplete(flag) {
+        return !!(flag && flag.verb && flag.target && flag.channel);
+    }
+
+    /* FLAG_FIELD — create (or re-flag) a flag with the given verb.
+     * target/channel start null, status starts at draft. Re-flagging
+     * preserves target/channel/status if they were already set. */
+    function flagField(state, fieldId, verb) {
         if (!fieldId) return state;
-        if (!VALID_CONTEXTS[context]) return state;
+        if (!VALID_VERBS[verb]) return state;
 
         var tick = nextTick(state);
-        var newFlags = Object.assign({}, state.flags);
         var existing = state.flags[fieldId];
+        var newFlags = Object.assign({}, state.flags);
         newFlags[fieldId] = {
             field_id: fieldId,
-            context: context,
-            context_text: contextText || null,
-            /* Re-flagging an already-flagged field preserves its action
-             * and status. Brand-new flags start as drafts. */
-            action: existing ? existing.action : null,
+            verb: verb,
+            target: existing ? existing.target : null,
+            channel: existing ? existing.channel : null,
             status: existing ? existing.status : "draft",
             created_at: existing ? existing.created_at : tick,
         };
@@ -95,73 +103,102 @@
         return { flags: newFlags, tick: state.tick };
     }
 
-    /* Change the context on an existing flag. No-op if the field isn't
-     * flagged (use FLAG_FIELD to create). context_text is optional
-     * for any context. */
-    function setContext(state, fieldId, context, contextText) {
+    /* Setting any pill on a sent row is rejected — sent is immutable.
+     * Setting a pill that changes the chain back to incomplete also
+     * resets a "ready" row back to draft (the chain is no longer
+     * confirmable, so it shouldn't be queued). */
+    function setPill(state, fieldId, pillKey, value, validMap) {
         if (!fieldId || !state.flags[fieldId]) return state;
-        if (!VALID_CONTEXTS[context]) return state;
+        if (value !== null && !validMap[value]) return state;
 
         var existing = state.flags[fieldId];
-        var newText = contextText || null;
-        if (existing.context === context && existing.context_text === newText) {
-            return state;  /* no actual change */
+        if (existing.status === "sent" || existing.status === "in_progress") {
+            return state;  /* immutable post-fire */
+        }
+        if (existing[pillKey] === value) return state;  /* no change */
+
+        var update = {};
+        update[pillKey] = value;
+        var next = Object.assign({}, existing, update);
+        /* If this change made the chain incomplete, demote ready→draft. */
+        if (next.status === "ready" && !isChainComplete(next)) {
+            next.status = "draft";
         }
         var newFlags = Object.assign({}, state.flags);
-        newFlags[fieldId] = Object.assign({}, existing, {
-            context: context,
-            context_text: newText,
-        });
+        newFlags[fieldId] = next;
         return { flags: newFlags, tick: state.tick };
     }
 
-    /* Set (or clear, with action=null) the action on an existing flag.
-     * Status transitions draft → ready when an action is set; ready →
-     * draft when cleared. */
-    function setAction(state, fieldId, action) {
+    /* TOGGLE_CONFIRM — flip draft ↔ ready. Only valid when the chain
+     * is complete (Confirm is meaningless before that). No-op for
+     * sent / in_progress rows. */
+    function toggleConfirm(state, fieldId) {
         if (!fieldId || !state.flags[fieldId]) return state;
-        if (action !== null && !VALID_ACTIONS[action]) return state;
-
         var existing = state.flags[fieldId];
-        if (existing.action === action) return state;  /* no change */
-
-        var newStatus = existing.status;
-        if (action === null && existing.status === "ready") {
-            newStatus = "draft";
-        } else if (action !== null && existing.status === "draft") {
-            newStatus = "ready";
+        if (existing.status === "draft" && isChainComplete(existing)) {
+            var newFlags = Object.assign({}, state.flags);
+            newFlags[fieldId] = Object.assign({}, existing, { status: "ready" });
+            return { flags: newFlags, tick: state.tick };
         }
+        if (existing.status === "ready") {
+            var newFlags2 = Object.assign({}, state.flags);
+            newFlags2[fieldId] = Object.assign({}, existing, { status: "draft" });
+            return { flags: newFlags2, tick: state.tick };
+        }
+        return state;
+    }
 
+    /* EXECUTE_FLAG — fire a single row. Goes straight to "sent" for
+     * Phase 1 (the in_progress flavor state lands later with its
+     * animation). Only valid on a complete chain. */
+    function executeFlag(state, fieldId) {
+        if (!fieldId || !state.flags[fieldId]) return state;
+        var existing = state.flags[fieldId];
+        if (existing.status === "sent" || existing.status === "in_progress") {
+            return state;
+        }
+        if (!isChainComplete(existing)) return state;
         var newFlags = Object.assign({}, state.flags);
-        newFlags[fieldId] = Object.assign({}, existing, {
-            action: action,
-            status: newStatus,
-        });
+        newFlags[fieldId] = Object.assign({}, existing, { status: "sent" });
         return { flags: newFlags, tick: state.tick };
     }
 
-    function clearAll(state) {
-        if (Object.keys(state.flags).length === 0) return state;
-        return { flags: {}, tick: state.tick };
+    /* SEND_ALL — every flag with status:ready transitions to sent. */
+    function sendAll(state) {
+        var changed = false;
+        var newFlags = {};
+        Object.keys(state.flags).forEach(function (fid) {
+            var f = state.flags[fid];
+            if (f.status === "ready") {
+                newFlags[fid] = Object.assign({}, f, { status: "sent" });
+                changed = true;
+            } else {
+                newFlags[fid] = f;
+            }
+        });
+        if (!changed) return state;
+        return { flags: newFlags, tick: state.tick };
     }
 
     function reduce(state, action) {
         if (!action || typeof action.type !== "string") return state;
         switch (action.type) {
             case "FLAG_FIELD":
-                return flagField(
-                    state, action.field_id, action.context, action.context_text
-                );
+                return flagField(state, action.field_id, action.verb);
             case "UNFLAG_FIELD":
                 return unflagField(state, action.field_id);
-            case "SET_CONTEXT":
-                return setContext(
-                    state, action.field_id, action.context, action.context_text
-                );
-            case "SET_ACTION":
-                return setAction(state, action.field_id, action.action);
-            case "CLEAR_ALL":
-                return clearAll(state);
+            case "SET_VERB":
+                return setPill(state, action.field_id, "verb", action.verb, VALID_VERBS);
+            case "SET_TARGET":
+                return setPill(state, action.field_id, "target", action.target, VALID_TARGETS);
+            case "SET_CHANNEL":
+                return setPill(state, action.field_id, "channel", action.channel, VALID_CHANNELS);
+            case "TOGGLE_CONFIRM":
+                return toggleConfirm(state, action.field_id);
+            case "EXECUTE_FLAG":
+                return executeFlag(state, action.field_id);
+            case "SEND_ALL":
+                return sendAll(state);
             default:
                 return state;
         }
@@ -170,5 +207,9 @@
     global.FlagsReducer = {
         initialState: initialState,
         reduce: reduce,
+        VERB_TOKENS: VERB_TOKENS,
+        TARGET_TOKENS: TARGET_TOKENS,
+        CHANNEL_TOKENS: CHANNEL_TOKENS,
+        isChainComplete: isChainComplete,
     };
 }(typeof window !== "undefined" ? window : globalThis));

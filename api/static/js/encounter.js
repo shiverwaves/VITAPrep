@@ -126,23 +126,19 @@
         return s && s.flags ? s.flags[fieldId] || null : null;
     }
 
-    /* Display labels per context — natural-language, easier to read
-     * than the raw enum values. The reducer / state still use the
-     * canonical "Missing" / "Confirm" / "Other" tokens; this map is
-     * presentation-only. */
-    var CONTEXT_LABELS = {
-        Missing: "Missing Information",
-        Confirm: "Needs Confirmation",
-        Other: "Other",
+    /* Display labels per verb. The reducer / state stores the
+     * canonical token ("RequestInfo" / "RequestConfirmation"); this
+     * map is presentation-only. */
+    var VERB_LABELS = {
+        RequestInfo: "Request Information",
+        RequestConfirmation: "Request Confirmation",
     };
 
     /* Render the menu HTML for the right-clicked field. Two cases:
-     *   - Unflagged: show three Flag-as items (one per context).
-     *   - Flagged: show current context, change-context options
+     *   - Unflagged: show one Flag-as item per verb.
+     *   - Flagged: show current verb, change-verb options
      *     (excluding the current one), and an Unflag (danger) item.
-     *
-     * The header row shows the raw field id for now; a human-label
-     * registry is a future polish item. */
+     */
     function renderMenuItems(fieldId, existing) {
         var parts = [];
         parts.push(
@@ -151,20 +147,20 @@
             '</div>'
         );
 
-        var contexts = ["Missing", "Confirm", "Other"];
+        var verbs = ["RequestInfo", "RequestConfirmation"];
 
         if (existing) {
             parts.push(
                 '<div class="contextmenu__header" style="text-transform:none;color:var(--color-accent)">' +
-                'Flagged: ' + escapeHtml(CONTEXT_LABELS[existing.context] || existing.context) +
+                'Flagged: ' + escapeHtml(VERB_LABELS[existing.verb] || existing.verb) +
                 '</div>'
             );
-            contexts.forEach(function (ctx) {
-                if (ctx !== existing.context) {
+            verbs.forEach(function (v) {
+                if (v !== existing.verb) {
                     parts.push(
                         '<button type="button" class="contextmenu__item"' +
-                        ' data-flag-action="set-context:' + ctx + '">' +
-                        escapeHtml(CONTEXT_LABELS[ctx]) +
+                        ' data-flag-action="set-verb:' + v + '">' +
+                        escapeHtml(VERB_LABELS[v]) +
                         '</button>'
                     );
                 }
@@ -175,11 +171,11 @@
                 ' data-flag-action="unflag">Unflag</button>'
             );
         } else {
-            contexts.forEach(function (ctx) {
+            verbs.forEach(function (v) {
                 parts.push(
                     '<button type="button" class="contextmenu__item"' +
-                    ' data-flag-action="flag:' + ctx + '">' +
-                    escapeHtml(CONTEXT_LABELS[ctx]) +
+                    ' data-flag-action="flag:' + v + '">' +
+                    escapeHtml(VERB_LABELS[v]) +
                     '</button>'
                 );
             });
@@ -198,13 +194,13 @@
             return;
         }
 
-        var actionType, ctx;
+        var actionType, verb;
         if (action.indexOf("flag:") === 0) {
             actionType = "FLAG_FIELD";
-            ctx = action.slice(5);
-        } else if (action.indexOf("set-context:") === 0) {
-            actionType = "SET_CONTEXT";
-            ctx = action.slice(12);
+            verb = action.slice(5);
+        } else if (action.indexOf("set-verb:") === 0) {
+            actionType = "SET_VERB";
+            verb = action.slice(9);
         } else {
             return;
         }
@@ -212,7 +208,7 @@
         global.Flags.dispatch({
             type: actionType,
             field_id: fieldId,
-            context: ctx,
+            verb: verb,
         });
     }
 

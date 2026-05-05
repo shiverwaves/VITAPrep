@@ -340,3 +340,112 @@ end-to-end. Mirrors the cadence of recent sprints.
   per-field affordance (jump to source document, view related
   interview-note, mark as concept-of-interest, etc.) — the menu
   framework is reusable.
+
+---
+
+## Marked Panel Chain Redesign (post-MVP, in progress)
+
+The original MVP shipped the marked panel as a JRPG-style nested
+menu (per-row drilldown for set-context / set-action / dismiss).
+That UI was retired pending a redesign of the follow-up workflow.
+The replacement is a **chain-link sentence builder** — each row in
+the marked panel composes one follow-up action as a chain of
+clickable pills.
+
+### Row structure
+
+Each marked row is a single sentence:
+
+    [field] [verb ▾] from [target ▾] via [channel ▾] [Confirm | ▾]
+
+- **field** — the flagged field id, immutable display
+- **verb ▾** — `Request Information` | `Request Confirmation`
+  (extensible; more verbs added as the workflow grows)
+- **target ▾** — recipient pulled from the scenario's chat contact
+  list. MVP set: `Vida` (senior preparer) and `Client`. Future
+  scenarios may add external contacts (employer for a missing W-2,
+  bank for a 1099-INT, etc.). Scenario-driven, not universal.
+- **channel ▾** — `Email` | `Message`
+- **Confirm | ▾** — split button. Primary action is Confirm
+  (toggle); dropdown carries `Execute` and `Discard`.
+
+The "from / via" connector words are conceptual — the sentence is
+read as a sentence but the words are decorative. The schema isn't
+strictly grammatical (e.g. "Request Confirmation from Vida via
+Message" is fine even though English would prefer "Ask Vida to
+confirm…"). Trying to enforce perfect grammar isn't worth the
+state-machine complexity.
+
+### Status lifecycle
+
+    draft → ready → in_progress → sent
+                                     ↑
+                                     └─ archived; immutable
+
+- **draft** — chain incomplete (any pill at "No <thing>") OR
+  Confirm not toggled. Send all ignores draft rows.
+- **ready** — chain complete and Confirm toggled on. Picked up by
+  Send all on next batch fire.
+- **in_progress** — fired (via Send all batch or per-row Execute);
+  flavor state, ~2-3 seconds, then auto-transitions to sent.
+- **sent** — archived. Read-only display. Click jumps to the
+  associated chat-log / email entry (placeholder hook until the
+  log is wired).
+
+### Confirm semantics
+
+Confirm is the multi-select mechanism. Toggling Confirm on a row
+moves it to `ready` (eligible for Send all); toggling off returns
+to `draft`. No separate checkboxes, no "select all" — the toggled
+set IS the batch. Confirm is disabled until the chain is complete
+(all three pills set).
+
+### Split-button dropdown
+
+The Confirm split button's dropdown menu carries two one-off
+actions:
+
+- **Execute** — fires this row immediately, bypassing the Send all
+  batch. Only enabled when the chain is complete. Transitions to
+  `in_progress` then `sent`.
+- **Discard** — removes the flag entirely. Functionally identical
+  to right-click → Unflag; one reducer action (`UNFLAG_FIELD`),
+  two entry points.
+
+### List ordering
+
+Active rows (`draft` + `ready` + `in_progress`) sit at the top in
+flag-order (newest at the top of the active set). A divider
+separates the active section from the archived (`sent`) section,
+which lives below the fold and lists rows in reverse-send order.
+
+When a new flag is created mid-session, it inserts at the top of
+the active section so the player sees it immediately.
+
+### Pill option lists (extensibility)
+
+Each pill's option list is a config-style array in
+`flags-reducer.js`, not a hard-coded enum. Adding a new verb /
+target / channel is a one-file edit. Targets are scenario-driven —
+loaded from the scenario's contact list rather than a global
+enum.
+
+### Phasing
+
+Implementation breakdown for the chain-link redesign:
+
+1. **Reducer + status field** — extend the flag model with
+   `verb` / `target` / `channel` / `status`; new actions
+   (`SET_VERB` / `SET_TARGET` / `SET_CHANNEL` / `TOGGLE_CONFIRM` /
+   `EXECUTE_FLAG` / `SEND_ALL`). Update right-click menu to set
+   verb instead of legacy context. **Phase 1 deliverable: a
+   clickable chain in the marked panel.**
+2. **Active / archived partition + list ordering** — divider,
+   newest-on-top within active.
+3. **Execute → in_progress → sent transition** — flavor delay,
+   visual states.
+4. **Click-to-log on sent rows** — placeholder hook; wires up
+   when the chat-log / email log lands.
+5. **Send all wiring + scenario-driven contact list** — pull
+   targets from the scenario rather than a hard-coded list; sweep
+   ready rows in batch.

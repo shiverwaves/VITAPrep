@@ -69,12 +69,13 @@
             chatOpen: false,
             hiddenDocCache: null,
             /* Marked-for-follow-up panel state. Marked is a top-of-
-             * workspace overlay (absolute-positioned in CSS) that
-             * floats over whatever's underneath without disturbing
-             * the underlying layout — docs stay in their grid slots
-             * and the form keeps its full geometry / interactivity.
-             * State is just the open/closed flag. */
+             * workspace overlay; while open, doc panes are not
+             * shown — they go into markedDocCache so the workspace
+             * collapses to form-only and the player sees only form
+             * + marked (chat is the lone exception, allowed to
+             * coexist). When Marked closes, cached docs restore. */
             markedOpen: false,
+            markedDocCache: [],
             paneRecency: [0, 0],
             tick: 0,
             formState: { currentPage: 1 },
@@ -127,6 +128,7 @@
      * is one-way "next" — click again to keep going. */
     function cyclePanes(state, availableDocs) {
         if (state.chatOpen) return state;  /* disabled while chat open */
+        if (state.markedOpen) return state;
 
         if (state.panes === 1) {
             return Object.assign({}, state, {
@@ -173,6 +175,11 @@
      */
     function openDoc(state, docId) {
         if (!docId) return state;
+        /* Marked overlay claims the workspace top — docs are
+         * inaccessible while it's open. The doc-list pills should
+         * be visually hidden in this state too (CSS), but guard
+         * here as a safety net. */
+        if (state.markedOpen) return state;
         if (isDocInSlots(docId, state.docSlots)) return state;
 
         /* Chat-open + cached-doc click → swap. The previously-cached
@@ -291,6 +298,7 @@
      * a safety net. */
     function openThirdPane(state, availableDocs) {
         if (state.chatOpen) return state;
+        if (state.markedOpen) return state;
         if (state.panes !== 2) return state;
         var nextDoc = pickNextDoc(availableDocs, state.docSlots);
         if (!nextDoc) return state;
@@ -363,14 +371,39 @@
         return setSidebarTool(state, next);
     }
 
-    /* TOGGLE_MARKED — flips the Marked panel open/closed. The panel
-     * is a CSS overlay anchored to the top of #workspace; it floats
-     * on top of whatever's underneath (form + doc-list, or doc panes
-     * in h2/h3 layouts) without changing the workspace grid. Docs
-     * stay in their slots and the form keeps its interactivity, so
-     * there's no cache to manage — just the boolean flag. */
+    /* TOGGLE_MARKED — opens/closes the Marked overlay panel. While
+     * open, doc panes are inaccessible — opening Marked drops all
+     * visible docs into markedDocCache and collapses the workspace
+     * to panes:1 so the form has the full area underneath the
+     * overlay. Closing restores the cached docs.
+     *
+     * The form keeps full interactivity; only docs are shed. Chat
+     * is independent — it can be open or closed before / during /
+     * after Marked is toggled. */
     function toggleMarked(state) {
-        return Object.assign({}, state, { markedOpen: !state.markedOpen });
+        if (state.markedOpen) {
+            /* Closing — restore docs from markedDocCache. */
+            var cache = state.markedDocCache || [];
+            if (cache.length === 0) {
+                return Object.assign({}, state, { markedOpen: false });
+            }
+            return Object.assign({}, state, {
+                markedOpen: false,
+                panes: 1 + cache.length,
+                docSlots: cache.slice(),
+                markedDocCache: [],
+            });
+        }
+        /* Opening — cache visible docs and drop to panes:1. */
+        var cachedDocs = (state.docSlots || []).filter(function (id) {
+            return id !== null && id !== undefined;
+        });
+        return Object.assign({}, state, {
+            markedOpen: true,
+            panes: 1,
+            docSlots: [],
+            markedDocCache: cachedDocs,
+        });
     }
 
     /* SELECT_DOC — direct slot-targeted assignment, dispatched by

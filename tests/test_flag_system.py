@@ -201,90 +201,144 @@ class TestFlagsReducer:
         """)
         assert "PASS" in out
 
-    def test_flag_field_adds_with_context(self) -> None:
+    def test_flag_field_adds_with_verb(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'income.wages', context: 'Confirm' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'income.wages', verb: 'RequestConfirmation' });
             if (!s.flags['income.wages']) throw new Error('flag not added');
-            eq(s.flags['income.wages'].context, 'Confirm', 'context');
-            eq(s.flags['income.wages'].action, null, 'action starts null');
+            eq(s.flags['income.wages'].verb, 'RequestConfirmation', 'verb');
+            eq(s.flags['income.wages'].target, null, 'target starts null');
+            eq(s.flags['income.wages'].channel, null, 'channel starts null');
             eq(s.flags['income.wages'].status, 'draft', 'status starts draft');
             if (s.flags['income.wages'].created_at <= 0) throw new Error('created_at not set');
         """)
         assert "PASS" in out
 
-    def test_flag_field_rejects_invalid_context(self) -> None:
+    def test_flag_field_rejects_invalid_verb(self) -> None:
         out = self._run("""
             var s = R.initialState();
             var before = JSON.stringify(s);
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'x', context: 'NotARealContext' });
-            eq(JSON.stringify(s), before, 'invalid context should no-op');
-        """)
-        assert "PASS" in out
-
-    def test_flag_field_other_no_longer_requires_text(self) -> None:
-        """Per polish round 2, "Other" context accepts null context_text."""
-        out = self._run("""
-            var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'x', context: 'Other' });
-            if (!s.flags['x']) throw new Error('Other-without-text should be accepted');
-            eq(s.flags['x'].context, 'Other', 'context');
-            eq(s.flags['x'].context_text, null, 'context_text null when not provided');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'x', verb: 'NotARealVerb' });
+            eq(JSON.stringify(s), before, 'invalid verb should no-op');
         """)
         assert "PASS" in out
 
     def test_unflag_removes(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', context: 'Confirm' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
             s = R.reduce(s, { type: 'UNFLAG_FIELD', field_id: 'a' });
             if (s.flags['a']) throw new Error('flag a should be removed');
             if (!s.flags['b']) throw new Error('flag b should remain');
         """)
         assert "PASS" in out
 
-    def test_set_context_changes_existing(self) -> None:
+    def test_set_pill_updates_chain(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
-            s = R.reduce(s, { type: 'SET_CONTEXT', field_id: 'a', context: 'Confirm' });
-            eq(s.flags['a'].context, 'Confirm', 'context updated');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
+            eq(s.flags['a'].target, 'Client', 'target set');
+            eq(s.flags['a'].channel, 'Email', 'channel set');
+            if (!R.isChainComplete(s.flags['a'])) throw new Error('chain should be complete');
         """)
         assert "PASS" in out
 
-    def test_set_context_no_op_for_unflagged(self) -> None:
+    def test_set_pill_no_op_for_unflagged(self) -> None:
         out = self._run("""
             var s = R.initialState();
             var before = JSON.stringify(s);
-            s = R.reduce(s, { type: 'SET_CONTEXT', field_id: 'a', context: 'Confirm' });
-            eq(JSON.stringify(s), before, 'set-context on unflagged is no-op');
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
+            eq(JSON.stringify(s), before, 'set-pill on unflagged is no-op');
         """)
         assert "PASS" in out
 
-    def test_set_action_transitions_status(self) -> None:
+    def test_set_pill_rejects_invalid_value(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
-            eq(s.flags['a'].status, 'draft', 'starts draft');
-            s = R.reduce(s, { type: 'SET_ACTION', field_id: 'a', action: 'Email' });
-            eq(s.flags['a'].action, 'Email', 'action set');
-            eq(s.flags['a'].status, 'ready', 'status moved to ready');
-            s = R.reduce(s, { type: 'SET_ACTION', field_id: 'a', action: null });
-            eq(s.flags['a'].action, null, 'action cleared');
-            eq(s.flags['a'].status, 'draft', 'status moved back to draft');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            var before = JSON.stringify(s);
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Pigeon' });
+            eq(JSON.stringify(s), before, 'invalid channel no-op');
         """)
         assert "PASS" in out
 
-    def test_clear_all_wipes_flags(self) -> None:
+    def test_toggle_confirm_requires_complete_chain(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', context: 'Confirm' });
-            var before_tick = s.tick;
-            s = R.reduce(s, { type: 'CLEAR_ALL' });
-            eq(Object.keys(s.flags).length, 0, 'flags cleared');
-            eq(s.tick, before_tick, 'tick preserved across clear');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            eq(s.flags['a'].status, 'draft', 'incomplete chain stays draft');
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            eq(s.flags['a'].status, 'ready', 'complete chain → ready');
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            eq(s.flags['a'].status, 'draft', 'toggle back → draft');
+        """)
+        assert "PASS" in out
+
+    def test_changing_pill_demotes_ready_when_chain_breaks(self) -> None:
+        out = self._run("""
+            var s = R.initialState();
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            eq(s.flags['a'].status, 'ready', 'should be ready');
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: null });
+            eq(s.flags['a'].status, 'draft', 'incomplete → demoted to draft');
+        """)
+        assert "PASS" in out
+
+    def test_execute_moves_to_sent(self) -> None:
+        out = self._run("""
+            var s = R.initialState();
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
+            s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
+            eq(s.flags['a'].status, 'sent', 'executed → sent');
+        """)
+        assert "PASS" in out
+
+    def test_execute_no_op_on_incomplete_chain(self) -> None:
+        out = self._run("""
+            var s = R.initialState();
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            var before = JSON.stringify(s);
+            s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
+            eq(JSON.stringify(s), before, 'incomplete execute is no-op');
+        """)
+        assert "PASS" in out
+
+    def test_send_all_only_sends_ready(self) -> None:
+        out = self._run("""
+            var s = R.initialState();
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
+            // b stays in draft (chain incomplete)
+            s = R.reduce(s, { type: 'SEND_ALL' });
+            eq(s.flags['a'].status, 'sent', 'a (ready) sent');
+            eq(s.flags['b'].status, 'draft', 'b (draft) untouched');
+        """)
+        assert "PASS" in out
+
+    def test_sent_row_pills_immutable(self) -> None:
+        out = self._run("""
+            var s = R.initialState();
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
+            s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
+            var before = JSON.stringify(s);
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            eq(JSON.stringify(s), before, 'sent row is immutable');
         """)
         assert "PASS" in out
 
@@ -293,9 +347,10 @@ class TestFlagsReducer:
         round-trips without mutation surprises."""
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', context: 'Confirm' });
-            s = R.reduce(s, { type: 'SET_ACTION', field_id: 'a', action: 'Email' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
             var json = JSON.stringify(s);
             var parsed = JSON.parse(json);
             eq(JSON.stringify(parsed), json, 'json round-trip stable');
@@ -305,25 +360,28 @@ class TestFlagsReducer:
     def test_unknown_action_is_no_op(self) -> None:
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             var before = JSON.stringify(s);
             s = R.reduce(s, { type: 'NOT_A_REAL_ACTION', field_id: 'a' });
             eq(JSON.stringify(s), before, 'unknown action no-op');
         """)
         assert "PASS" in out
 
-    def test_re_flag_preserves_action_and_status(self) -> None:
-        """Re-flagging an already-flagged field updates the context
-        but keeps the action and status — so the player doesn't
+    def test_re_flag_preserves_pills_and_status(self) -> None:
+        """Re-flagging an already-flagged field updates the verb but
+        keeps the target / channel / status — so the player doesn't
         lose work when changing the why."""
         out = self._run("""
             var s = R.initialState();
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Missing' });
-            s = R.reduce(s, { type: 'SET_ACTION', field_id: 'a', action: 'Email' });
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
+            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
             eq(s.flags['a'].status, 'ready', 'ready before re-flag');
-            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', context: 'Confirm' });
-            eq(s.flags['a'].context, 'Confirm', 'context updated');
-            eq(s.flags['a'].action, 'Email', 'action preserved');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestConfirmation' });
+            eq(s.flags['a'].verb, 'RequestConfirmation', 'verb updated');
+            eq(s.flags['a'].target, 'Client', 'target preserved');
+            eq(s.flags['a'].channel, 'Email', 'channel preserved');
             eq(s.flags['a'].status, 'ready', 'status preserved');
         """)
         assert "PASS" in out
