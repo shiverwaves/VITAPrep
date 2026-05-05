@@ -10,24 +10,32 @@
  * State shape:
  *
  *     {
- *         flags: { [field_id]: Flag },
- *         tick: number,                 // monotonic counter for created_at
+ *         flags: { [field_id]: ActiveFlag },   // draft + ready only
+ *         archive: [SentFlag, ...],            // immutable log, append-only
+ *         tick: number,                        // monotonic counter
  *     }
  *
- * Flag shape (chain-link redesign):
+ * Active flag shape (chain-link):
  *
  *     {
  *         field_id: string,
  *         verb: "RequestInfo" | "RequestConfirmation",
  *         target: "Vida" | "Client" | null,
  *         channel: "Email" | "Message" | null,
- *         status: "draft" | "ready" | "in_progress" | "sent",
- *         created_at: number,           // tick when first flagged
+ *         status: "draft" | "ready",
+ *         created_at: number,
  *     }
+ *
+ * Sent flag (in archive) shape — same as active plus `sent_at`.
+ * Once a flag fires (Execute or Send all), it's removed from
+ * `flags` and pushed to `archive`. The form-side dot + .f13c-flagged
+ * class clear automatically because they read from `flags` only.
+ * The field can then be re-flagged, producing a fresh active entry
+ * while the archived entry remains in the panel as history.
  *
  * The chain is complete when verb + target + channel are all set.
  * Confirm (status:ready) is only allowed on a complete chain;
- * Execute likewise. Send all batch-fires every ready row.
+ * Execute likewise. Send all fires every active row in ready state.
  *
  * Action types:
  *
@@ -63,6 +71,7 @@
     function initialState() {
         return {
             flags: {},
+            archive: [],
             tick: 0,
         };
     }
@@ -75,9 +84,17 @@
         return !!(flag && flag.verb && flag.target && flag.channel);
     }
 
+    /* withState — convenience that copies state and overlays updates,
+     * always preserving the archive unless explicitly replaced. */
+    function withState(state, updates) {
+        return Object.assign({}, state, updates);
+    }
+
     /* FLAG_FIELD — create (or re-flag) a flag with the given verb.
      * target/channel start null, status starts at draft. Re-flagging
-     * preserves target/channel/status if they were already set. */
+     * an active flag preserves target/channel/status. The archive is
+     * never consulted — re-flagging a previously-sent field always
+     * starts fresh. */
     function flagField(state, fieldId, verb) {
         if (!fieldId) return state;
         if (!VALID_VERBS[verb]) return state;
@@ -93,91 +110,109 @@
             status: existing ? existing.status : "draft",
             created_at: existing ? existing.created_at : tick,
         };
-        return { flags: newFlags, tick: tick };
+        return withState(state, { flags: newFlags, tick: tick });
     }
 
     function unflagField(state, fieldId) {
         if (!fieldId || !state.flags[fieldId]) return state;
         var newFlags = Object.assign({}, state.flags);
         delete newFlags[fieldId];
-        return { flags: newFlags, tick: state.tick };
+        return withState(state, { flags: newFlags });
     }
 
-    /* Setting any pill on a sent row is rejected — sent is immutable.
-     * Setting a pill that changes the chain back to incomplete also
-     * resets a "ready" row back to draft (the chain is no longer
-     * confirmable, so it shouldn't be queued). */
+    /* setPill — change a pill's value on an active flag. If the
+     * change makes the chain incomplete, ready demotes to draft. */
     function setPill(state, fieldId, pillKey, value, validMap) {
         if (!fieldId || !state.flags[fieldId]) return state;
         if (value !== null && !validMap[value]) return state;
 
         var existing = state.flags[fieldId];
-        if (existing.status === "sent" || existing.status === "in_progress") {
-            return state;  /* immutable post-fire */
-        }
-        if (existing[pillKey] === value) return state;  /* no change */
+        if (existing[pillKey] === value) return state;
 
         var update = {};
         update[pillKey] = value;
         var next = Object.assign({}, existing, update);
-        /* If this change made the chain incomplete, demote ready→draft. */
         if (next.status === "ready" && !isChainComplete(next)) {
             next.status = "draft";
         }
         var newFlags = Object.assign({}, state.flags);
         newFlags[fieldId] = next;
-        return { flags: newFlags, tick: state.tick };
+        return withState(state, { flags: newFlags });
     }
 
-    /* TOGGLE_CONFIRM — flip draft ↔ ready. Only valid when the chain
-     * is complete (Confirm is meaningless before that). No-op for
-     * sent / in_progress rows. */
+    /* TOGGLE_CONFIRM — flip draft ↔ ready. Confirm requires a
+     * complete chain; toggling off is always allowed. */
     function toggleConfirm(state, fieldId) {
         if (!fieldId || !state.flags[fieldId]) return state;
         var existing = state.flags[fieldId];
         if (existing.status === "draft" && isChainComplete(existing)) {
             var newFlags = Object.assign({}, state.flags);
             newFlags[fieldId] = Object.assign({}, existing, { status: "ready" });
-            return { flags: newFlags, tick: state.tick };
+            return withState(state, { flags: newFlags });
         }
         if (existing.status === "ready") {
             var newFlags2 = Object.assign({}, state.flags);
             newFlags2[fieldId] = Object.assign({}, existing, { status: "draft" });
-            return { flags: newFlags2, tick: state.tick };
+            return withState(state, { flags: newFlags2 });
         }
         return state;
     }
 
-    /* EXECUTE_FLAG — fire a single row. Goes straight to "sent" for
-     * Phase 1 (the in_progress flavor state lands later with its
-     * animation). Only valid on a complete chain. */
-    function executeFlag(state, fieldId) {
-        if (!fieldId || !state.flags[fieldId]) return state;
-        var existing = state.flags[fieldId];
-        if (existing.status === "sent" || existing.status === "in_progress") {
-            return state;
-        }
-        if (!isChainComplete(existing)) return state;
-        var newFlags = Object.assign({}, state.flags);
-        newFlags[fieldId] = Object.assign({}, existing, { status: "sent" });
-        return { flags: newFlags, tick: state.tick };
+    /* archiveOne — pop a flag from `flags` and push a sent copy
+     * onto `archive`. Returns updated { flags, archive } or null
+     * if the flag wasn't eligible to fire (incomplete chain). */
+    function archiveOne(flags, archive, fieldId, sentAt) {
+        var existing = flags[fieldId];
+        if (!existing) return null;
+        if (!isChainComplete(existing)) return null;
+        var newFlags = Object.assign({}, flags);
+        delete newFlags[fieldId];
+        var sentEntry = Object.assign({}, existing, {
+            status: "sent",
+            sent_at: sentAt,
+        });
+        return {
+            flags: newFlags,
+            archive: archive.concat([sentEntry]),
+        };
     }
 
-    /* SEND_ALL — every flag with status:ready transitions to sent. */
-    function sendAll(state) {
-        var changed = false;
-        var newFlags = {};
-        Object.keys(state.flags).forEach(function (fid) {
-            var f = state.flags[fid];
-            if (f.status === "ready") {
-                newFlags[fid] = Object.assign({}, f, { status: "sent" });
-                changed = true;
-            } else {
-                newFlags[fid] = f;
-            }
+    /* EXECUTE_FLAG — fire a single row. Removes from flags, appends
+     * to archive. No-op on incomplete chain or unknown field. */
+    function executeFlag(state, fieldId) {
+        if (!fieldId) return state;
+        var tick = nextTick(state);
+        var moved = archiveOne(state.flags, state.archive || [], fieldId, tick);
+        if (!moved) return state;
+        return withState(state, {
+            flags: moved.flags,
+            archive: moved.archive,
+            tick: tick,
         });
-        if (!changed) return state;
-        return { flags: newFlags, tick: state.tick };
+    }
+
+    /* SEND_ALL — every active flag with status:ready fires; each
+     * one moves from flags → archive. Single shared sent_at tick
+     * for the batch so the archive reads as one event. */
+    function sendAll(state) {
+        var readyIds = Object.keys(state.flags).filter(function (fid) {
+            return state.flags[fid].status === "ready";
+        });
+        if (readyIds.length === 0) return state;
+        var tick = nextTick(state);
+        var flags = state.flags;
+        var archive = state.archive || [];
+        for (var i = 0; i < readyIds.length; i++) {
+            var moved = archiveOne(flags, archive, readyIds[i], tick);
+            if (!moved) continue;
+            flags = moved.flags;
+            archive = moved.archive;
+        }
+        return withState(state, {
+            flags: flags,
+            archive: archive,
+            tick: tick,
+        });
     }
 
     function reduce(state, action) {

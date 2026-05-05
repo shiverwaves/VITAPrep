@@ -197,6 +197,7 @@ class TestFlagsReducer:
         out = self._run("""
             var s = R.initialState();
             eq(Object.keys(s.flags).length, 0, 'initial flags should be empty');
+            eq(s.archive.length, 0, 'initial archive should be empty');
             eq(s.tick, 0, 'initial tick should be 0');
         """)
         assert "PASS" in out
@@ -293,14 +294,18 @@ class TestFlagsReducer:
         """)
         assert "PASS" in out
 
-    def test_execute_moves_to_sent(self) -> None:
+    def test_execute_moves_to_archive(self) -> None:
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
             s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
-            eq(s.flags['a'].status, 'sent', 'executed → sent');
+            if (s.flags['a']) throw new Error('a should be removed from flags');
+            eq(s.archive.length, 1, 'archive has 1 entry');
+            eq(s.archive[0].field_id, 'a', 'archive entry field_id');
+            eq(s.archive[0].status, 'sent', 'archive entry status sent');
+            if (!s.archive[0].sent_at) throw new Error('sent_at not set');
         """)
         assert "PASS" in out
 
@@ -322,23 +327,30 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
             s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestConfirmation' });
-            // b stays in draft (chain incomplete)
             s = R.reduce(s, { type: 'SEND_ALL' });
-            eq(s.flags['a'].status, 'sent', 'a (ready) sent');
-            eq(s.flags['b'].status, 'draft', 'b (draft) untouched');
+            if (s.flags['a']) throw new Error('a (ready) should have moved to archive');
+            if (!s.flags['b']) throw new Error('b (draft) should remain in flags');
+            eq(s.archive.length, 1, 'archive has 1 entry');
+            eq(s.archive[0].field_id, 'a', 'a is in archive');
         """)
         assert "PASS" in out
 
-    def test_sent_row_pills_immutable(self) -> None:
+    def test_re_flag_after_send_creates_fresh_active(self) -> None:
+        """A field that was sent can be flagged again — the new active
+        flag starts as a fresh draft and the archived entry stays."""
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
             s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
-            var before = JSON.stringify(s);
-            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
-            eq(JSON.stringify(s), before, 'sent row is immutable');
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestConfirmation' });
+            if (!s.flags['a']) throw new Error('a should be back in flags');
+            eq(s.flags['a'].verb, 'RequestConfirmation', 'fresh verb');
+            eq(s.flags['a'].target, null, 'fresh target null');
+            eq(s.flags['a'].channel, null, 'fresh channel null');
+            eq(s.flags['a'].status, 'draft', 'fresh status draft');
+            eq(s.archive.length, 1, 'archive entry preserved');
         """)
         assert "PASS" in out
 

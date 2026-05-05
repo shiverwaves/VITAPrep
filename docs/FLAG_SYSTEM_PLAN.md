@@ -376,21 +376,34 @@ Message" is fine even though English would prefer "Ask Vida to
 confirm…"). Trying to enforce perfect grammar isn't worth the
 state-machine complexity.
 
-### Status lifecycle
+### Status lifecycle + archive split
 
-    draft → ready → in_progress → sent
-                                     ↑
-                                     └─ archived; immutable
+State is split into two collections:
+
+- **`flags: { [field_id]: ActiveFlag }`** — only `draft` + `ready`
+  rows live here. The form-side dot + `.f13c-flagged` class read
+  from this map, so once a flag fires, the field is automatically
+  un-flagged on the form (the player can re-flag it as a fresh
+  entry without losing the archived history).
+- **`archive: [SentFlag, ...]`** — append-only log of fired actions,
+  ordered by `sent_at` tick. Immutable. Re-flagging a previously-
+  sent field creates a new active entry; the archived entry stays
+  in the panel as history. Only a scenario restart / abandon
+  clears the archive.
+
+Status values:
 
 - **draft** — chain incomplete (any pill at "No <thing>") OR
   Confirm not toggled. Send all ignores draft rows.
 - **ready** — chain complete and Confirm toggled on. Picked up by
   Send all on next batch fire.
-- **in_progress** — fired (via Send all batch or per-row Execute);
-  flavor state, ~2-3 seconds, then auto-transitions to sent.
-- **sent** — archived. Read-only display. Click jumps to the
-  associated chat-log / email entry (placeholder hook until the
-  log is wired).
+- **in_progress** — fired; flavor state, ~2-3 seconds, then
+  auto-transitions to sent. Lives in `flags` for the duration of
+  the animation, then moves to `archive` (Phase 3 of the
+  redesign — Phase 1 jumps directly active → archive).
+- **sent** — only ever in the `archive` collection. Read-only
+  display. Click jumps to the associated chat-log / email entry
+  (placeholder hook until the log is wired).
 
 ### Confirm semantics
 
