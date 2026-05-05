@@ -44,7 +44,7 @@
     "use strict";
 
     /* -------- Module state (initialized in init()) -------- */
-    var workspace, formPane, docPanes, chatPane, flagsPane;
+    var workspace, formPane, docPanes, chatPane, markedPane;
     var chatToggleBtn, markedPill;
     var docList;
     var scenarioId = "";
@@ -114,6 +114,11 @@
 
     /* -------- Render -------- */
     function computeLayoutName(s) {
+        /* Marked panel takes priority — when it's open, all docs
+         * are cached and the workspace shows form (bottom 2/3) +
+         * marked panel (top 1/3). Chat coexists at the .app-main
+         * level; workspace doesn't differentiate. */
+        if (s.markedOpen) return "form-only-marked";
         if (s.chatOpen) {
             return s.panes === 1 ? "form-only-chat" : "h2-chat";
         }
@@ -126,11 +131,11 @@
     function applyState() {
         if (!workspace) return;
         workspace.setAttribute("data-layout", computeLayoutName(state));
-        /* body[data-sidebar] takes "chat" / "flags" / "closed". Both
-         * tools occupy the same right-column real estate; the value
-         * just tells CSS which pane content to show. */
         var sidebarValue = state.sidebarTool || "closed";
         document.body.setAttribute("data-sidebar", sidebarValue);
+        document.body.setAttribute(
+            "data-marked", state.markedOpen ? "open" : "closed"
+        );
         updateDocPane(0, state.docSlots[0] || null);
         updateDocPane(1, state.docSlots[1] || null);
         renderDocList();
@@ -294,8 +299,11 @@
             );
         }
         if (markedPill) {
+            /* Marked is its own axis (state.markedOpen), not a
+             * sidebar tool — pill reflects the dedicated marked
+             * panel state. */
             markedPill.setAttribute(
-                "aria-pressed", state.sidebarTool === "flags" ? "true" : "false"
+                "aria-pressed", state.markedOpen ? "true" : "false"
             );
         }
     }
@@ -317,6 +325,11 @@
     function handleAction(action, element) {
         if (action === "toggle-chat") {
             dispatch({ type: "TOGGLE_CHAT" });
+        } else if (action === "toggle-marked") {
+            /* Marked panel toggle — fires from the titlebar Marked
+             * pill. The reducer's TOGGLE_MARKED handler caches /
+             * restores docs and updates state.markedOpen. */
+            dispatch({ type: "TOGGLE_MARKED" });
         } else if (action === "select-doc") {
             var paneEl = closest(element, "[data-pane-index]");
             if (!paneEl) return;
@@ -394,7 +407,7 @@
             document.getElementById("doc-pane-1"),
         ];
         chatPane = document.getElementById("chat-pane");
-        flagsPane = document.getElementById("flags-pane");
+        markedPane = document.getElementById("marked-pane");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
         markedPill = document.getElementById("marked-pill");
         docList = document.getElementById("doc-list");

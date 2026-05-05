@@ -112,7 +112,7 @@
      * panelView. Always renders (even when the pane is hidden via
      * body[data-sidebar]) so opening the pane shows fresh content. */
     function renderFlagsPanel() {
-        var pane = document.getElementById("flags-pane");
+        var pane = document.getElementById("marked-pane");
         if (!pane) return;
 
         var flags = state.flags || {};
@@ -436,7 +436,7 @@
         /* Wire one click listener on the flags pane for panel
          * interactions. Outside the pane, no flag-action attributes
          * exist so clicks fall through to other handlers. */
-        var pane = document.getElementById("flags-pane");
+        var pane = document.getElementById("marked-pane");
         if (pane) pane.addEventListener("click", handlePanelClick);
 
         applyState();

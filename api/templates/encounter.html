@@ -63,7 +63,7 @@ html, body { height: 100%; overflow: hidden; }
    pattern as the scenario trigger to its left. #}
 <button class="titlebar__pill titlebar__pill--marked"
         id="marked-pill" type="button"
-        data-layout-action="toggle-sidebar-tool" data-tool="flags"
+        data-layout-action="toggle-marked"
         aria-pressed="false" aria-label="Marked for follow-up">
     Marked: <span id="marked-pill-count">0</span>
     <span class="titlebar__pill-chevron" aria-hidden="true">&#9662;</span>
@@ -106,6 +106,19 @@ html, body { height: 100%; overflow: hidden; }
            the no-JS first paint is form-only-full-width. The renderer
            confirms or restores from sessionStorage on hydration. #}
         <div id="workspace" data-layout="form-only">
+            {# --- Marked panel (top 1/3 when body has data-marked="open") ---
+               Lives inside #workspace's grid as the 'm' area; CSS grid
+               templates (form-only-marked, etc.) place it across the
+               top 1/3 with the form pane occupying the bottom 2/3.
+               Hidden via display:none when data-marked is closed.
+               Mutually exclusive with doc panes — opening Marked
+               auto-caches docs to markedDocCache; closing restores.
+               The CSS class name .flags-pane__* on inner content
+               stays for back-compat with the existing render code;
+               only the container ID changes. #}
+            <aside id="marked-pane">
+                <div class="flags-pane__empty">No flags yet.</div>
+            </aside>
             <div id="form-pane">
                 {# Doc list — sticky bar at the top of the form pane.
                    Lists every document generated for the scenario; each
@@ -281,14 +294,6 @@ html, body { height: 100%; overflow: hidden; }
             </div>
         </aside>
 
-        {# --- Flags pane (right 1/3 when body has data-sidebar="flags") ---
-           Sibling of #chat-pane; mutually exclusive with it (only one
-           sidebar tool occupies the right column at a time, gated by
-           body[data-sidebar]). Phase D ships an empty placeholder;
-           Phase E fills in the marked-for-follow-up review content. #}
-        <aside id="flags-pane">
-            <div class="flags-pane__empty">No flags yet.</div>
-        </aside>
     </div>
 
     {# --- Status bar (2.4) --- #}
