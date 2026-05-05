@@ -1,8 +1,10 @@
-<!-- Status bar — bottom strip showing scenario state -->
+<!-- Status bar — bottom strip showing scenario state.
+     The previously-present #status-flags / #status-fields counters
+     were retired; this slot is reserved for grading info on resumed
+     scenarios (future). For now just the scenario id + a hint. -->
 <footer class="statusbar">
     <div class="statusbar__left">
         <span id="status-scenario">{{ scenario_id[:12] }}</span>
-        <span id="status-flags">0 flags</span>
     </div>
     <div class="statusbar__right">
         <span id="status-hint">Right-click a field for actions</span>
