@@ -122,22 +122,15 @@ class TestFlagSystemDom:
         body = client.get(f"/scenarios/{sid}").text
         assert "/app-static/styles/contextmenu.css" in body
 
-    def test_status_flags_counter_present(self, client: TestClient) -> None:
-        """The status-bar surfaces the textual flag count via
-        #status-flags. The renderer writes 'N flag(s)' there on
-        every state change."""
-        sid = _make_scenario(client)
-        body = client.get(f"/scenarios/{sid}").text
-        assert 'id="status-flags"' in body
-
-    def test_status_fields_counter_removed(self, client: TestClient) -> None:
-        """The 'fields' counter was removed from the status bar in
-        the Phase E polish round (wasn't driven by anything
-        meaningful for the current MVP). Keep the removal pinned so
-        future changes don't reintroduce it accidentally."""
+    def test_status_bar_counters_retired(self, client: TestClient) -> None:
+        """Both #status-fields and #status-flags were retired from
+        the status bar — the slot is reserved for grading info on
+        resumed scenarios (future). The flag count is surfaced on
+        the #flags-toggle-btn badge instead."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
         assert 'id="status-fields"' not in body
+        assert 'id="status-flags"' not in body
 
 
 # =========================================================================

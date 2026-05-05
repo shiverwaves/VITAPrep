@@ -338,26 +338,38 @@ body:not([data-sidebar="flags"]) #flags-pane {
 }
 
 /* =========================================================================
- * Flags toggle button dot indicator
+ * Flags toggle button counter badge
  * =========================================================================
- * Small accent dot on the titlebar Flags icon that signals "something
- * is flagged" without showing a number. The textual count lives in
- * the status bar's #status-flags. The dot appears when count > 0 and
- * is removed (DOM removal) when count returns to 0.
+ * Notification-style numbered badge on the titlebar Flags icon.
+ * Positioned to overhang the button's top-right corner so it doesn't
+ * obscure the underlying SVG icon — most of the badge sits OUTSIDE
+ * the button's content rectangle. Hidden (DOM removed) when count
+ * is 0.
  *
- * Visual rhyme: same accent color + white ring as the field-level
- * flag dot, so the player reads "this icon refers to the orange
- * dots on the form." */
+ * Single-digit counts get a circular badge; double digits and "9+"
+ * widen the pill via min-width + horizontal padding. The accent
+ * color + white-ring outline matches the field-level flag dot so
+ * the visual rhyme reads as "this icon refers to the orange-dotted
+ * fields on the form." */
 
 .flags-toggle-badge {
     position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+    top: -3px;
+    right: -3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
     background: #e87a2e;
-    box-shadow: 0 0 0 1.5px var(--color-surface);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    /* Surface-color ring so the badge reads cleanly against the
+     * titlebar background and clearly belongs to the button. */
+    border: 1.5px solid var(--color-surface);
+    box-sizing: content-box;
     pointer-events: none;
 }
 
