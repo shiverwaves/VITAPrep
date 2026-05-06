@@ -105,6 +105,27 @@
         Email: "Email",
         Message: "Message",
     };
+    /* Drawer-row data: each option has a title (the canonical
+     * label), an optional subtitle (description that teaches the
+     * schema), and for targets, an avatar string (initials). The
+     * subtitle is what makes the drawer richer than a flat enum
+     * picker. Adding a new option = one entry. */
+    var VERB_OPTIONS = {
+        RequestInfo: { title: "Request Information", subtitle: "Get a value you don't have yet" },
+    };
+    var TARGET_OPTIONS = {
+        Vida: { title: "Vida Reyes", subtitle: "Senior preparer", initials: "VR" },
+        Client: { title: "Client", subtitle: "The taxpayer you're helping", initials: "CL" },
+    };
+    var CHANNEL_OPTIONS = {
+        Email: { title: "Email", subtitle: "Sent as an email" },
+        Message: { title: "Message", subtitle: "In-app chat message" },
+    };
+    var DRAWER_TITLES = {
+        verb: "Verb",
+        target: "Send to",
+        channel: "Channel",
+    };
     var PILL_PLACEHOLDERS = {
         verb: "Choose verb",
         target: "Choose target",
@@ -313,65 +334,102 @@
      * a future affordance (compile multiple ready rows into one
      * email when the channel is Email). */
 
-    /* Pill option dropdown popover. Created on demand inside the
-     * Marked tab body; positioned right under the clicked pill via
-     * getBoundingClientRect. */
+    /* Pill option drawer. Slides up from the bottom of the workpanel
+     * content area when a pill is tapped. Mobile-app action-sheet
+     * pattern. The pill being edited gets an orange ring
+     * (.flags-pane__pill--editing) so the connection between pill
+     * and drawer is unambiguous. */
     function showDropdown(fieldId, pillKey) {
         hideDropdown();
 
-        var container = document.getElementById("marked-tab-body");
-        if (!container) return;
-        var pillBtn = container.querySelector(
+        var content = document.querySelector(
+            "#workpanel-tab-marked .workpanel__body"
+        );
+        if (!content) return;
+        var pillBtn = content.querySelector(
             '.flags-pane__row[data-field-id="' + cssEscape(fieldId) + '"]' +
             ' .flags-pane__pill[data-pill="' + pillKey + '"]'
         );
         if (!pillBtn) return;
 
-        var tokens, labels, currentValue;
         var flag = (state.flags || {})[fieldId];
         if (!flag) return;
+
+        var tokens, options, currentValue;
         if (pillKey === "verb") {
             tokens = global.FlagsReducer.VERB_TOKENS;
-            labels = VERB_LABELS;
+            options = VERB_OPTIONS;
             currentValue = flag.verb;
         } else if (pillKey === "target") {
             tokens = global.FlagsReducer.TARGET_TOKENS;
-            labels = TARGET_LABELS;
+            options = TARGET_OPTIONS;
             currentValue = flag.target;
         } else if (pillKey === "channel") {
             tokens = global.FlagsReducer.CHANNEL_TOKENS;
-            labels = CHANNEL_LABELS;
+            options = CHANNEL_OPTIONS;
             currentValue = flag.channel;
         } else {
             return;
         }
 
         var items = tokens.map(function (tok) {
-            var active = tok === currentValue ? " flags-pane__dropdown-item--active" : "";
+            var opt = options[tok] || { title: tok };
+            var isActive = tok === currentValue;
+            var classes = "workpanel__drawer-item"
+                + (isActive ? " workpanel__drawer-item--active" : "");
+            var avatar = opt.initials
+                ? '<span class="workpanel__drawer-item-avatar">' +
+                    escapeHtml(opt.initials) + '</span>'
+                : "";
+            var subtitle = opt.subtitle
+                ? '<span class="workpanel__drawer-item-subtitle">' +
+                    escapeHtml(opt.subtitle) + '</span>'
+                : "";
             return (
-                '<button type="button" class="flags-pane__dropdown-item' + active + '"' +
+                '<button type="button" class="' + classes + '"' +
                 ' data-flag-action="set-pill"' +
                 ' data-pill="' + pillKey + '"' +
                 ' data-value="' + escapeAttr(tok) + '">' +
-                escapeHtml(labels[tok] || tok) +
+                avatar +
+                '<span class="workpanel__drawer-item-text">' +
+                    '<span class="workpanel__drawer-item-title">' +
+                    escapeHtml(opt.title || tok) + '</span>' +
+                    subtitle +
+                '</span>' +
+                '<span class="workpanel__drawer-item-check" aria-hidden="true">' +
+                    '&#10003;' +
+                '</span>' +
                 '</button>'
             );
         }).join("");
 
-        var dropdown = document.createElement("div");
-        dropdown.className = "flags-pane__dropdown";
-        dropdown.id = "flags-pane-dropdown";
-        dropdown.innerHTML = items;
-        document.body.appendChild(dropdown);
+        /* Backdrop + drawer share a wrapper so they can be removed
+         * together. The wrapper is positioned absolute inside the
+         * .workpanel__body scroll container (sits above content,
+         * below the bottom nav). */
+        var wrapper = document.createElement("div");
+        wrapper.className = "workpanel__drawer-host";
+        wrapper.id = "workpanel-drawer-host";
+        wrapper.innerHTML =
+            '<div class="workpanel__drawer-backdrop"' +
+                ' data-flag-action="dismiss-drawer"></div>' +
+            '<div class="workpanel__drawer">' +
+                '<div class="workpanel__drawer-handle" aria-hidden="true"></div>' +
+                '<div class="workpanel__drawer-title">' +
+                    escapeHtml(DRAWER_TITLES[pillKey] || "") +
+                '</div>' +
+                '<div class="workpanel__drawer-list">' + items + '</div>' +
+            '</div>';
+        content.appendChild(wrapper);
 
-        var rect = pillBtn.getBoundingClientRect();
-        dropdown.style.position = "fixed";
-        dropdown.style.top = (rect.bottom + 4) + "px";
-        dropdown.style.left = rect.left + "px";
-        dropdown.style.minWidth = rect.width + "px";
+        /* Trigger the slide-in animation in the next frame. */
+        requestAnimationFrame(function () {
+            wrapper.classList.add("workpanel__drawer-host--open");
+        });
 
-        openDropdown = { fieldId: fieldId, pillKey: pillKey };
+        pillBtn.classList.add("flags-pane__pill--editing");
         pillBtn.setAttribute("aria-expanded", "true");
+        openDropdown = { fieldId: fieldId, pillKey: pillKey };
     }
 
     function showConfirmMenu(fieldId) {
@@ -409,8 +467,15 @@
     }
 
     function hideDropdown() {
-        var existing = document.getElementById("flags-pane-dropdown");
-        if (existing) existing.parentNode.removeChild(existing);
+        var drawerHost = document.getElementById("workpanel-drawer-host");
+        if (drawerHost && drawerHost.parentNode) {
+            drawerHost.parentNode.removeChild(drawerHost);
+        }
+        /* Also clean up the legacy popover wrapper if any persists
+         * from an older render path. */
+        var legacy = document.getElementById("flags-pane-dropdown");
+        if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+
         var container = document.getElementById("marked-tab-body");
         if (container) {
             var expanded = container.querySelectorAll(
@@ -418,6 +483,7 @@
             );
             for (var i = 0; i < expanded.length; i++) {
                 expanded[i].setAttribute("aria-expanded", "false");
+                expanded[i].classList.remove("flags-pane__pill--editing");
             }
         }
         openDropdown = null;
@@ -517,6 +583,11 @@
                  * is kept so the pill markup didn't have to change
                  * in the same commit. */
                 openMarkedTab();
+                return;
+
+            case "dismiss-drawer":
+                /* Backdrop click — close the open pill drawer. */
+                hideDropdown();
                 return;
 
             case "open-pill":
