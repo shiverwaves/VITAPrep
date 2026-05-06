@@ -84,83 +84,175 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* =========================================================================
- * Marked dropdown — popover anchored to the titlebar Marked pill
+ * Workpanel — tabbed multi-mode panel in the right column
  * =========================================================================
- * Created on demand by flags-render.js when the player clicks the pill.
- * Positioned via fixed + JS-set top/left. Click outside / Escape /
- * re-clicking the pill dismisses. Contains the chain-link rows
- * (.flags-pane__row) and an Approve-all footer.
+ * Lives inside #chat-pane (which retains its id for back-compat with
+ * the layout state machine). Three tabs along the bottom: Marked
+ * (active), Messages + Notes (placeholders). Tab content fills the
+ * area above the nav strip. Mobile-app idiom: card rows, bottom-
+ * anchored tabs, generous padding.
  */
 
-.marked-dropdown {
-    position: fixed;
-    z-index: 200;
-    width: min(640px, calc(100vw - 24px));
-    max-height: min(60vh, 560px);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md, 8px);
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18),
-                0 2px 6px rgba(0, 0, 0, 0.06);
+.workpanel__content {
+    flex: 1 1 auto;
+    overflow: hidden;
+    position: relative;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
 }
 
-.marked-dropdown__header {
+.workpanel__tab {
+    display: none;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.workpanel__tab--active {
+    display: flex;
+}
+
+.workpanel__title {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-navy);
-    color: #fff;
+    padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm);
     border-bottom: 1px solid var(--color-border);
 }
 
-.marked-dropdown__title {
+.workpanel__title-text {
     flex: 1 1 auto;
     font-size: var(--font-size-md);
     font-weight: 700;
-    letter-spacing: 0.02em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--color-text);
+    letter-spacing: 0.01em;
 }
 
-.marked-dropdown__close {
+.workpanel__count {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm, 4px);
-    color: rgba(255, 255, 255, 0.85);
-    cursor: pointer;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 11px;
+    background: rgba(232, 122, 46, 0.15);
+    color: #b35a17;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
 }
 
-.marked-dropdown__close:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-}
-
-.marked-dropdown__close svg {
-    width: 14px;
-    height: 14px;
-    pointer-events: none;
-}
-
-.marked-dropdown__body {
+.workpanel__body {
     flex: 1 1 auto;
     overflow-y: auto;
-    /* Inner content uses the existing .flags-pane__* classes for
-     * chain rows + footer; this body is just the scroll container. */
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
     display: flex;
     flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.workpanel__empty {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-style: italic;
+    text-align: center;
+    line-height: 1.5;
+    padding: var(--spacing-xl) var(--spacing-md);
+}
+
+.workpanel__section-title {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    padding: var(--spacing-xs) 2px;
+    margin-top: var(--spacing-xs);
+}
+
+.workpanel__section-title:first-child {
+    margin-top: 0;
+}
+
+.workpanel__section-title--sent {
+    margin-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border-light);
+    padding-top: var(--spacing-sm);
+}
+
+.workpanel__send-all {
+    display: flex;
+    padding: var(--spacing-sm) 0 0;
+}
+
+.workpanel__send-all-btn {
+    flex: 1 1 auto;
+    padding: 10px 16px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.workpanel__send-all-btn:hover:not(:disabled) {
+    background: var(--color-border-light);
+}
+
+.workpanel__send-all-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.workpanel__nav {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.workpanel__nav-btn {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    background: transparent;
+    border: none;
+    border-top: 2px solid transparent;
+    color: var(--color-text-muted);
+    font: inherit;
+    cursor: pointer;
+    transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.workpanel__nav-btn:hover {
+    color: var(--color-text);
+}
+
+.workpanel__nav-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.workpanel__nav-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.workpanel__nav-btn--active {
+    color: var(--color-navy);
+    border-top-color: var(--color-navy);
 }
 
 /* =========================================================================
@@ -182,26 +274,29 @@ body:not([data-sidebar="chat"]) #chat-pane {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 8px;
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
-    border-bottom: 1px solid var(--color-border-light);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
     font: inherit;
 }
 
 .flags-pane__row-field {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
     color: var(--color-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
 }
 
 .flags-pane__chain {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     flex-wrap: wrap;
 }
 
@@ -209,6 +304,12 @@ body:not([data-sidebar="chat"]) #chat-pane {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
     font-style: italic;
+}
+
+.flags-pane__row-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
 }
 
 .flags-pane__pill {
@@ -308,11 +409,18 @@ body:not([data-sidebar="chat"]) #chat-pane {
     padding: 4px 8px;
 }
 
-/* Sent rows — dimmed, with a small Sent tag instead of the
- * Confirm split button. */
-
+/* Sent rows — compact card with the field name + status tag,
+ * no chain pills. Sits below the Active section divider. */
 .flags-pane__row--sent {
-    opacity: 0.6;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 8px var(--spacing-md);
+    opacity: 0.85;
+}
+
+.flags-pane__row--sent .flags-pane__row-field {
+    flex: 1 1 auto;
 }
 
 .flags-pane__sent-tag {
@@ -814,78 +922,9 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * toggle's badge slot is reserved for a future unread-messages
  * indicator. */
 
-/* =========================================================================
- * Chat-pane chrome (tabs + panels + notes textarea)
- * =========================================================================
- * MVP placeholder content; real probe interaction is future work. The
- * tab strip and panels mirror the layout the (now retired) sidebar
- * had so the structure is familiar.
- */
-
-.chat-pane__tabs {
-    display: flex;
-    border-bottom: 1px solid var(--color-border);
-    flex-shrink: 0;
-}
-
-.chat-pane__tab {
-    flex: 1;
-    padding: var(--spacing-sm) var(--spacing-xs);
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    text-align: center;
-    color: var(--color-text-muted);
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-}
-
-.chat-pane__tab:hover {
-    color: var(--color-text);
-}
-
-.chat-pane__tab--active {
-    color: var(--color-navy);
-    border-bottom-color: var(--color-navy);
-}
-
-.chat-pane__panel {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--spacing-md);
-    display: none;
-}
-
-.chat-pane__panel--active {
-    display: block;
-}
-
-.chat-pane__empty {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    font-style: italic;
-    text-align: center;
-    padding: var(--spacing-xl) var(--spacing-md);
-}
-
-.chat-pane__notes-area {
-    width: 100%;
-    min-height: 200px;
-    padding: var(--spacing-sm);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    font-family: var(--font-stack);
-    font-size: var(--font-size-sm);
-    resize: vertical;
-}
-
-.chat-pane__notes-area:focus {
-    outline: 2px solid var(--color-navy);
-    outline-offset: -1px;
-}
+/* (chat-pane chrome was retired — content now uses the workpanel
+ * tabbed structure above. #chat-pane is just the right-column
+ * container; layout state still drives its show/hide.) */
 
 /* =========================================================================
  * Doc list — sticky strip at the top of #form-pane

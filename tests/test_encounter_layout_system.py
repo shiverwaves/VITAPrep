@@ -120,13 +120,21 @@ class TestWorkspaceStructure:
         ), "doc-pane-0 should start hidden"
 
     def test_chat_pane_present(self, client: TestClient) -> None:
+        """The right-column container is the new tabbed Workpanel:
+        Marked (active default), Messages, and Notes (placeholders).
+        Bottom-anchored tab nav. Container keeps the legacy id
+        #chat-pane so the layout state machine doesn't have to be
+        renamed."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
         assert 'id="chat-pane"' in body
-        # MVP: three placeholder sub-tabs.
-        assert 'data-panel="probes"' in body
-        assert 'data-panel="flags"' in body
-        assert 'data-panel="notes"' in body
+        # Workpanel tab buttons in the bottom nav.
+        assert 'data-workpanel-tab="marked"' in body
+        assert 'data-workpanel-tab="messages"' in body
+        assert 'data-workpanel-tab="notes"' in body
+        # Tab content sections.
+        assert 'id="workpanel-tab-marked"' in body
+        assert 'id="marked-tab-body"' in body
 
 
 # =========================================================================

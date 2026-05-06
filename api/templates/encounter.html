@@ -264,24 +264,71 @@ html, body { height: 100%; overflow: hidden; }
             </div>
         </div>
 
-        {# --- Chat pane (right 1/3 when body has data-chat="open") ---
-           MVP placeholder: three sub-tabs reserved for Probes / Flags /
-           Notes. Real probe interaction is future work. #}
+        {# --- Workpanel (right 1/3 when body has data-sidebar="chat") ---
+           Tabbed multi-mode panel: Marked (active), Messages + Notes
+           (placeholders). Bottom-anchored tab nav, mobile-app feel.
+           Marked tab content is rendered by flags-render.js. #}
         <aside id="chat-pane">
-            <div class="chat-pane__tabs">
-                <button class="chat-pane__tab chat-pane__tab--active" data-panel="probes" type="button">Probes</button>
-                <button class="chat-pane__tab" data-panel="flags" type="button">Flags</button>
-                <button class="chat-pane__tab" data-panel="notes" type="button">Notes</button>
+            <div class="workpanel__content">
+                <section class="workpanel__tab workpanel__tab--active" id="workpanel-tab-marked">
+                    <div class="workpanel__title">
+                        <span class="workpanel__title-text">Marked</span>
+                        <span class="workpanel__count" id="marked-tab-count">0</span>
+                    </div>
+                    <div class="workpanel__body" id="marked-tab-body">
+                        <div class="workpanel__empty">No flags yet. Right-click a form field to mark it for follow-up.</div>
+                    </div>
+                </section>
+                <section class="workpanel__tab" id="workpanel-tab-messages">
+                    <div class="workpanel__title">
+                        <span class="workpanel__title-text">Messages</span>
+                    </div>
+                    <div class="workpanel__body">
+                        <div class="workpanel__empty">Messages will live here once Vida + Client comms are wired.</div>
+                    </div>
+                </section>
+                <section class="workpanel__tab" id="workpanel-tab-notes">
+                    <div class="workpanel__title">
+                        <span class="workpanel__title-text">Notes</span>
+                    </div>
+                    <div class="workpanel__body">
+                        <div class="workpanel__empty">Notes placeholder.</div>
+                    </div>
+                </section>
             </div>
-            <div class="chat-pane__panel chat-pane__panel--active" id="chat-panel-probes">
-                <div class="chat-pane__empty">Probes will appear here.</div>
-            </div>
-            <div class="chat-pane__panel" id="chat-panel-flags">
-                <div class="chat-pane__empty">No flags yet.</div>
-            </div>
-            <div class="chat-pane__panel" id="chat-panel-notes">
-                <textarea class="chat-pane__notes-area" placeholder="Scratchpad — your notes here..."></textarea>
-            </div>
+            <nav class="workpanel__nav" aria-label="Workpanel tabs">
+                <button class="workpanel__nav-btn workpanel__nav-btn--active"
+                        data-workpanel-tab="marked" type="button"
+                        aria-pressed="true">
+                    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor"
+                         stroke-width="1.5" aria-hidden="true">
+                        <path d="M4 2 V16 M4 2 H13 L11 5 L13 8 H4"
+                              stroke-linejoin="round"/>
+                    </svg>
+                    <span class="workpanel__nav-label">Marked</span>
+                </button>
+                <button class="workpanel__nav-btn"
+                        data-workpanel-tab="messages" type="button"
+                        aria-pressed="false">
+                    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor"
+                         stroke-width="1.5" aria-hidden="true">
+                        <path d="M3 4 H15 V12 H8 L5 15 V12 H3 Z"
+                              stroke-linejoin="round"/>
+                    </svg>
+                    <span class="workpanel__nav-label">Messages</span>
+                </button>
+                <button class="workpanel__nav-btn"
+                        data-workpanel-tab="notes" type="button"
+                        aria-pressed="false">
+                    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor"
+                         stroke-width="1.5" aria-hidden="true">
+                        <path d="M4 2 H12 L14 4 V16 H4 Z M12 2 V4 H14
+                                 M6 8 H12 M6 11 H12 M6 14 H10"
+                              stroke-linejoin="round"/>
+                    </svg>
+                    <span class="workpanel__nav-label">Notes</span>
+                </button>
+            </nav>
         </aside>
 
     </div>
