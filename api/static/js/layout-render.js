@@ -41,8 +41,8 @@
     "use strict";
 
     /* -------- Module state (initialized in init()) -------- */
-    var workspace, formPane, docPane, chatPane, markedPane;
-    var chatToggleBtn, markedPill;
+    var workspace, formPane, docPane, chatPane;
+    var chatToggleBtn;
     var docList;
     var scenarioId = "";
     var docUrls = {};
@@ -72,17 +72,15 @@
         }
     }
 
-    /* Strip persisted-state fields that are no longer part of the
-     * shape (legacy hiddenDocCache / markedCache / panes / paneRecency
-     * / tick) and validate docSlots ids against the current scenario.
-     * Sessions persisted under the old shape rehydrate cleanly. */
+    /* Strip retired persisted-state fields (panes, hiddenDocCache,
+     * markedCache, paneRecency, tick, markedOpen) and validate
+     * docSlots ids against the current scenario. */
     function sanitizePersistedState(persisted) {
         if (!persisted) return persisted;
         if (Array.isArray(persisted.docSlots)) {
             persisted.docSlots = persisted.docSlots.filter(function (id) {
                 return id && docUrls[id];
             });
-            /* Cap at 1 — single-slot model. */
             if (persisted.docSlots.length > 1) {
                 persisted.docSlots = persisted.docSlots.slice(0, 1);
             }
@@ -93,19 +91,17 @@
             persisted.sidebarTool = persisted.chatOpen ? "chat" : null;
         }
         persisted.chatOpen = persisted.sidebarTool !== null;
-        if (typeof persisted.markedOpen !== "boolean") {
-            persisted.markedOpen = false;
-        }
         if (!persisted.formState) {
             persisted.formState = { currentPage: 1 };
         }
-        /* Drop retired fields outright. */
+        /* Drop retired fields. */
         delete persisted.panes;
         delete persisted.hiddenDocCache;
         delete persisted.markedCache;
         delete persisted.preMarkedSnapshot;
         delete persisted.paneRecency;
         delete persisted.tick;
+        delete persisted.markedOpen;
         return persisted;
     }
 
@@ -122,9 +118,6 @@
     /* -------- Render -------- */
     function computeLayoutName(s) {
         var hasDoc = s.docSlots.length > 0;
-        if (s.markedOpen) {
-            return hasDoc ? "doc-only-marked" : "form-only-marked";
-        }
         if (s.chatOpen) {
             return hasDoc ? "h2-chat" : "form-only-chat";
         }
@@ -136,9 +129,6 @@
         workspace.setAttribute("data-layout", computeLayoutName(state));
         var sidebarValue = state.sidebarTool || "closed";
         document.body.setAttribute("data-sidebar", sidebarValue);
-        document.body.setAttribute(
-            "data-marked", state.markedOpen ? "open" : "closed"
-        );
         updateDocPane(state.docSlots[0] || null);
         renderDocList();
         updateSidebarToggleButtons();
@@ -155,23 +145,17 @@
         if (!docList) return;
         var slot0 = state.docSlots[0] || null;
 
-        /* Form pill — bolded, position 0. Cached state derives from
-         * `markedOpen && docSlots.length > 0`. Clickable in marked
-         * mode (dispatches SHOW_FORM); inert otherwise. */
-        var formCached = state.markedOpen && state.docSlots.length > 0;
-        var formPillClasses = "doc-list__item doc-list__item--form";
-        if (!formCached) formPillClasses += " doc-list__item--in-pane";
-        if (formCached) formPillClasses += " doc-list__item--cached";
-        var formPillAttrs = state.markedOpen
-            ? ' data-layout-action="show-form"'
-            : ' tabindex="-1" aria-current="true"';
-        var formPillBadge = formCached
-            ? '<span class="doc-list__badge doc-list__badge--cached"></span>'
-            : "";
+        /* Form pill — bolded, position 0. Always shown as in-pane;
+         * clicking dispatches SHOW_FORM which clears any visible doc
+         * (returns the workspace to form-only). When the slot is
+         * already empty (form-only / form-only-chat), clicking is
+         * a no-op handled by the reducer. */
+        var formPillClasses =
+            "doc-list__item doc-list__item--form doc-list__item--in-pane";
         var parts = [
             '<button type="button" class="' + formPillClasses + '"' +
-            formPillAttrs + '>' +
-            'Form 13614-C' + formPillBadge +
+            ' data-layout-action="show-form">' +
+            'Form 13614-C' +
             '</button>',
         ];
 
@@ -237,16 +221,12 @@
             '</svg></button>';
     }
 
-    /* Sync aria-pressed on the chat toggle and marked pill. */
+    /* Sync aria-pressed on the chat toggle. The marked pill is
+     * managed by flags-render.js since marked is a flag-system UI. */
     function updateSidebarToggleButtons() {
         if (chatToggleBtn) {
             chatToggleBtn.setAttribute(
                 "aria-pressed", state.sidebarTool === "chat" ? "true" : "false"
-            );
-        }
-        if (markedPill) {
-            markedPill.setAttribute(
-                "aria-pressed", state.markedOpen ? "true" : "false"
             );
         }
     }
@@ -268,11 +248,9 @@
     function handleAction(action, element) {
         if (action === "toggle-chat") {
             dispatch({ type: "TOGGLE_CHAT" });
-        } else if (action === "toggle-marked") {
-            dispatch({ type: "TOGGLE_MARKED" });
         } else if (action === "show-form") {
-            /* Form pill click in marked mode — clears docSlots so
-             * the form takes the bottom slot. */
+            /* Form pill click — clears docSlots so the form takes
+             * the workspace alone. No-op when no doc is visible. */
             dispatch({ type: "SHOW_FORM" });
         } else if (action === "open-doc") {
             var openDocId = element.getAttribute("data-doc-id");
@@ -307,9 +285,7 @@
         formPane = document.getElementById("form-pane");
         docPane = document.getElementById("doc-pane-0");
         chatPane = document.getElementById("chat-pane");
-        markedPane = document.getElementById("marked-pane");
         chatToggleBtn = document.getElementById("chat-toggle-btn");
-        markedPill = document.getElementById("marked-pill");
         docList = document.getElementById("doc-list");
 
         scenarioId = global.SCENARIO_ID || "";

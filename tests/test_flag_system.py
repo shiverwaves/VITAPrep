@@ -69,17 +69,16 @@ class TestFlagSystemDom:
 
     def test_marked_pill_present(self, client: TestClient) -> None:
         """The titlebar carries a 'Marked: N' pill that displays the
-        flag count and toggles the Marked review panel. Replaces the
-        former titlebar flag icon button + corner badge.
+        flag count and toggles the Marked dropdown popover.
 
-        Wired with data-layout-action="toggle-marked" so the layout
-        renderer's TOGGLE_MARKED handler picks it up. (Marked is its
-        own layout axis, not a sidebar tool — it occupies the top
-        1/3 of the workspace, not the right column.)"""
+        Wired with data-flag-action="toggle-marked-dropdown" so the
+        flag renderer (not the layout renderer) handles the click —
+        marked is now a flag-system UI, not part of the workspace
+        layout state machine."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
         assert 'id="marked-pill"' in body
-        assert 'data-layout-action="toggle-marked"' in body
+        assert 'data-flag-action="toggle-marked-dropdown"' in body
         # Pressed state defaults to false on initial render.
         assert 'aria-pressed="false"' in body
         # Inner count span starts at 0.
@@ -102,15 +101,14 @@ class TestFlagSystemDom:
         assert 'id="chat-toggle-btn"' in body
         assert 'data-layout-action="toggle-chat"' in body
 
-    def test_marked_pane_present(self, client: TestClient) -> None:
-        """#marked-pane is the workspace-top container the flag
-        renderer populates. Replaces the former #flags-pane (which
-        lived in the right column as a sidebar tool); now lives in
-        the top 1/3 of the workspace grid as its own layout axis."""
+    def test_marked_pane_retired(self, client: TestClient) -> None:
+        """The marked panel is now a JS-mounted dropdown popover
+        anchored to the titlebar pill; there's no longer a
+        server-rendered #marked-pane container in the workspace."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
-        assert 'id="marked-pane"' in body
-        # Old flags-pane (right-column sidebar tool) is retired.
+        assert 'id="marked-pane"' not in body
+        # Old #flags-pane right-column sidebar is also gone.
         assert 'id="flags-pane"' not in body
 
     def test_chat_pane_still_present(self, client: TestClient) -> None:
