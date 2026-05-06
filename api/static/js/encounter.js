@@ -131,6 +131,7 @@
      * list will expand again during the upcoming vocab revamp. */
     var VERB_LABELS = {
         RequestInfo: "Request Information",
+        ClarifyInfo: "Clarify Information",
     };
 
     /* Render the menu HTML for the right-clicked field. Two cases:
@@ -146,7 +147,7 @@
             '</div>'
         );
 
-        var verbs = ["RequestInfo"];
+        var verbs = ["RequestInfo", "ClarifyInfo"];
 
         if (existing) {
             parts.push(

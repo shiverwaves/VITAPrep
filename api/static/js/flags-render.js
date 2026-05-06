@@ -67,11 +67,22 @@
     /* -------- Action dispatch -------- */
     function dispatch(action) {
         if (!global.FlagsReducer) return;
+        var prev = state;
         var next = global.FlagsReducer.reduce(state, action);
         if (next === state) return;  /* no-op, skip render */
         state = next;
         persistState();
         applyState();
+        /* Side effect: marking a NEW field opens the workpanel
+         * to the Marked tab so the player can fill the chain
+         * immediately. Re-flagging an existing field doesn't
+         * trigger this — the row is already there. */
+        if (action.type === "FLAG_FIELD"
+                && action.field_id
+                && !prev.flags[action.field_id]
+                && next.flags[action.field_id]) {
+            openMarkedTab();
+        }
     }
 
     /* -------- Render -------- */
@@ -98,6 +109,7 @@
 
     var VERB_LABELS = {
         RequestInfo: "Request Information",
+        ClarifyInfo: "Clarify Information",
     };
     var TARGET_LABELS = {
         Vida: "Vida",
@@ -114,6 +126,7 @@
      * picker. Adding a new option = one entry. */
     var VERB_OPTIONS = {
         RequestInfo: { title: "Request Information", subtitle: "Get a value you don't have yet" },
+        ClarifyInfo: { title: "Clarify Information", subtitle: "Verify a value that seems off or unclear" },
     };
     var TARGET_OPTIONS = {
         Vida: { title: "Vida Reyes", subtitle: "Senior preparer", initials: "VR" },
@@ -139,8 +152,10 @@
      * time — clicking a pill closes any other open dropdown. */
     var openDropdown = null;
     /* Which workpanel tab is active. The tab content panes are all
-     * mounted server-side; this just toggles which one displays. */
-    var activeWorkpanelTab = "marked";
+     * mounted server-side; this just toggles which one displays.
+     * Default is "messages" — the Marked pill or marking a field
+     * is the only way to land on the Marked tab automatically. */
+    var activeWorkpanelTab = "messages";
 
     /* -------- Workpanel tabs -------- */
     function setActiveWorkpanelTab(tabName) {
