@@ -50,28 +50,33 @@ html, body { height: 100%; overflow: hidden; }
 {% block body %}
 {# --- Titlebar (2.2) --- #}
 {% set titlebar_center_html %}
-<button class="titlebar__scenario-trigger" id="scenario-btn">
-    <span>{{ scenario_id[:12] }}</span>
-    <span class="tag tag--{{ mode }}">{{ mode }}</span>
-    <span class="tag tag--practice">practice</span>
-    <span>&#9662;</span>
-</button>
-{# Marked pill — counter + clickable toggle for the flag review panel.
-   Greyed when count is 0, accent-illuminated when ≥1. Pressed state
-   reflects whether the flags pane is currently open. Chevron appears
-   when illuminated/pressed, signaling "click to open" — same affordance
-   pattern as the scenario trigger to its left. #}
-<button class="titlebar__pill titlebar__pill--marked"
-        id="marked-pill" type="button"
-        data-flag-action="toggle-marked-dropdown"
-        aria-pressed="false" aria-label="Marked for follow-up"
-        aria-haspopup="true" aria-expanded="false">
-    <span class="titlebar__pill-tag">
-        <span class="titlebar__pill-tag-label">Marked</span>
-        <span class="titlebar__pill-tag-count" id="marked-pill-count">0</span>
-    </span>
-    <span class="titlebar__pill-chevron" aria-hidden="true">&#9662;</span>
-</button>
+{# Scenario group — single shell containing the scenario id + tags +
+   chevron (opens scenario menu) AND the Marked pill, separated by
+   a subtle divider. Clicks on each child are routed independently;
+   the outer shell is purely visual grouping. #}
+<div class="titlebar__scenario-group">
+    <button class="titlebar__scenario-trigger" id="scenario-btn" type="button">
+        <span>{{ scenario_id[:12] }}</span>
+        <span class="tag tag--{{ mode }}">{{ mode }}</span>
+        <span class="tag tag--practice">practice</span>
+        <span>&#9662;</span>
+    </button>
+    <span class="titlebar__group-divider" aria-hidden="true"></span>
+    {# Marked pill — count + toggle for the flag review dropdown.
+       Greyed when count is 0, accent-illuminated when ≥1. The
+       chevron is always visible so the affordance reads even at 0. #}
+    <button class="titlebar__pill titlebar__pill--marked"
+            id="marked-pill" type="button"
+            data-flag-action="toggle-marked-dropdown"
+            aria-pressed="false" aria-label="Marked for follow-up"
+            aria-haspopup="true" aria-expanded="false">
+        <span class="titlebar__pill-tag">
+            <span class="titlebar__pill-tag-label">Marked</span>
+            <span class="titlebar__pill-tag-count" id="marked-pill-count">0</span>
+        </span>
+        <span class="titlebar__pill-chevron" aria-hidden="true">&#9662;</span>
+    </button>
+</div>
 {% endset %}
 
 {% set titlebar_right_html %}

@@ -492,31 +492,33 @@ body:not([data-sidebar="chat"]) #chat-pane {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 8px 3px 4px;
+    padding: 3px 8px 3px 6px;
     font: inherit;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: var(--radius-sm);
+    /* Lives inside .titlebar__scenario-group, which carries the
+     * outer shell border + bg. The pill itself is borderless and
+     * transparent — it's just a click target wrapping the inner
+     * tag chip. */
+    background: transparent;
+    border: none;
     cursor: pointer;
     user-select: none;
     color: #fff;
-    transition: background 0.12s ease, border-color 0.12s ease;
+    transition: background 0.12s ease;
 }
 
 .titlebar__pill:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .titlebar__pill:focus-visible {
     outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
+    outline-offset: -2px;
 }
 
-/* Pressed — shell goes solid so the pill itself reads as "this
- * surface is active." Chevron tint shifts dark to stay legible. */
+/* Pressed — subtle inverted background so the pill itself reads
+ * as "this surface is active." */
 .titlebar__pill[aria-pressed="true"] {
-    background: rgba(255, 255, 255, 0.95);
-    border-color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.92);
     color: var(--color-navy);
 }
 

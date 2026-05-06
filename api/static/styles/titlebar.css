@@ -32,21 +32,41 @@
     gap: var(--spacing-sm);
 }
 
+/* Scenario group — single bordered shell wrapping the scenario
+ * trigger and the Marked pill. Each child is its own button with
+ * an independent click target; the shell itself is decorative. */
+.titlebar__scenario-group {
+    display: inline-flex;
+    align-items: stretch;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.titlebar__group-divider {
+    flex: 0 0 auto;
+    width: 1px;
+    align-self: stretch;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 4px 0;
+}
+
 .titlebar__scenario-trigger {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: var(--radius-sm);
+    /* Inside the shared shell now — drop the standalone bg + border. */
+    background: transparent;
+    border: none;
     color: #fff;
     font-size: var(--font-size-sm);
     cursor: pointer;
 }
 
 .titlebar__scenario-trigger:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .titlebar__right {
