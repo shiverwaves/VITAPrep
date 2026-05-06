@@ -4,17 +4,13 @@
  * The renderer (api/static/js/layout-render.js) sets two attributes
  * the styles below key off:
  *
- *     <body data-sidebar="chat|flags|closed">
- *     <body data-marked="open|closed">
- *     <div id="workspace" data-layout="form-only|h2|form-only-chat|h2-chat|
- *                                       form-only-marked|doc-only-marked">
+ *     <body data-sidebar="chat|closed">
+ *     <div id="workspace" data-layout="form-only|h2|form-only-chat|h2-chat">
  *
  * Single-slot model: the bottom area holds at most one doc pane
  * (or the form). Doc swaps are one-click via the doc-list pills.
- * The legacy 3-pane layout (form + 2 docs) was retired.
- *
- * Sidebar tools share the right column via mutual exclusion. Marked
- * is its own layout axis (top 1/3 of workspace).
+ * Marked is a popover dropdown owned by the flag system — not part
+ * of the workspace layout anymore.
  *
  * Five grid configurations, single horizontal axis, no vertical splits
  * (the form is 980px wide; vertical splits would squeeze it below
@@ -88,12 +84,92 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* =========================================================================
- * Marked panel — chain-link rows
+ * Marked dropdown — popover anchored to the titlebar Marked pill
+ * =========================================================================
+ * Created on demand by flags-render.js when the player clicks the pill.
+ * Positioned via fixed + JS-set top/left. Click outside / Escape /
+ * re-clicking the pill dismisses. Contains the chain-link rows
+ * (.flags-pane__row) and an Approve-all footer.
+ */
+
+.marked-dropdown {
+    position: fixed;
+    z-index: 200;
+    width: min(640px, calc(100vw - 24px));
+    max-height: min(60vh, 560px);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md, 8px);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18),
+                0 2px 6px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.marked-dropdown__header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-navy);
+    color: #fff;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.marked-dropdown__title {
+    flex: 1 1 auto;
+    font-size: var(--font-size-md);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.marked-dropdown__close {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+}
+
+.marked-dropdown__close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.marked-dropdown__close svg {
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+
+.marked-dropdown__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    /* Inner content uses the existing .flags-pane__* classes for
+     * chain rows + footer; this body is just the scroll container. */
+    display: flex;
+    flex-direction: column;
+}
+
+/* =========================================================================
+ * Marked panel content — chain-link rows
  * =========================================================================
  * Each row is a sentence chain:
- *   [field] [verb ▾] from [target ▾] via [channel ▾] [Confirm | ▾]
+ *   [field] [verb ▾] from [target ▾] via [channel ▾] [Ready | ▾]
  * Pills are <button> dropdowns; the split-button at the right edge
- * is the Confirm primary + the menu (Execute / Discard).
+ * is the Ready toggle + the menu (Approve / Discard).
  */
 
 .flags-pane__body {
@@ -514,11 +590,10 @@ body:not([data-sidebar="chat"]) #chat-pane {
  *   d0 = document pane 0
  *   d1 = document pane 1
  *
- * The doc-list lives at workspace level (not inside form-pane) so
- * it stays visible across every layout — including doc-only-marked
- * where form-pane is hidden. Every grid template reserves a "dl"
- * row at the top with auto height (the bar is 32px tall, fits its
- * content); the remaining rows split as before.
+ * The doc-list lives at workspace level (not inside form-pane).
+ * Every grid template reserves a "dl" row at the top with auto
+ * height (the bar is 32px tall, fits its content); the remaining
+ * rows split as before.
  */
 
 #workspace {
@@ -564,60 +639,6 @@ body:not([data-sidebar="chat"]) #chat-pane {
         "d0";
     grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 1fr;
-}
-
-/* =========================================================================
- * Marked panel — grid area at the top of #workspace
- * =========================================================================
- * When state.markedOpen is true, the workspace switches to the
- * form-only-marked grid template: top 1/3 is the marked panel, bottom
- * 2/3 is the form. Doc panes are auto-cached by the reducer when
- * Marked opens, so the marked + form layout never has to coexist
- * with doc panes — the cached docs restore when Marked closes.
- *
- * The form keeps full interactivity (no pointer-events lock); a
- * player can mark fields, scroll the form, and watch the marked
- * panel update in real time. It's a HUD layer, not a modal.
- */
-
-#workspace[data-layout="form-only-marked"] {
-    grid-template-areas:
-        "dl"
-        "m"
-        "f";
-    grid-template-rows: auto 1fr 2fr;
-    grid-template-columns: 1fr;
-}
-
-/* Marked + visible doc — single-slot layout: the doc occupies the
- * bottom 2/3 and form-pane is hidden. Same template applies whether
- * chat is open or closed (chat is in its own right column). */
-#workspace[data-layout="doc-only-marked"] {
-    grid-template-areas:
-        "dl"
-        "m"
-        "d0";
-    grid-template-rows: auto 1fr 2fr;
-    grid-template-columns: 1fr;
-}
-
-#workspace[data-layout="doc-only-marked"] #form-pane {
-    display: none;
-}
-
-#marked-pane {
-    grid-area: m;
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-}
-
-body:not([data-marked="open"]) #marked-pane {
-    display: none;
 }
 
 /* =========================================================================
@@ -882,10 +903,9 @@ body:not([data-marked="open"]) #marked-pane {
 
 .doc-list {
     /* Workspace-level strip — sits in the "dl" grid area at the top
-     * of every layout. Always visible, including doc-only-marked
-     * where form-pane is hidden. The :empty selector collapses
-     * the strip when no docs (and no form pill) are rendered, but
-     * with the form pill always present this is effectively a
+     * of every layout. The :empty selector collapses the strip when
+     * no docs (and no form pill) are rendered, but with the form
+     * pill always present this is effectively a
      * minimum-height-on-content row. */
     grid-area: dl;
     display: flex;

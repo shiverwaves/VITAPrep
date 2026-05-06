@@ -10,27 +10,22 @@
  *         docSlots: [] | [doc_id],     length 0 or 1 — drives layout
  *         sidebarTool: null | "chat",  what occupies the right column
  *         chatOpen: boolean,           derived from sidebarTool, kept in sync
- *         markedOpen: boolean,         marked panel visible in top 1/3
  *         formState: { currentPage: 1..4 }
  *     }
  *
- * Layout (six combinations):
+ * Layout (four combinations):
  *
- *     marked  chat  docSlots  layout name           visual
- *     -----   ----  --------  -------------------   ----------------------
- *      no      no    []       form-only             full-screen form
- *      no      no    [d]      h2                    form top, doc bottom
- *      no      yes   []       form-only-chat        form left + chat right
- *      no      yes   [d]      h2-chat               form/doc split + chat
- *      yes     any   []       form-only-marked      marked top + form bottom
- *      yes     any   [d]      doc-only-marked       marked top + doc bottom
- *                                                   (form is "cached")
+ *     chat   docSlots  layout name        visual
+ *     ----   --------  ----------------   ----------------------
+ *      no    []        form-only          full-screen form
+ *      no    [d]       h2                 form top, doc bottom
+ *      yes   []        form-only-chat     form left + chat right
+ *      yes   [d]       h2-chat            form/doc split + chat
  *
- * The "form cached" cue (greyed form pill in the doc-list) is a render-
- * side derivation from `markedOpen && docSlots.length > 0`. There's no
- * cache field — `docSlots` is the single source of truth for what's
- * in the bottom slot. Closing Marked never restores anything; whatever
- * was in `docSlots` at close-time stays through.
+ * Marked (the flag review UI) is no longer part of the layout state
+ * machine — it's a dropdown popover owned by flags-render.js,
+ * anchored to the titlebar Marked pill. Opening / closing it doesn't
+ * change the workspace.
  *
  * Action types:
  *
@@ -39,13 +34,7 @@
  *     SHOW_FORM          {}                   clear docSlots (form pill click)
  *     TOGGLE_CHAT        {}                   flip sidebarTool null ↔ "chat"
  *     TOGGLE_SIDEBAR_TOOL { tool }            generic sidebar-tool toggle
- *     TOGGLE_MARKED      {}                   flip markedOpen
  *     SET_FORM_PAGE      { page: 1..4 }       update form page
- *
- * The 3-pane workspace (form + 2 docs) was retired; the doc-list is
- * a one-click swap and two simultaneously-visible docs proved rare in
- * practice. Removing 3-pane lets the cache fields (hiddenDocCache /
- * markedCache / paneRecency / tick) all go away.
  */
 
 (function (global) {
@@ -56,14 +45,12 @@
             docSlots: [],
             sidebarTool: null,
             chatOpen: false,
-            markedOpen: false,
             formState: { currentPage: 1 },
         };
     }
 
     /* OPEN_DOC — clicking a doc pill in the doc-list. Sets docSlots
-     * to [docId], replacing whatever was there. Single-slot semantics
-     * apply across every layout (h2, h2-chat, doc-only-marked). */
+     * to [docId], replacing whatever was there. */
     function openDoc(state, docId) {
         if (!docId) return state;
         if (state.docSlots[0] === docId) return state;
@@ -73,8 +60,7 @@
     }
 
     /* CLOSE_DOC — X on the doc pane banner. Clears docSlots. The
-     * docId arg is accepted for symmetry with the legacy contract
-     * but no longer used (single-slot model). */
+     * docId arg is accepted for symmetry but no longer used. */
     function closeDoc(state, docId) {
         if (!docId) return state;
         if (state.docSlots.length === 0) return state;
@@ -84,9 +70,8 @@
     }
 
     /* SHOW_FORM — clicking the bolded form pill in the doc-list.
-     * Functionally equivalent to CLOSE_DOC but doesn't require a
-     * docId. Used by the form pill's handler in marked-mode where
-     * the form is "cached" behind a doc. */
+     * Clears docSlots, switching the workspace from h2 (or h2-chat)
+     * back to form-only (or form-only-chat). */
     function showForm(state) {
         if (state.docSlots.length === 0) return state;
         return Object.assign({}, state, {
@@ -94,9 +79,7 @@
         });
     }
 
-    /* setSidebarTool: single source of truth for the right column.
-     * With 3-pane retired, opening / closing chat doesn't shed or
-     * restore docs anymore — chat is fully orthogonal to docSlots. */
+    /* setSidebarTool: single source of truth for the right column. */
     function setSidebarTool(state, nextTool) {
         var prevTool = state.sidebarTool;
         if (prevTool === nextTool) return state;
@@ -115,15 +98,6 @@
         if (!tool) return state;
         var next = state.sidebarTool === tool ? null : tool;
         return setSidebarTool(state, next);
-    }
-
-    /* TOGGLE_MARKED — flip the marked panel. No snapshots, no auto-
-     * clear of docSlots. Whatever doc (or form) is visible at toggle
-     * time stays visible across the transition. */
-    function toggleMarked(state) {
-        return Object.assign({}, state, {
-            markedOpen: !state.markedOpen,
-        });
     }
 
     function setFormPage(state, page) {
@@ -146,8 +120,6 @@
                 return toggleChat(state);
             case "TOGGLE_SIDEBAR_TOOL":
                 return toggleSidebarTool(state, action.tool);
-            case "TOGGLE_MARKED":
-                return toggleMarked(state);
             case "SET_FORM_PAGE":
                 return setFormPage(state, action.page);
             default:

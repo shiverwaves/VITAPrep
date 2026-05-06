@@ -76,16 +76,17 @@
 
     /* -------- Render -------- */
     /* applyState is the single DOM mutation entry point for the flag
-     * system. Two responsibilities:
-     *   - field-level visual indicators (Phase C: .f13c-flagged class +
-     *     dot in the field's wrapper)
-     *   - sidebar Flags panel content + count badge on the toggle
-     *     (Phase E: list view, per-row detail submenu, batch actions) */
+     * system. Three responsibilities:
+     *   - field-level visual indicators (.f13c-flagged + dot)
+     *   - the titlebar Marked pill count + has-flags class
+     *   - the marked dropdown contents, when open */
     function applyState() {
         if (!state) return;
         renderFieldIndicators();
-        renderFlagsPanel();
         renderMarkedPill();
+        if (markedDropdownOpen) {
+            renderMarkedDropdownBody();
+        }
     }
 
     /* -------- Marked panel content (chain-link redesign) -------- */
@@ -116,24 +117,108 @@
      * Format: { fieldId, pillKey } | null. Only ever one open at a
      * time — clicking a pill closes any other open dropdown. */
     var openDropdown = null;
+    /* Whether the marked dropdown itself is currently mounted to the
+     * DOM. The dropdown is created on demand when the pill is clicked
+     * and torn down when dismissed. */
+    var markedDropdownOpen = false;
 
-    function renderFlagsPanel() {
-        var pane = document.getElementById("marked-pane");
-        if (!pane) return;
+    /* -------- Marked dropdown (anchored to the titlebar pill) -------- */
+    /* The marked panel is a popover dropping down from the Marked
+     * pill in the titlebar. It contains the chain-link rows + the
+     * Approve-all footer. Click outside / Escape / re-clicking the
+     * pill dismisses. The dropdown is created on demand and positioned
+     * relative to the pill via getBoundingClientRect; on every render
+     * we update its content but reuse the wrapper element. */
+
+    function showMarkedDropdown() {
+        if (markedDropdownOpen) return;
+        var pill = document.getElementById("marked-pill");
+        if (!pill) return;
+
+        var dropdown = document.createElement("div");
+        dropdown.className = "marked-dropdown";
+        dropdown.id = "marked-dropdown";
+        dropdown.innerHTML =
+            '<div class="marked-dropdown__header">' +
+                '<span class="marked-dropdown__title">Marked for Follow Up</span>' +
+                '<button type="button" class="marked-dropdown__close"' +
+                    ' data-flag-action="toggle-marked-dropdown"' +
+                    ' aria-label="Close">' +
+                '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor"' +
+                    ' stroke-width="1.5" stroke-linecap="round">' +
+                    '<line x1="4" y1="4" x2="14" y2="14"/>' +
+                    '<line x1="14" y1="4" x2="4" y2="14"/>' +
+                '</svg></button>' +
+            '</div>' +
+            '<div class="marked-dropdown__body" id="marked-dropdown-body"></div>';
+        document.body.appendChild(dropdown);
+
+        positionMarkedDropdown(pill, dropdown);
+        markedDropdownOpen = true;
+        pill.setAttribute("aria-expanded", "true");
+        pill.setAttribute("aria-pressed", "true");
+
+        renderMarkedDropdownBody();
+    }
+
+    function hideMarkedDropdown() {
+        var dropdown = document.getElementById("marked-dropdown");
+        if (dropdown && dropdown.parentNode) {
+            dropdown.parentNode.removeChild(dropdown);
+        }
+        markedDropdownOpen = false;
+        var pill = document.getElementById("marked-pill");
+        if (pill) {
+            pill.setAttribute("aria-expanded", "false");
+            pill.setAttribute("aria-pressed", "false");
+        }
+        /* Pill dropdowns + confirm menus are children of body too;
+         * clean them up so they don't orbit the dismissed marked panel. */
+        hideDropdown();
+    }
+
+    function toggleMarkedDropdown() {
+        if (markedDropdownOpen) {
+            hideMarkedDropdown();
+        } else {
+            showMarkedDropdown();
+        }
+    }
+
+    /* Anchor the dropdown's right edge to the pill's right edge,
+     * with the top just below the titlebar. Falls back to fixed
+     * positioning so it floats over the workspace cleanly. */
+    function positionMarkedDropdown(pill, dropdown) {
+        var rect = pill.getBoundingClientRect();
+        dropdown.style.position = "fixed";
+        dropdown.style.top = (rect.bottom + 6) + "px";
+        /* Center the dropdown under the pill if there's room either
+         * side, otherwise pin to a corner. */
+        var dropdownWidth = 640;  /* must match max-width in CSS */
+        var pillCenter = rect.left + rect.width / 2;
+        var left = pillCenter - dropdownWidth / 2;
+        var maxLeft = window.innerWidth - dropdownWidth - 12;
+        if (left < 12) left = 12;
+        if (left > maxLeft) left = maxLeft;
+        dropdown.style.left = left + "px";
+        dropdown.style.maxWidth = dropdownWidth + "px";
+    }
+
+    function renderMarkedDropdownBody() {
+        var body = document.getElementById("marked-dropdown-body");
+        if (!body) return;
 
         var flags = state.flags || {};
         var archive = state.archive || [];
         var activeIds = Object.keys(flags);
 
         if (activeIds.length === 0 && archive.length === 0) {
-            pane.innerHTML =
-                '<div class="flags-pane__empty">No flags yet.</div>';
+            body.innerHTML =
+                '<div class="flags-pane__empty">No flags yet. ' +
+                'Right-click a form field to mark it for follow-up.</div>';
             return;
         }
 
-        /* Active rows newest-first by created_at; archive newest-
-         * first by sent_at. Split into two sections separated by
-         * a divider; archive is read-only history. */
         activeIds.sort(function (a, b) {
             return (flags[b].created_at || 0) - (flags[a].created_at || 0);
         });
@@ -152,15 +237,12 @@
         if (sortedArchive.length > 0) {
             html += '<div class="flags-pane__divider">Sent</div>';
             sortedArchive.forEach(function (entry, i) {
-                /* Archive entries are unique by (field_id, sent_at);
-                 * use index as the data-archive-index so the row's
-                 * data-field-id can stay the bare field id. */
                 html += renderChainRow(entry, true, i);
             });
         }
         html += '</div>';
         html += renderFooter(hasReady);
-        pane.innerHTML = html;
+        body.innerHTML = html;
 
         if (openDropdown) {
             var stillExists = flags[openDropdown.fieldId];
@@ -273,13 +355,14 @@
     }
 
     /* Pill dropdown popover. Created on demand inside the marked
-     * pane; positioned right under the clicked pill via getBoundingClientRect. */
+     * dropdown; positioned right under the clicked pill via
+     * getBoundingClientRect. */
     function showDropdown(fieldId, pillKey) {
         hideDropdown();
 
-        var pane = document.getElementById("marked-pane");
-        if (!pane) return;
-        var pillBtn = pane.querySelector(
+        var container = document.getElementById("marked-dropdown");
+        if (!container) return;
+        var pillBtn = container.querySelector(
             '.flags-pane__row[data-field-id="' + cssEscape(fieldId) + '"]' +
             ' .flags-pane__pill[data-pill="' + pillKey + '"]'
         );
@@ -335,9 +418,9 @@
     function showConfirmMenu(fieldId) {
         hideDropdown();
 
-        var pane = document.getElementById("marked-pane");
-        if (!pane) return;
-        var trigger = pane.querySelector(
+        var container = document.getElementById("marked-dropdown");
+        if (!container) return;
+        var trigger = container.querySelector(
             '.flags-pane__row[data-field-id="' + cssEscape(fieldId) + '"]' +
             ' .flags-pane__confirm-menu'
         );
@@ -369,9 +452,14 @@
     function hideDropdown() {
         var existing = document.getElementById("flags-pane-dropdown");
         if (existing) existing.parentNode.removeChild(existing);
-        var pane = document.getElementById("marked-pane");
-        if (pane) {
-            var expanded = pane.querySelectorAll('[aria-expanded="true"]');
+        var container = document.getElementById("marked-dropdown");
+        if (container) {
+            /* Reset aria-expanded only on pill triggers inside the
+             * marked dropdown — not on the marked pill itself, which
+             * tracks the marked-dropdown's open state separately. */
+            var expanded = container.querySelectorAll(
+                '.flags-pane__pill[aria-expanded="true"]'
+            );
             for (var i = 0; i < expanded.length; i++) {
                 expanded[i].setAttribute("aria-expanded", "false");
             }
@@ -386,15 +474,10 @@
         return String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
     }
 
-    /* Update the titlebar "Marked: N" pill — both the count and the
-     * "has flags" state class. The pill is always present (greyed
-     * when count is 0); the .titlebar__pill--has-flags class flips
-     * it to the accent-illuminated state when count > 0.
-     *
-     * The pill itself carries data-layout-action="toggle-sidebar-tool"
-     * so clicking it opens / closes the flag panel via the layout-
-     * render dispatcher. aria-pressed is managed by layout-render
-     * (mirrors state.sidebarTool === "flags"). */
+    /* Update the titlebar "Marked: N" pill — count + has-flags
+     * state class. aria-pressed reflects whether the marked dropdown
+     * is currently open (toggled in showMarkedDropdown /
+     * hideMarkedDropdown). */
     function renderMarkedPill() {
         var pill = document.getElementById("marked-pill");
         if (!pill) return;
@@ -423,8 +506,14 @@
             target = target.parentNode;
         }
         if (!actionEl) {
-            /* Click outside any flag-action element — close dropdown. */
+            /* Click outside any flag-action element. Dismiss any
+             * pill option dropdown first; then if the click was
+             * also outside the marked dropdown itself, dismiss it. */
             if (openDropdown) hideDropdown();
+            if (markedDropdownOpen) {
+                var inDropdown = isInsideMarkedDropdown(e.target);
+                if (!inDropdown) hideMarkedDropdown();
+            }
             return;
         }
         if (actionEl.disabled) return;
@@ -436,6 +525,23 @@
         e.preventDefault();
         e.stopPropagation();
         handlePanelAction(action, actionEl, fieldId);
+    }
+
+    /* True iff `el` is inside the marked dropdown OR any popover
+     * spawned from it (pill option dropdown, confirm menu). The
+     * dropdowns are body-children, so a "click in popover" wouldn't
+     * be detected by walking up to #marked-dropdown. */
+    function isInsideMarkedDropdown(el) {
+        var node = el;
+        while (node && node.nodeType === 1) {
+            if (node.id === "marked-dropdown"
+                    || node.id === "flags-pane-dropdown"
+                    || node.id === "marked-pill") {
+                return true;
+            }
+            node = node.parentNode;
+        }
+        return false;
     }
 
     function closestRow(el) {
@@ -451,6 +557,10 @@
 
     function handlePanelAction(action, element, fieldId) {
         switch (action) {
+            case "toggle-marked-dropdown":
+                toggleMarkedDropdown();
+                return;
+
             case "open-pill":
                 if (!fieldId) return;
                 var pillKey = element.getAttribute("data-pill");
@@ -617,6 +727,21 @@
         /* Document-level click handler routes flag-action attributes
          * AND closes any open dropdown when clicking outside. */
         document.addEventListener("click", handleDocumentClick);
+
+        /* Escape dismisses the marked dropdown (and any nested
+         * popover); window resize re-positions the dropdown so it
+         * stays anchored to the pill across viewport changes. */
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape" && markedDropdownOpen) {
+                hideMarkedDropdown();
+            }
+        });
+        window.addEventListener("resize", function () {
+            if (!markedDropdownOpen) return;
+            var pill = document.getElementById("marked-pill");
+            var dd = document.getElementById("marked-dropdown");
+            if (pill && dd) positionMarkedDropdown(pill, dd);
+        });
 
         applyState();
     }
