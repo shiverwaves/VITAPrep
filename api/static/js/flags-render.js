@@ -137,16 +137,24 @@
         }
     }
 
-    /* Open the workpanel (chat sidebar) and switch to the Marked tab.
+    /* Open the workpanel (chat sidebar) and switch to the Marked
+     * tab. Three cases:
+     *   - chat closed         → open chat + activate Marked tab
+     *   - chat open, other tab → switch to Marked tab (don't close)
+     *   - chat open, on Marked → close chat (toggle off)
      * Dispatched by the titlebar Marked pill. */
     function openMarkedTab() {
-        if (global.LayoutRender && global.LayoutRender._dispatch) {
-            /* Read layout state to avoid toggling chat closed when
-             * it's already open. */
-            var layoutState = global.LayoutRender._getState();
-            if (!layoutState || !layoutState.chatOpen) {
-                global.LayoutRender._dispatch({ type: "TOGGLE_CHAT" });
-            }
+        if (!global.LayoutRender || !global.LayoutRender._dispatch) return;
+        var layoutState = global.LayoutRender._getState();
+        var chatOpen = layoutState && layoutState.chatOpen;
+
+        if (chatOpen && activeWorkpanelTab === "marked") {
+            /* Already on Marked → close the panel. */
+            global.LayoutRender._dispatch({ type: "TOGGLE_CHAT" });
+            return;
+        }
+        if (!chatOpen) {
+            global.LayoutRender._dispatch({ type: "TOGGLE_CHAT" });
         }
         setActiveWorkpanelTab("marked");
     }
@@ -177,10 +185,6 @@
             return (b.sent_at || 0) - (a.sent_at || 0);
         });
 
-        var readyCount = activeIds.filter(function (fid) {
-            return flags[fid].status === "ready";
-        }).length;
-
         var html = "";
         if (activeIds.length > 0) {
             html += '<div class="workpanel__section-title">Active</div>';
@@ -194,7 +198,6 @@
                 html += renderChainRow(entry, true, i);
             });
         }
-        html += renderSendAll(readyCount);
         body.innerHTML = html;
 
         if (openDropdown) {
@@ -305,24 +308,10 @@
         );
     }
 
-    /* "Send all (N)" button at the foot of the Marked tab. Only
-     * enabled when ≥ 1 row is in the ready state. The count cue
-     * tells the player how many rows will fire on click. */
-    function renderSendAll(readyCount) {
-        var disabled = readyCount === 0;
-        var attrs = disabled ? ' disabled aria-disabled="true"' : '';
-        var label = readyCount > 0
-            ? ("Send all (" + readyCount + ")")
-            : "Send all";
-        return (
-            '<div class="workpanel__send-all">' +
-            '<button type="button" class="workpanel__send-all-btn"' +
-            ' data-flag-action="send-all"' + attrs + '>' +
-            escapeHtml(label) +
-            '</button>' +
-            '</div>'
-        );
-    }
+    /* Send-all was retired — players fire follow-ups row by row to
+     * keep the chat log per-conversation. Email-channel batching is
+     * a future affordance (compile multiple ready rows into one
+     * email when the channel is Email). */
 
     /* Pill option dropdown popover. Created on demand inside the
      * Marked tab body; positioned right under the clicked pill via
@@ -442,9 +431,8 @@
     }
 
     /* Update the titlebar "Marked: N" pill — count + has-flags
-     * state class. aria-pressed reflects whether the marked dropdown
-     * is currently open (toggled in showMarkedDropdown /
-     * hideMarkedDropdown). */
+     * state class. aria-pressed reflects whether the workpanel
+     * is currently open AND showing the Marked tab. */
     function renderMarkedPill() {
         var pill = document.getElementById("marked-pill");
         if (!pill) return;
@@ -452,6 +440,13 @@
         var countSpan = document.getElementById("marked-pill-count");
         if (countSpan) countSpan.textContent = String(count);
         pill.classList.toggle("titlebar__pill--has-flags", count > 0);
+        var chatOpen = false;
+        if (global.LayoutRender && global.LayoutRender._getState) {
+            var ls = global.LayoutRender._getState();
+            chatOpen = ls && ls.chatOpen;
+        }
+        var pressed = chatOpen && activeWorkpanelTab === "marked";
+        pill.setAttribute("aria-pressed", pressed ? "true" : "false");
     }
 
     /* -------- Panel + dropdown event delegation -------- */
@@ -583,10 +578,6 @@
                 hideDropdown();
                 dispatch({ type: "UNFLAG_FIELD", field_id: discardFid });
                 return;
-
-            case "send-all":
-                dispatch({ type: "SEND_ALL" });
-                return;
         }
     }
 
@@ -697,6 +688,12 @@
             if (e.key === "Escape" && openDropdown) {
                 hideDropdown();
             }
+        });
+
+        /* Refresh the marked pill's pressed state when the layout
+         * state machine fires (chat-toggle from any path, etc.). */
+        document.addEventListener("vitaprep:layout-applied", function () {
+            renderMarkedPill();
         });
 
         applyState();

@@ -182,34 +182,6 @@ body:not([data-sidebar="chat"]) #chat-pane {
     padding-top: var(--spacing-sm);
 }
 
-.workpanel__send-all {
-    display: flex;
-    padding: var(--spacing-sm) 0 0;
-}
-
-.workpanel__send-all-btn {
-    flex: 1 1 auto;
-    padding: 10px 16px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    font: inherit;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text);
-    cursor: pointer;
-    transition: background 0.12s ease;
-}
-
-.workpanel__send-all-btn:hover:not(:disabled) {
-    background: var(--color-border-light);
-}
-
-.workpanel__send-all-btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
 .workpanel__nav {
     flex: 0 0 auto;
     display: flex;

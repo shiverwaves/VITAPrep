@@ -132,6 +132,12 @@
         updateDocPane(state.docSlots[0] || null);
         renderDocList();
         updateSidebarToggleButtons();
+        /* Notify listeners (flags-render) so external surfaces like
+         * the titlebar Marked pill can refresh their pressed state
+         * when chat opens/closes through any path. */
+        try {
+            document.dispatchEvent(new CustomEvent("vitaprep:layout-applied"));
+        } catch (_) { /* IE11 / very old browsers; fall through. */ }
     }
 
     /* Render the doc-list pill strip. The form pill is pinned at
