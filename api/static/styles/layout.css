@@ -510,17 +510,18 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * Workspace grid layouts
  * =========================================================================
  * Each layout is a CSS Grid template with named areas:
- *   dl = doc-list strip (always at the top of #workspace)
+ *   dl = doc-list strip
  *   m  = marked panel
  *   f  = form pane
  *   d0 = document pane 0
  *   d1 = document pane 1
  *
- * The doc-list lives at workspace level (not inside form-pane) so
- * it stays visible across every layout — including doc-only-marked
- * where form-pane is hidden. Every grid template reserves a "dl"
- * row at the top with auto height (the bar is 32px tall, fits its
- * content); the remaining rows split as before.
+ * Doc-list placement rule: when a doc pane is visible, the strip
+ * sits directly above the doc row (it "owns" the docs section).
+ * When there's no doc pane (form-only / marked-only), it sits at
+ * the workspace top instead. Marked / chat being open doesn't
+ * change the rule on its own — only whether a doc is currently
+ * being viewed matters.
  */
 
 #workspace {
@@ -541,19 +542,19 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 #workspace[data-layout="h2"] {
     grid-template-areas:
-        "dl"
         "f"
+        "dl"
         "d0";
-    grid-template-rows: auto 1fr 1fr;
+    grid-template-rows: 1fr auto 1fr;
     grid-template-columns: 1fr;
 }
 
 #workspace[data-layout="h3"] {
     grid-template-areas:
-        "dl dl"
         "f  f"
+        "dl dl"
         "d0 d1";
-    grid-template-rows: auto 1fr 1fr;
+    grid-template-rows: 1fr auto 1fr;
     grid-template-columns: 1fr 1fr;
 }
 
@@ -570,10 +571,10 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 #workspace[data-layout="h2-chat"] {
     grid-template-areas:
-        "dl"
         "f"
+        "dl"
         "d0";
-    grid-template-rows: auto 1fr 1fr;
+    grid-template-rows: 1fr auto 1fr;
     grid-template-columns: 1fr;
 }
 
@@ -601,14 +602,14 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* Marked + visible doc — single-slot layout: the doc occupies the
- * bottom 2/3 and form-pane is hidden. Same template applies whether
- * chat is open or closed (chat is in its own right column). */
+ * bottom 2/3 and form-pane is hidden. Doc-list sits between the
+ * marked panel and the doc since the doc is being viewed. */
 #workspace[data-layout="doc-only-marked"] {
     grid-template-areas:
-        "dl"
         "m"
+        "dl"
         "d0";
-    grid-template-rows: auto 1fr 2fr;
+    grid-template-rows: 1fr auto 2fr;
     grid-template-columns: 1fr;
 }
 
