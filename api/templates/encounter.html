@@ -268,7 +268,7 @@ html, body { height: 100%; overflow: hidden; }
            Marked tab content is rendered by flags-render.js. #}
         <aside id="chat-pane">
             <div class="workpanel__content">
-                <section class="workpanel__tab workpanel__tab--active" id="workpanel-tab-marked">
+                <section class="workpanel__tab" id="workpanel-tab-marked">
                     <div class="workpanel__title">
                         <span class="workpanel__title-text">Marked</span>
                         <span class="workpanel__count" id="marked-tab-count">0</span>
@@ -277,7 +277,7 @@ html, body { height: 100%; overflow: hidden; }
                         <div class="workpanel__empty">No flags yet. Right-click a form field to mark it for follow-up.</div>
                     </div>
                 </section>
-                <section class="workpanel__tab" id="workpanel-tab-messages">
+                <section class="workpanel__tab workpanel__tab--active" id="workpanel-tab-messages">
                     <div class="workpanel__title">
                         <span class="workpanel__title-text">Messages</span>
                     </div>
@@ -295,9 +295,9 @@ html, body { height: 100%; overflow: hidden; }
                 </section>
             </div>
             <nav class="workpanel__nav" aria-label="Workpanel tabs">
-                <button class="workpanel__nav-btn workpanel__nav-btn--active"
+                <button class="workpanel__nav-btn"
                         data-workpanel-tab="marked" type="button"
-                        aria-pressed="true">
+                        aria-pressed="false">
                     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor"
                          stroke-width="1.5" aria-hidden="true">
                         <path d="M4 2 V16 M4 2 H13 L11 5 L13 8 H4"
@@ -305,9 +305,9 @@ html, body { height: 100%; overflow: hidden; }
                     </svg>
                     <span class="workpanel__nav-label">Marked</span>
                 </button>
-                <button class="workpanel__nav-btn"
+                <button class="workpanel__nav-btn workpanel__nav-btn--active"
                         data-workpanel-tab="messages" type="button"
-                        aria-pressed="false">
+                        aria-pressed="true">
                     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor"
                          stroke-width="1.5" aria-hidden="true">
                         <path d="M3 4 H15 V12 H8 L5 15 V12 H3 Z"

@@ -75,7 +75,7 @@
      * new option is a one-line edit here. Labels live in OPTIONS
      * separately so the token (used in state) and the display
      * string can diverge. */
-    var VERB_TOKENS = ["RequestInfo"];
+    var VERB_TOKENS = ["RequestInfo", "ClarifyInfo"];
     var TARGET_TOKENS = ["Vida", "Client"];
     var CHANNEL_TOKENS = ["Email", "Message"];
     var ARCHIVE_STATUSES = { sent: 1, delivered: 1, expired: 1 };
