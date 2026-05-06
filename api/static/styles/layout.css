@@ -438,6 +438,137 @@ body:not([data-sidebar="chat"]) #chat-pane {
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: 6px;
+}
+
+.flags-pane__row-actions--staged {
+    flex-wrap: wrap;
+}
+
+.flags-pane__row-btn {
+    padding: 5px 12px;
+    font: inherit;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.flags-pane__row-btn--primary {
+    background: var(--color-navy);
+    color: #fff;
+    border: 1px solid var(--color-navy);
+}
+
+.flags-pane__row-btn--primary:hover:not(:disabled) {
+    opacity: 0.88;
+}
+
+.flags-pane__row-btn--primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.flags-pane__row-btn--ghost {
+    background: transparent;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.flags-pane__row-btn--ghost:hover:not(:disabled) {
+    background: var(--color-border-light);
+}
+
+.flags-pane__row-btn--danger {
+    background: transparent;
+    color: var(--color-error);
+    border: 1px solid var(--color-border);
+}
+
+.flags-pane__row-btn--danger:hover:not(:disabled) {
+    background: var(--color-error);
+    color: #fff;
+    border-color: var(--color-error);
+}
+
+/* Staged row — locked pills, indicator chip + Edit / Discard. */
+.flags-pane__row--staged {
+    border-color: var(--color-accent);
+    background: rgba(232, 122, 46, 0.05);
+}
+
+.flags-pane__staged-tag {
+    flex: 1 1 auto;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: #b35a17;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Messages tab — composed previews of staged Message-channel rows. */
+.message-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+}
+
+.message-preview__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.message-preview__avatar {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(232, 122, 46, 0.15);
+    color: #b35a17;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.message-preview__target {
+    font-weight: 700;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+}
+
+.message-preview__field {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.message-preview__body {
+    padding: 10px 12px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    line-height: 1.45;
+}
+
+.message-preview__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
 }
 
 .flags-pane__pill {
@@ -495,55 +626,9 @@ body:not([data-sidebar="chat"]) #chat-pane {
     line-height: 1;
 }
 
-/* Confirm split-button — primary toggle + menu trigger. */
-
-.flags-pane__confirm {
-    display: inline-flex;
-    margin-left: auto;
-    border-radius: var(--radius-sm, 4px);
-    overflow: hidden;
-    border: 1px solid var(--color-navy);
-}
-
-.flags-pane__confirm-primary,
-.flags-pane__confirm-menu {
-    padding: 4px 10px;
-    font: inherit;
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    background: var(--color-bg);
-    color: var(--color-navy);
-    border: none;
-    cursor: pointer;
-}
-
-.flags-pane__confirm-primary {
-    border-right: 1px solid var(--color-navy);
-}
-
-.flags-pane__confirm-primary:hover:not(:disabled),
-.flags-pane__confirm-menu:hover {
-    background: var(--color-border-light);
-}
-
-.flags-pane__confirm-primary:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.flags-pane__confirm-primary--pressed {
-    background: var(--color-navy);
-    color: #fff;
-}
-
-.flags-pane__confirm-primary--pressed:hover:not(:disabled) {
-    background: var(--color-navy);
-    opacity: 0.9;
-}
-
-.flags-pane__confirm-menu {
-    padding: 4px 8px;
-}
+/* (Confirm split-button + Ready/Approve/Discard menu retired —
+ * see renderRowAction for the new per-row Compose / Add-to-draft
+ * affordance.) */
 
 /* Sent rows — compact card with the field name + status tag,
  * no chain pills. Sits below the Active section divider. */
@@ -599,105 +684,9 @@ body:not([data-sidebar="chat"]) #chat-pane {
     background: var(--color-bg);
 }
 
-/* Dropdown popover — appended to <body> so it escapes the panel's
- * overflow:auto clipping. Position is set inline (top/left) by the
- * renderer based on the trigger element's bounding rect. */
-.flags-pane__dropdown {
-    z-index: 1000;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
-    padding: 4px;
-    min-width: 140px;
-    max-width: 240px;
-}
-
-.flags-pane__dropdown-item {
-    display: block;
-    width: 100%;
-    padding: 6px 10px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm, 4px);
-    font: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    cursor: pointer;
-    text-align: left;
-}
-
-.flags-pane__dropdown-item:hover:not(:disabled) {
-    background: var(--color-border-light);
-}
-
-.flags-pane__dropdown-item:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.flags-pane__dropdown-item--active {
-    background: var(--color-navy);
-    color: #fff;
-    font-weight: 600;
-}
-
-.flags-pane__dropdown-item--active:hover {
-    background: var(--color-navy);
-    opacity: 0.9;
-}
-
-.flags-pane__dropdown-item--danger {
-    color: var(--color-error);
-}
-
-.flags-pane__dropdown-item--danger:hover:not(:disabled) {
-    background: var(--color-error);
-    color: #fff;
-}
-
-/* Footer — Send all batch trigger. */
-
-.flags-pane__footer {
-    flex: 0 0 auto;
-    display: flex;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-top: 1px solid var(--color-border);
-    background: var(--color-surface);
-}
-
-.flags-pane__btn {
-    flex: 1 1 auto;
-    padding: 8px 12px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    font: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    cursor: pointer;
-}
-
-.flags-pane__btn:hover:not(:disabled) {
-    background: var(--color-border-light);
-}
-
-.flags-pane__btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
-.flags-pane__btn--primary {
-    background: var(--color-navy);
-    color: #fff;
-    border-color: var(--color-navy);
-}
-
-.flags-pane__btn--primary:hover:not(:disabled) {
-    background: var(--color-navy);
-    opacity: 0.85;
-}
+/* (.flags-pane__dropdown / .flags-pane__btn families retired —
+ * pill picker is now the workpanel drawer; per-row actions use
+ * .flags-pane__row-btn; Send-all footer is gone.) */
 
 /* =========================================================================
  * Titlebar pills (Marked: N + future grade pill, case-clock pill, ...)

@@ -76,15 +76,17 @@
 
     /* -------- Render -------- */
     /* applyState is the single DOM mutation entry point for the flag
-     * system. Three responsibilities:
+     * system. Four responsibilities:
      *   - field-level visual indicators (.f13c-flagged + dot)
      *   - the titlebar Marked pill count + has-flags class
-     *   - the workpanel's Marked tab body */
+     *   - the workpanel's Marked tab body
+     *   - the workpanel's Messages tab body (staged Message previews) */
     function applyState() {
         if (!state) return;
         renderFieldIndicators();
         renderMarkedPill();
         renderMarkedTabBody();
+        renderMessagesTabBody();
     }
 
     /* -------- Marked panel content (chain-link redesign) -------- */
@@ -236,7 +238,7 @@
 
         if (isSent) {
             /* Sent rows are compact summaries — just the field id +
-             * a status tag. No chain pills, no Ready button. */
+             * a status tag. No chain pills, no action button. */
             return (
                 '<div class="flags-pane__row flags-pane__row--sent"' +
                 ' data-field-id="' + escapeAttr(fieldId) + '"' +
@@ -244,16 +246,16 @@
                 '<div class="flags-pane__row-field">' +
                 escapeHtml(fieldId) +
                 '</div>' +
-                renderConfirm(fieldId, flag, false, true) +
+                renderSentTag(flag) +
                 '</div>'
             );
         }
 
         var complete = global.FlagsReducer.isChainComplete(flag);
-        var isReady = flag.status === "ready";
-        var pillsLocked = isReady;
+        var isStaged = flag.status === "staged";
+        var pillsLocked = isStaged;
         var modifiers = " flags-pane__row--chain";
-        if (isReady) modifiers += " flags-pane__row--ready";
+        if (isStaged) modifiers += " flags-pane__row--staged";
 
         return (
             '<div class="flags-pane__row' + modifiers + '"' +
@@ -268,9 +270,59 @@
             '<span class="flags-pane__chain-connector">via</span>' +
             renderPill(fieldId, "channel", flag.channel, CHANNEL_LABELS, pillsLocked) +
             '</div>' +
+            renderRowAction(fieldId, flag, complete, isStaged) +
+            '</div>'
+        );
+    }
+
+    /* renderSentTag — small status chip on archived rows. Color
+     * varies with the archive sub-status (sent / delivered / expired). */
+    function renderSentTag(flag) {
+        var sentStatus = flag.status || "sent";
+        var labelMap = { sent: "Sent", delivered: "Delivered", expired: "Expired" };
+        return (
+            '<span class="flags-pane__sent-tag flags-pane__sent-tag--' + sentStatus + '">' +
+            escapeHtml(labelMap[sentStatus] || "Sent") +
+            '</span>'
+        );
+    }
+
+    /* Per-row action button. Channel decides the verb:
+     *   - Message → "Compose" (stages the row; tab jumps to Messages
+     *     where the player previews and clicks Send).
+     *   - Email   → "Add to draft" (queues the row in the Mail tab's
+     *     email draft for that recipient; player sends from there).
+     *   - Chain incomplete → disabled generic "Stage".
+     * Staged rows show "Discard" + "Edit" affordances instead. */
+    function renderRowAction(fieldId, flag, complete, isStaged) {
+        if (isStaged) {
+            var stagedLabel = flag.channel === "Email"
+                ? "Queued in mail" : "Composed in messages";
+            return (
+                '<div class="flags-pane__row-actions flags-pane__row-actions--staged">' +
+                '<span class="flags-pane__staged-tag">' +
+                escapeHtml(stagedLabel) +
+                '</span>' +
+                '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--ghost"' +
+                ' data-flag-action="unstage">Edit</button>' +
+                '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--danger"' +
+                ' data-flag-action="discard">Discard</button>' +
+                '</div>'
+            );
+        }
+        var label = "Stage";
+        if (flag.channel === "Message") label = "Compose";
+        else if (flag.channel === "Email") label = "Add to draft";
+        var disabled = !complete;
+        var attrs = disabled ? ' disabled aria-disabled="true"' : '';
+        return (
             '<div class="flags-pane__row-actions">' +
-            renderConfirm(fieldId, flag, complete, false) +
-            '</div>' +
+            '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--ghost"' +
+            ' data-flag-action="discard">Discard</button>' +
+            '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--primary"' +
+            ' data-flag-action="stage"' + attrs + '>' +
+            escapeHtml(label) +
+            '</button>' +
             '</div>'
         );
     }
@@ -293,46 +345,77 @@
         );
     }
 
-    function renderConfirm(fieldId, flag, complete, isSent) {
-        if (isSent) {
-            var sentStatus = flag.status || "sent";
-            var labelMap = { sent: "Sent", delivered: "Delivered", expired: "Expired" };
-            return (
-                '<span class="flags-pane__sent-tag flags-pane__sent-tag--' + sentStatus + '">' +
-                escapeHtml(labelMap[sentStatus] || "Sent") +
-                '</span>'
-            );
-        }
-        var disabled = !complete;
-        var pressed = flag.status === "ready";
-        var primaryClass = "flags-pane__confirm-primary";
-        if (pressed) primaryClass += " flags-pane__confirm-primary--pressed";
-        var primaryAttrs = disabled ? ' disabled aria-disabled="true"' : '';
-        /* Single label "Ready" for both states — pressed/unpressed is
-         * conveyed by the navy fill + checkmark, not by changing the
-         * word. Keeps the language separate from the "Approve" /
-         * "Approve all" verbs that fire the row. */
-        return (
-            '<span class="flags-pane__confirm">' +
-            '<button type="button" class="' + primaryClass + '"' +
-            ' data-flag-action="toggle-confirm"' +
-            ' aria-pressed="' + (pressed ? "true" : "false") + '"' +
-            primaryAttrs + '>' +
-            (pressed ? "Ready &#10003;" : "Ready") +
-            '</button>' +
-            '<button type="button" class="flags-pane__confirm-menu"' +
-            ' data-flag-action="open-confirm-menu"' +
-            ' aria-label="More actions">' +
-            '<span aria-hidden="true">&#9662;</span>' +
-            '</button>' +
-            '</span>'
-        );
+    /* renderConfirm + the Approve/Discard split-button menu were
+     * retired alongside the Ready toggle. Each row now has a
+     * direct channel-aware button — see renderRowAction. */
+
+    /* Generate the message body text for a staged row. This is the
+     * preview content the player sees in the Messages tab — auto-
+     * composed from the chain (verb + target + field). Future
+     * iterations may let the player edit this; for now it's
+     * derived. */
+    function composeMessageText(flag) {
+        var verbText = (VERB_LABELS[flag.verb] || flag.verb || "").toLowerCase();
+        var targetText = TARGET_LABELS[flag.target] || flag.target || "";
+        var fieldText = flag.field_id || "the field";
+        return "Hi " + targetText + ", I need to " + verbText +
+            " for " + fieldText + ". Could you help me with this?";
     }
 
-    /* Send-all was retired — players fire follow-ups row by row to
-     * keep the chat log per-conversation. Email-channel batching is
-     * a future affordance (compile multiple ready rows into one
-     * email when the channel is Email). */
+    /* Render the Messages tab body — shows each staged Message-
+     * channel row as a composed preview with a Send button. Empty
+     * state when no Message rows are staged. */
+    function renderMessagesTabBody() {
+        var body = document.getElementById("messages-tab-body");
+        if (!body) return;
+
+        var flags = state.flags || {};
+        var stagedMessageIds = Object.keys(flags).filter(function (fid) {
+            return flags[fid].status === "staged"
+                && flags[fid].channel === "Message";
+        });
+
+        if (stagedMessageIds.length === 0) {
+            body.innerHTML =
+                '<div class="workpanel__empty">No messages staged. ' +
+                'Compose a Marked row with channel "Message" to start one.</div>';
+            return;
+        }
+
+        /* Newest first by created_at. */
+        stagedMessageIds.sort(function (a, b) {
+            return (flags[b].created_at || 0) - (flags[a].created_at || 0);
+        });
+
+        var html = "";
+        stagedMessageIds.forEach(function (fid) {
+            var flag = flags[fid];
+            var target = TARGET_LABELS[flag.target] || flag.target || "";
+            var initials = (TARGET_OPTIONS[flag.target] || {}).initials || "?";
+            html +=
+                '<div class="message-preview" data-field-id="' +
+                escapeAttr(fid) + '">' +
+                '<div class="message-preview__header">' +
+                    '<span class="message-preview__avatar">' +
+                    escapeHtml(initials) + '</span>' +
+                    '<span class="message-preview__target">' +
+                    escapeHtml(target) + '</span>' +
+                    '<span class="message-preview__field">' +
+                    escapeHtml(fid) + '</span>' +
+                '</div>' +
+                '<div class="message-preview__body">' +
+                    escapeHtml(composeMessageText(flag)) +
+                '</div>' +
+                '<div class="message-preview__actions">' +
+                    '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--ghost"' +
+                        ' data-flag-action="unstage">Edit</button>' +
+                    '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--primary"' +
+                        ' data-flag-action="send">Send</button>' +
+                '</div>' +
+                '</div>';
+        });
+        body.innerHTML = html;
+    }
 
     /* Pill option drawer. Slides up from the bottom of the workpanel
      * content area when a pill is tapped. Mobile-app action-sheet
@@ -430,40 +513,6 @@
         pillBtn.classList.add("flags-pane__pill--editing");
         pillBtn.setAttribute("aria-expanded", "true");
         openDropdown = { fieldId: fieldId, pillKey: pillKey };
-    }
-
-    function showConfirmMenu(fieldId) {
-        hideDropdown();
-
-        var container = document.getElementById("marked-tab-body");
-        if (!container) return;
-        var trigger = container.querySelector(
-            '.flags-pane__row[data-field-id="' + cssEscape(fieldId) + '"]' +
-            ' .flags-pane__confirm-menu'
-        );
-        if (!trigger) return;
-
-        var flag = (state.flags || {})[fieldId];
-        if (!flag) return;
-        var complete = global.FlagsReducer.isChainComplete(flag);
-        var executeAttrs = complete ? "" : ' disabled aria-disabled="true"';
-
-        var menu = document.createElement("div");
-        menu.className = "flags-pane__dropdown";
-        menu.id = "flags-pane-dropdown";
-        menu.innerHTML =
-            '<button type="button" class="flags-pane__dropdown-item"' +
-            ' data-flag-action="execute"' + executeAttrs + '>Approve</button>' +
-            '<button type="button" class="flags-pane__dropdown-item flags-pane__dropdown-item--danger"' +
-            ' data-flag-action="discard">Discard</button>';
-        document.body.appendChild(menu);
-
-        var rect = trigger.getBoundingClientRect();
-        menu.style.position = "fixed";
-        menu.style.top = (rect.bottom + 4) + "px";
-        menu.style.right = (window.innerWidth - rect.right) + "px";
-
-        openDropdown = { fieldId: fieldId, pillKey: "_confirmMenu" };
     }
 
     function hideDropdown() {
@@ -567,7 +616,7 @@
     function closestRow(el) {
         var node = el;
         while (node && node.nodeType === 1) {
-            if (node.classList && node.classList.contains("flags-pane__row")) {
+            if (node.getAttribute && node.getAttribute("data-field-id")) {
                 return node;
             }
             node = node.parentNode;
@@ -603,17 +652,6 @@
                 showDropdown(fieldId, pillKey);
                 return;
 
-            case "open-confirm-menu":
-                if (!fieldId) return;
-                if (openDropdown
-                        && openDropdown.fieldId === fieldId
-                        && openDropdown.pillKey === "_confirmMenu") {
-                    hideDropdown();
-                    return;
-                }
-                showConfirmMenu(fieldId);
-                return;
-
             case "set-pill":
                 /* Dropdown lives in <body>, so fieldId comes from
                  * openDropdown rather than DOM ancestor. */
@@ -631,23 +669,38 @@
                 dispatch(payload);
                 return;
 
-            case "toggle-confirm":
+            case "stage":
+                /* Compose / Add to draft button on a chain row.
+                 * Stages the row; for Message channel, switches the
+                 * tab to Messages so the player sees the composed
+                 * preview. */
                 if (!fieldId) return;
-                dispatch({ type: "TOGGLE_CONFIRM", field_id: fieldId });
+                var flag = (state.flags || {})[fieldId];
+                dispatch({ type: "STAGE_FLAG", field_id: fieldId });
+                if (flag && flag.channel === "Message") {
+                    setActiveWorkpanelTab("messages");
+                }
                 return;
 
-            case "execute":
-                if (!openDropdown) return;
-                var execFid = openDropdown.fieldId;
-                hideDropdown();
-                dispatch({ type: "EXECUTE_FLAG", field_id: execFid });
+            case "unstage":
+                /* Edit button on a staged row — back to draft so the
+                 * player can re-edit the chain pills. */
+                if (!fieldId) return;
+                dispatch({ type: "UNSTAGE_FLAG", field_id: fieldId });
+                return;
+
+            case "send":
+                /* Send button on a staged Message preview in the
+                 * Messages tab. Fires the row to archive. */
+                if (!fieldId) return;
+                dispatch({ type: "SEND_FLAG", field_id: fieldId });
                 return;
 
             case "discard":
-                if (!openDropdown) return;
-                var discardFid = openDropdown.fieldId;
-                hideDropdown();
-                dispatch({ type: "UNFLAG_FIELD", field_id: discardFid });
+                /* Discard button on a row (any state). Removes the
+                 * flag entirely. */
+                if (!fieldId) return;
+                dispatch({ type: "UNFLAG_FIELD", field_id: fieldId });
                 return;
         }
     }
