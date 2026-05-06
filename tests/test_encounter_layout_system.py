@@ -100,31 +100,24 @@ class TestWorkspaceStructure:
         )
         assert m is not None, "form-pane should wrap the sheet"
 
-    def test_two_doc_pane_skeletons(self, client: TestClient) -> None:
+    def test_single_doc_pane_skeleton(self, client: TestClient) -> None:
+        """Single-slot model: only #doc-pane-0 exists. The legacy
+        #doc-pane-1 was retired alongside the 3-pane workspace."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
-        for i in (0, 1):
-            assert (
-                f'id="doc-pane-{i}" data-pane-index="{i}"' in body
-            ), f"missing doc-pane-{i} skeleton"
-        # Each pane has a navy title banner and an iframe. (The
-        # per-pane tab strip was removed in favor of a single global
-        # doc-list bar; each pane now shows just the active doc's
-        # title in its banner.)
-        assert body.count('class="doc-pane__banner"') == 2
-        assert body.count('class="doc-pane__frame"') == 2
+        assert 'id="doc-pane-0" data-pane-index="0"' in body
+        assert 'id="doc-pane-1"' not in body
+        assert body.count('class="doc-pane__banner"') == 1
+        assert body.count('class="doc-pane__frame"') == 1
 
-    def test_doc_panes_hidden_by_default(self, client: TestClient) -> None:
-        """Both doc panes start `hidden`; the renderer un-hides them as
-        the player adds panes via pane-cycle."""
+    def test_doc_pane_hidden_by_default(self, client: TestClient) -> None:
+        """The single doc pane starts `hidden`; the renderer un-hides
+        it when a doc is selected from the doc-list."""
         sid = _make_scenario(client)
         body = client.get(f"/scenarios/{sid}").text
         assert re.search(
             r'id="doc-pane-0"[^>]*\bhidden\b', body,
         ), "doc-pane-0 should start hidden"
-        assert re.search(
-            r'id="doc-pane-1"[^>]*\bhidden\b', body,
-        ), "doc-pane-1 should start hidden"
 
     def test_chat_pane_present(self, client: TestClient) -> None:
         sid = _make_scenario(client)
