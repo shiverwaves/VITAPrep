@@ -6,17 +6,15 @@
  *
  *     <body data-sidebar="chat|flags|closed">
  *     <body data-marked="open|closed">
- *     <div id="workspace" data-layout="form-only|h2|h3|form-only-chat|h2-chat|form-only-marked">
+ *     <div id="workspace" data-layout="form-only|h2|form-only-chat|h2-chat|
+ *                                       form-only-marked|doc-only-marked">
  *
- * Sidebar tools (chat / flags / future) are mutually exclusive — only
- * one occupies the right column at a time. Both produce the same
- * workspace squeeze (h2-chat is a misnomer kept for back-compat with
- * existing tests / test names; semantically it's "h2 with sidebar").
+ * Single-slot model: the bottom area holds at most one doc pane
+ * (or the form). Doc swaps are one-click via the doc-list pills.
+ * The legacy 3-pane layout (form + 2 docs) was retired.
  *
- * Marked is its own layout axis. When open, the workspace switches
- * to form-only-marked (top 1/3 marked + bottom 2/3 form) and any
- * doc panes are auto-cached by the reducer so the marked panel
- * never has to share the workspace with doc panes.
+ * Sidebar tools share the right column via mutual exclusion. Marked
+ * is its own layout axis (top 1/3 of workspace).
  *
  * Five grid configurations, single horizontal axis, no vertical splits
  * (the form is 980px wide; vertical splits would squeeze it below
@@ -510,18 +508,17 @@ body:not([data-sidebar="chat"]) #chat-pane {
  * Workspace grid layouts
  * =========================================================================
  * Each layout is a CSS Grid template with named areas:
- *   dl = doc-list strip
+ *   dl = doc-list strip (always at the top of #workspace)
  *   m  = marked panel
  *   f  = form pane
  *   d0 = document pane 0
  *   d1 = document pane 1
  *
- * Doc-list placement rule: when a doc pane is visible, the strip
- * sits directly above the doc row (it "owns" the docs section).
- * When there's no doc pane (form-only / marked-only), it sits at
- * the workspace top instead. Marked / chat being open doesn't
- * change the rule on its own — only whether a doc is currently
- * being viewed matters.
+ * The doc-list lives at workspace level (not inside form-pane) so
+ * it stays visible across every layout — including doc-only-marked
+ * where form-pane is hidden. Every grid template reserves a "dl"
+ * row at the top with auto height (the bar is 32px tall, fits its
+ * content); the remaining rows split as before.
  */
 
 #workspace {
@@ -542,20 +539,11 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 #workspace[data-layout="h2"] {
     grid-template-areas:
-        "f"
         "dl"
+        "f"
         "d0";
-    grid-template-rows: 1fr auto 1fr;
+    grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 1fr;
-}
-
-#workspace[data-layout="h3"] {
-    grid-template-areas:
-        "f  f"
-        "dl dl"
-        "d0 d1";
-    grid-template-rows: 1fr auto 1fr;
-    grid-template-columns: 1fr 1fr;
 }
 
 /* Chat-open variants — workspace lives inside the left 2/3 of
@@ -571,10 +559,10 @@ body:not([data-sidebar="chat"]) #chat-pane {
 
 #workspace[data-layout="h2-chat"] {
     grid-template-areas:
-        "f"
         "dl"
+        "f"
         "d0";
-    grid-template-rows: 1fr auto 1fr;
+    grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 1fr;
 }
 
@@ -602,14 +590,14 @@ body:not([data-sidebar="chat"]) #chat-pane {
 }
 
 /* Marked + visible doc — single-slot layout: the doc occupies the
- * bottom 2/3 and form-pane is hidden. Doc-list sits between the
- * marked panel and the doc since the doc is being viewed. */
+ * bottom 2/3 and form-pane is hidden. Same template applies whether
+ * chat is open or closed (chat is in its own right column). */
 #workspace[data-layout="doc-only-marked"] {
     grid-template-areas:
-        "m"
         "dl"
+        "m"
         "d0";
-    grid-template-rows: 1fr auto 2fr;
+    grid-template-rows: auto 1fr 2fr;
     grid-template-columns: 1fr;
 }
 
@@ -651,8 +639,8 @@ body:not([data-marked="open"]) #marked-pane {
     background: var(--color-surface);
 }
 
-#doc-pane-0,
-#doc-pane-1 {
+#doc-pane-0 {
+    grid-area: d0;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -663,17 +651,7 @@ body:not([data-marked="open"]) #marked-pane {
     flex-direction: column;
 }
 
-#doc-pane-0 { grid-area: d0; }
-#doc-pane-1 { grid-area: d1; }
-
-/* When the renderer hides a pane (state.docSlots[i] is null) the
- * pane's grid-area cell is still defined — but the [hidden] attribute
- * keeps it invisible. The grid won't collapse the cell since CSS
- * grid keeps named areas reserved; that's fine because the active
- * data-layout is what controls geometry. */
-
-#doc-pane-0[hidden],
-#doc-pane-1[hidden] {
+#doc-pane-0[hidden] {
     display: none;
 }
 
@@ -740,44 +718,6 @@ body:not([data-marked="open"]) #marked-pane {
 .doc-pane__banner-btn svg {
     width: 16px;
     height: 16px;
-    pointer-events: none;
-}
-
-/* Non-interactive variant of the 3-pane icon shown on pane 2 when
-   chat is open AND a third doc is cached. Same visual footprint as
-   the toggle button minus the hover / focus / cursor — purely a
-   "there's a 3rd pane in cache" signal. The dot is anchored to the
-   icon's top-right corner. */
-.doc-pane__banner-indicator {
-    flex: 0 0 auto;
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    color: rgba(255, 255, 255, 0.55);  /* dimmer than the active button */
-    cursor: default;
-}
-
-.doc-pane__banner-indicator svg {
-    width: 16px;
-    height: 16px;
-    pointer-events: none;
-}
-
-.doc-pane__banner-indicator-dot {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--color-accent);
-    /* Border in the banner's navy so the dot reads as floating
-     * over the icon rather than touching it. */
-    border: 1.5px solid var(--color-navy);
-    box-sizing: content-box;
     pointer-events: none;
 }
 
