@@ -264,48 +264,49 @@ class TestFlagsReducer:
         """)
         assert "PASS" in out
 
-    def test_toggle_confirm_requires_complete_chain(self) -> None:
+    def test_stage_requires_complete_chain(self) -> None:
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
             eq(s.flags['a'].status, 'draft', 'incomplete chain stays draft');
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
-            eq(s.flags['a'].status, 'ready', 'complete chain → ready');
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
-            eq(s.flags['a'].status, 'draft', 'toggle back → draft');
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
+            eq(s.flags['a'].status, 'staged', 'complete chain → staged');
+            s = R.reduce(s, { type: 'UNSTAGE_FLAG', field_id: 'a' });
+            eq(s.flags['a'].status, 'draft', 'unstage → draft');
         """)
         assert "PASS" in out
 
-    def test_set_pill_blocked_while_ready(self) -> None:
-        """Pills are locked once the row is in ready state — the
-        player must toggle Ready off (back to draft) to edit them."""
+    def test_set_pill_blocked_while_staged(self) -> None:
+        """Pills are locked once a row is staged — the player must
+        un-stage to edit pills."""
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
-            eq(s.flags['a'].status, 'ready', 'should be ready');
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
+            eq(s.flags['a'].status, 'staged', 'should be staged');
             var before = JSON.stringify(s);
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
-            eq(JSON.stringify(s), before, 'set-pill on ready row is no-op');
-            // toggle off and try again — should now succeed.
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            eq(JSON.stringify(s), before, 'set-pill on staged row is no-op');
+            // unstage and try again — should succeed.
+            s = R.reduce(s, { type: 'UNSTAGE_FLAG', field_id: 'a' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
-            eq(s.flags['a'].target, 'Vida', 'set-pill works after toggle off');
+            eq(s.flags['a'].target, 'Vida', 'set-pill works after unstage');
         """)
         assert "PASS" in out
 
-    def test_execute_moves_to_archive(self) -> None:
+    def test_send_flag_archives_staged_row(self) -> None:
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
-            s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
+            s = R.reduce(s, { type: 'SEND_FLAG', field_id: 'a' });
             if (s.flags['a']) throw new Error('a should be removed from flags');
             eq(s.archive.length, 1, 'archive has 1 entry');
             eq(s.archive[0].field_id, 'a', 'archive entry field_id');
@@ -314,29 +315,43 @@ class TestFlagsReducer:
         """)
         assert "PASS" in out
 
-    def test_execute_no_op_on_incomplete_chain(self) -> None:
+    def test_send_flag_no_op_on_draft(self) -> None:
+        """SEND_FLAG only fires staged rows — draft rows are ignored
+        so the player can't bypass the staging step."""
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
             var before = JSON.stringify(s);
-            s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
-            eq(JSON.stringify(s), before, 'incomplete execute is no-op');
+            s = R.reduce(s, { type: 'SEND_FLAG', field_id: 'a' });
+            eq(JSON.stringify(s), before, 'send on draft is no-op');
         """)
         assert "PASS" in out
 
-    def test_send_all_only_sends_ready(self) -> None:
+    def test_send_staged_by_channel_batch(self) -> None:
+        """Mail tab uses SEND_STAGED_BY_CHANNEL to fire all staged
+        Email rows for a recipient at once."""
         out = self._run("""
             var s = R.initialState();
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'b', verb: 'RequestInfo' });
-            s = R.reduce(s, { type: 'SEND_ALL' });
-            if (s.flags['a']) throw new Error('a (ready) should have moved to archive');
-            if (!s.flags['b']) throw new Error('b (draft) should remain in flags');
-            eq(s.archive.length, 1, 'archive has 1 entry');
-            eq(s.archive[0].field_id, 'a', 'a is in archive');
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'b', target: 'Client' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'b', channel: 'Email' });
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'b' });
+            // c is staged for Vida via Message — must NOT be batched.
+            s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'c', verb: 'RequestInfo' });
+            s = R.reduce(s, { type: 'SET_TARGET', field_id: 'c', target: 'Vida' });
+            s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'c', channel: 'Message' });
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'c' });
+            s = R.reduce(s, { type: 'SEND_STAGED_BY_CHANNEL', channel: 'Email', target: 'Client' });
+            if (s.flags['a']) throw new Error('a should be archived');
+            if (s.flags['b']) throw new Error('b should be archived');
+            if (!s.flags['c']) throw new Error('c (different channel/target) stays staged');
+            eq(s.archive.length, 2, 'two emails archived together');
         """)
         assert "PASS" in out
 
@@ -348,7 +363,8 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Vida' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Message' });
-            s = R.reduce(s, { type: 'EXECUTE_FLAG', field_id: 'a' });
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
+            s = R.reduce(s, { type: 'SEND_FLAG', field_id: 'a' });
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             if (!s.flags['a']) throw new Error('a should be back in flags');
             eq(s.flags['a'].verb, 'RequestInfo', 'fresh verb');
@@ -393,12 +409,12 @@ class TestFlagsReducer:
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             s = R.reduce(s, { type: 'SET_TARGET', field_id: 'a', target: 'Client' });
             s = R.reduce(s, { type: 'SET_CHANNEL', field_id: 'a', channel: 'Email' });
-            s = R.reduce(s, { type: 'TOGGLE_CONFIRM', field_id: 'a' });
-            eq(s.flags['a'].status, 'ready', 'ready before re-flag');
+            s = R.reduce(s, { type: 'STAGE_FLAG', field_id: 'a' });
+            eq(s.flags['a'].status, 'staged', 'staged before re-flag');
             s = R.reduce(s, { type: 'FLAG_FIELD', field_id: 'a', verb: 'RequestInfo' });
             eq(s.flags['a'].verb, 'RequestInfo', 'verb updated');
             eq(s.flags['a'].target, 'Client', 'target preserved');
             eq(s.flags['a'].channel, 'Email', 'channel preserved');
-            eq(s.flags['a'].status, 'ready', 'status preserved');
+            eq(s.flags['a'].status, 'staged', 'status preserved');
         """)
         assert "PASS" in out

@@ -68,13 +68,11 @@ html, body { height: 100%; overflow: hidden; }
     <button class="titlebar__pill titlebar__pill--marked"
             id="marked-pill" type="button"
             data-flag-action="toggle-marked-dropdown"
-            aria-pressed="false" aria-label="Marked for follow-up"
-            aria-haspopup="true" aria-expanded="false">
+            aria-pressed="false" aria-label="Marked for follow-up">
         <span class="titlebar__pill-tag">
             <span class="titlebar__pill-tag-label">Marked</span>
             <span class="titlebar__pill-tag-count" id="marked-pill-count">0</span>
         </span>
-        <span class="titlebar__pill-chevron" aria-hidden="true">&#9662;</span>
     </button>
 </div>
 {% endset %}
@@ -283,8 +281,8 @@ html, body { height: 100%; overflow: hidden; }
                     <div class="workpanel__title">
                         <span class="workpanel__title-text">Messages</span>
                     </div>
-                    <div class="workpanel__body">
-                        <div class="workpanel__empty">Messages will live here once Vida + Client comms are wired.</div>
+                    <div class="workpanel__body" id="messages-tab-body">
+                        <div class="workpanel__empty">No messages yet. Stage a Marked row with channel "Message" to compose one.</div>
                     </div>
                 </section>
                 <section class="workpanel__tab" id="workpanel-tab-notes">

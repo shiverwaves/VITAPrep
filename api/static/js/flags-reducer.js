@@ -47,16 +47,23 @@
  * Confirm (status:ready) is only allowed on a complete chain;
  * Execute likewise. Send all fires every active row in ready state.
  *
+ * Status lifecycle: draft → staged → sent
+ *   - draft: chain may be incomplete; pills editable; no action taken.
+ *   - staged: chain complete and player tapped Compose (Message) or
+ *     Add to draft (Email). Pills locked. Surface depends on channel.
+ *   - sent: archived, immutable.
+ *
  * Action types:
  *
  *     FLAG_FIELD       { field_id, verb }
- *     UNFLAG_FIELD     { field_id }                 (Discard)
+ *     UNFLAG_FIELD     { field_id }                 (Discard from any state)
  *     SET_VERB         { field_id, verb }
  *     SET_TARGET       { field_id, target }         (target may be null)
  *     SET_CHANNEL      { field_id, channel }        (channel may be null)
- *     TOGGLE_CONFIRM   { field_id }                 (draft ↔ ready)
- *     EXECUTE_FLAG     { field_id }                 (→ archive, status:sent)
- *     SEND_ALL         {}                           (all ready → archive)
+ *     STAGE_FLAG       { field_id }                 (draft → staged, requires complete chain)
+ *     UNSTAGE_FLAG     { field_id }                 (staged → draft)
+ *     SEND_FLAG        { field_id }                 (staged → sent)
+ *     SEND_STAGED_BY_CHANNEL { channel, target? }   (batch staged → sent)
  *     SET_ARCHIVE_STATUS { archive_index, status }  (sent → delivered|expired)
  */
 
@@ -132,16 +139,15 @@
         return withState(state, { flags: newFlags });
     }
 
-    /* setPill — change a pill's value on an active flag. If the
-     * change makes the chain incomplete, ready demotes to draft.
-     * Pills are locked while a row is in the ready state — the
-     * player must toggle Ready off to edit. */
+    /* setPill — change a pill's value on an active flag. Pills are
+     * locked once a row is staged (Compose / Add to draft was
+     * clicked) — player must un-stage to edit. */
     function setPill(state, fieldId, pillKey, value, validMap) {
         if (!fieldId || !state.flags[fieldId]) return state;
         if (value !== null && !validMap[value]) return state;
 
         var existing = state.flags[fieldId];
-        if (existing.status === "ready") return state;  /* locked */
+        if (existing.status === "staged") return state;  /* locked */
         if (existing[pillKey] === value) return state;
 
         var update = {};
@@ -152,31 +158,39 @@
         return withState(state, { flags: newFlags });
     }
 
-    /* TOGGLE_CONFIRM — flip draft ↔ ready. Confirm requires a
-     * complete chain; toggling off is always allowed. */
-    function toggleConfirm(state, fieldId) {
+    /* STAGE_FLAG — moves a complete-chain row from draft → staged.
+     * Channel decides what "staged" means downstream:
+     *   - Message: row is composed and visible in the Messages tab;
+     *     player clicks Send there to fire (SEND_FLAG).
+     *   - Email:   row is queued in the Mail tab's email draft;
+     *     player clicks Send Email there to batch-fire.
+     * Pills lock once staged. */
+    function stageFlag(state, fieldId) {
         if (!fieldId || !state.flags[fieldId]) return state;
         var existing = state.flags[fieldId];
-        if (existing.status === "draft" && isChainComplete(existing)) {
-            var newFlags = Object.assign({}, state.flags);
-            newFlags[fieldId] = Object.assign({}, existing, { status: "ready" });
-            return withState(state, { flags: newFlags });
-        }
-        if (existing.status === "ready") {
-            var newFlags2 = Object.assign({}, state.flags);
-            newFlags2[fieldId] = Object.assign({}, existing, { status: "draft" });
-            return withState(state, { flags: newFlags2 });
-        }
-        return state;
+        if (existing.status !== "draft") return state;
+        if (!isChainComplete(existing)) return state;
+        var newFlags = Object.assign({}, state.flags);
+        newFlags[fieldId] = Object.assign({}, existing, { status: "staged" });
+        return withState(state, { flags: newFlags });
+    }
+
+    /* UNSTAGE_FLAG — staged → draft. Lets the player re-edit pills
+     * after they've staged a row but before sending. */
+    function unstageFlag(state, fieldId) {
+        if (!fieldId || !state.flags[fieldId]) return state;
+        var existing = state.flags[fieldId];
+        if (existing.status !== "staged") return state;
+        var newFlags = Object.assign({}, state.flags);
+        newFlags[fieldId] = Object.assign({}, existing, { status: "draft" });
+        return withState(state, { flags: newFlags });
     }
 
     /* archiveOne — pop a flag from `flags` and push a sent copy
-     * onto `archive`. Returns updated { flags, archive } or null
-     * if the flag wasn't eligible to fire (incomplete chain). */
+     * onto `archive`. Caller has already validated state. */
     function archiveOne(flags, archive, fieldId, sentAt) {
         var existing = flags[fieldId];
         if (!existing) return null;
-        if (!isChainComplete(existing)) return null;
         var newFlags = Object.assign({}, flags);
         delete newFlags[fieldId];
         var sentEntry = Object.assign({}, existing, {
@@ -189,10 +203,13 @@
         };
     }
 
-    /* EXECUTE_FLAG — fire a single row. Removes from flags, appends
-     * to archive. No-op on incomplete chain or unknown field. */
-    function executeFlag(state, fieldId) {
+    /* SEND_FLAG — fires a single staged row to the archive. The
+     * preview surface (Messages tab for Message channel, Mail tab
+     * for Email channel) calls this on its Send action. */
+    function sendFlag(state, fieldId) {
         if (!fieldId) return state;
+        var existing = state.flags[fieldId];
+        if (!existing || existing.status !== "staged") return state;
         var tick = nextTick(state);
         var moved = archiveOne(state.flags, state.archive || [], fieldId, tick);
         if (!moved) return state;
@@ -203,19 +220,25 @@
         });
     }
 
-    /* SEND_ALL — every active flag with status:ready fires; each
-     * one moves from flags → archive. Single shared sent_at tick
-     * for the batch so the archive reads as one event. */
-    function sendAll(state) {
-        var readyIds = Object.keys(state.flags).filter(function (fid) {
-            return state.flags[fid].status === "ready";
+    /* SEND_STAGED_BY_CHANNEL — batch-fire all staged rows whose
+     * channel matches the given value (and target, if provided).
+     * Used by the Mail tab when the player sends a compiled email:
+     * every staged Email-row to that recipient archives in one event. */
+    function sendStagedByChannel(state, channel, target) {
+        if (!channel) return state;
+        var matchIds = Object.keys(state.flags).filter(function (fid) {
+            var f = state.flags[fid];
+            if (f.status !== "staged") return false;
+            if (f.channel !== channel) return false;
+            if (target && f.target !== target) return false;
+            return true;
         });
-        if (readyIds.length === 0) return state;
+        if (matchIds.length === 0) return state;
         var tick = nextTick(state);
         var flags = state.flags;
         var archive = state.archive || [];
-        for (var i = 0; i < readyIds.length; i++) {
-            var moved = archiveOne(flags, archive, readyIds[i], tick);
+        for (var i = 0; i < matchIds.length; i++) {
+            var moved = archiveOne(flags, archive, matchIds[i], tick);
             if (!moved) continue;
             flags = moved.flags;
             archive = moved.archive;
@@ -255,12 +278,14 @@
                 return setPill(state, action.field_id, "target", action.target, VALID_TARGETS);
             case "SET_CHANNEL":
                 return setPill(state, action.field_id, "channel", action.channel, VALID_CHANNELS);
-            case "TOGGLE_CONFIRM":
-                return toggleConfirm(state, action.field_id);
-            case "EXECUTE_FLAG":
-                return executeFlag(state, action.field_id);
-            case "SEND_ALL":
-                return sendAll(state);
+            case "STAGE_FLAG":
+                return stageFlag(state, action.field_id);
+            case "UNSTAGE_FLAG":
+                return unstageFlag(state, action.field_id);
+            case "SEND_FLAG":
+                return sendFlag(state, action.field_id);
+            case "SEND_STAGED_BY_CHANNEL":
+                return sendStagedByChannel(state, action.channel, action.target);
             case "SET_ARCHIVE_STATUS":
                 return setArchiveStatus(state, action.archive_index, action.status);
             default:

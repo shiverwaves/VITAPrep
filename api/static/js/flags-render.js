@@ -76,15 +76,17 @@
 
     /* -------- Render -------- */
     /* applyState is the single DOM mutation entry point for the flag
-     * system. Three responsibilities:
+     * system. Four responsibilities:
      *   - field-level visual indicators (.f13c-flagged + dot)
      *   - the titlebar Marked pill count + has-flags class
-     *   - the workpanel's Marked tab body */
+     *   - the workpanel's Marked tab body
+     *   - the workpanel's Messages tab body (staged Message previews) */
     function applyState() {
         if (!state) return;
         renderFieldIndicators();
         renderMarkedPill();
         renderMarkedTabBody();
+        renderMessagesTabBody();
     }
 
     /* -------- Marked panel content (chain-link redesign) -------- */
@@ -104,6 +106,27 @@
     var CHANNEL_LABELS = {
         Email: "Email",
         Message: "Message",
+    };
+    /* Drawer-row data: each option has a title (the canonical
+     * label), an optional subtitle (description that teaches the
+     * schema), and for targets, an avatar string (initials). The
+     * subtitle is what makes the drawer richer than a flat enum
+     * picker. Adding a new option = one entry. */
+    var VERB_OPTIONS = {
+        RequestInfo: { title: "Request Information", subtitle: "Get a value you don't have yet" },
+    };
+    var TARGET_OPTIONS = {
+        Vida: { title: "Vida Reyes", subtitle: "Senior preparer", initials: "VR" },
+        Client: { title: "Client", subtitle: "The taxpayer you're helping", initials: "CL" },
+    };
+    var CHANNEL_OPTIONS = {
+        Email: { title: "Email", subtitle: "Sent as an email" },
+        Message: { title: "Message", subtitle: "In-app chat message" },
+    };
+    var DRAWER_TITLES = {
+        verb: "Verb",
+        target: "Send to",
+        channel: "Channel",
     };
     var PILL_PLACEHOLDERS = {
         verb: "Choose verb",
@@ -137,16 +160,24 @@
         }
     }
 
-    /* Open the workpanel (chat sidebar) and switch to the Marked tab.
+    /* Open the workpanel (chat sidebar) and switch to the Marked
+     * tab. Three cases:
+     *   - chat closed         → open chat + activate Marked tab
+     *   - chat open, other tab → switch to Marked tab (don't close)
+     *   - chat open, on Marked → close chat (toggle off)
      * Dispatched by the titlebar Marked pill. */
     function openMarkedTab() {
-        if (global.LayoutRender && global.LayoutRender._dispatch) {
-            /* Read layout state to avoid toggling chat closed when
-             * it's already open. */
-            var layoutState = global.LayoutRender._getState();
-            if (!layoutState || !layoutState.chatOpen) {
-                global.LayoutRender._dispatch({ type: "TOGGLE_CHAT" });
-            }
+        if (!global.LayoutRender || !global.LayoutRender._dispatch) return;
+        var layoutState = global.LayoutRender._getState();
+        var chatOpen = layoutState && layoutState.chatOpen;
+
+        if (chatOpen && activeWorkpanelTab === "marked") {
+            /* Already on Marked → close the panel. */
+            global.LayoutRender._dispatch({ type: "TOGGLE_CHAT" });
+            return;
+        }
+        if (!chatOpen) {
+            global.LayoutRender._dispatch({ type: "TOGGLE_CHAT" });
         }
         setActiveWorkpanelTab("marked");
     }
@@ -177,10 +208,6 @@
             return (b.sent_at || 0) - (a.sent_at || 0);
         });
 
-        var readyCount = activeIds.filter(function (fid) {
-            return flags[fid].status === "ready";
-        }).length;
-
         var html = "";
         if (activeIds.length > 0) {
             html += '<div class="workpanel__section-title">Active</div>';
@@ -194,7 +221,6 @@
                 html += renderChainRow(entry, true, i);
             });
         }
-        html += renderSendAll(readyCount);
         body.innerHTML = html;
 
         if (openDropdown) {
@@ -212,7 +238,7 @@
 
         if (isSent) {
             /* Sent rows are compact summaries — just the field id +
-             * a status tag. No chain pills, no Ready button. */
+             * a status tag. No chain pills, no action button. */
             return (
                 '<div class="flags-pane__row flags-pane__row--sent"' +
                 ' data-field-id="' + escapeAttr(fieldId) + '"' +
@@ -220,16 +246,16 @@
                 '<div class="flags-pane__row-field">' +
                 escapeHtml(fieldId) +
                 '</div>' +
-                renderConfirm(fieldId, flag, false, true) +
+                renderSentTag(flag) +
                 '</div>'
             );
         }
 
         var complete = global.FlagsReducer.isChainComplete(flag);
-        var isReady = flag.status === "ready";
-        var pillsLocked = isReady;
+        var isStaged = flag.status === "staged";
+        var pillsLocked = isStaged;
         var modifiers = " flags-pane__row--chain";
-        if (isReady) modifiers += " flags-pane__row--ready";
+        if (isStaged) modifiers += " flags-pane__row--staged";
 
         return (
             '<div class="flags-pane__row' + modifiers + '"' +
@@ -244,9 +270,59 @@
             '<span class="flags-pane__chain-connector">via</span>' +
             renderPill(fieldId, "channel", flag.channel, CHANNEL_LABELS, pillsLocked) +
             '</div>' +
+            renderRowAction(fieldId, flag, complete, isStaged) +
+            '</div>'
+        );
+    }
+
+    /* renderSentTag — small status chip on archived rows. Color
+     * varies with the archive sub-status (sent / delivered / expired). */
+    function renderSentTag(flag) {
+        var sentStatus = flag.status || "sent";
+        var labelMap = { sent: "Sent", delivered: "Delivered", expired: "Expired" };
+        return (
+            '<span class="flags-pane__sent-tag flags-pane__sent-tag--' + sentStatus + '">' +
+            escapeHtml(labelMap[sentStatus] || "Sent") +
+            '</span>'
+        );
+    }
+
+    /* Per-row action button. Channel decides the verb:
+     *   - Message → "Compose" (stages the row; tab jumps to Messages
+     *     where the player previews and clicks Send).
+     *   - Email   → "Add to draft" (queues the row in the Mail tab's
+     *     email draft for that recipient; player sends from there).
+     *   - Chain incomplete → disabled generic "Stage".
+     * Staged rows show "Discard" + "Edit" affordances instead. */
+    function renderRowAction(fieldId, flag, complete, isStaged) {
+        if (isStaged) {
+            var stagedLabel = flag.channel === "Email"
+                ? "Queued in mail" : "Composed in messages";
+            return (
+                '<div class="flags-pane__row-actions flags-pane__row-actions--staged">' +
+                '<span class="flags-pane__staged-tag">' +
+                escapeHtml(stagedLabel) +
+                '</span>' +
+                '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--ghost"' +
+                ' data-flag-action="unstage">Edit</button>' +
+                '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--danger"' +
+                ' data-flag-action="discard">Discard</button>' +
+                '</div>'
+            );
+        }
+        var label = "Stage";
+        if (flag.channel === "Message") label = "Compose";
+        else if (flag.channel === "Email") label = "Add to draft";
+        var disabled = !complete;
+        var attrs = disabled ? ' disabled aria-disabled="true"' : '';
+        return (
             '<div class="flags-pane__row-actions">' +
-            renderConfirm(fieldId, flag, complete, false) +
-            '</div>' +
+            '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--ghost"' +
+            ' data-flag-action="discard">Discard</button>' +
+            '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--primary"' +
+            ' data-flag-action="stage"' + attrs + '>' +
+            escapeHtml(label) +
+            '</button>' +
             '</div>'
         );
     }
@@ -269,159 +345,186 @@
         );
     }
 
-    function renderConfirm(fieldId, flag, complete, isSent) {
-        if (isSent) {
-            var sentStatus = flag.status || "sent";
-            var labelMap = { sent: "Sent", delivered: "Delivered", expired: "Expired" };
-            return (
-                '<span class="flags-pane__sent-tag flags-pane__sent-tag--' + sentStatus + '">' +
-                escapeHtml(labelMap[sentStatus] || "Sent") +
-                '</span>'
-            );
+    /* renderConfirm + the Approve/Discard split-button menu were
+     * retired alongside the Ready toggle. Each row now has a
+     * direct channel-aware button — see renderRowAction. */
+
+    /* Generate the message body text for a staged row. This is the
+     * preview content the player sees in the Messages tab — auto-
+     * composed from the chain (verb + target + field). Future
+     * iterations may let the player edit this; for now it's
+     * derived. */
+    function composeMessageText(flag) {
+        var verbText = (VERB_LABELS[flag.verb] || flag.verb || "").toLowerCase();
+        var targetText = TARGET_LABELS[flag.target] || flag.target || "";
+        var fieldText = flag.field_id || "the field";
+        return "Hi " + targetText + ", I need to " + verbText +
+            " for " + fieldText + ". Could you help me with this?";
+    }
+
+    /* Render the Messages tab body — shows each staged Message-
+     * channel row as a composed preview with a Send button. Empty
+     * state when no Message rows are staged. */
+    function renderMessagesTabBody() {
+        var body = document.getElementById("messages-tab-body");
+        if (!body) return;
+
+        var flags = state.flags || {};
+        var stagedMessageIds = Object.keys(flags).filter(function (fid) {
+            return flags[fid].status === "staged"
+                && flags[fid].channel === "Message";
+        });
+
+        if (stagedMessageIds.length === 0) {
+            body.innerHTML =
+                '<div class="workpanel__empty">No messages staged. ' +
+                'Compose a Marked row with channel "Message" to start one.</div>';
+            return;
         }
-        var disabled = !complete;
-        var pressed = flag.status === "ready";
-        var primaryClass = "flags-pane__confirm-primary";
-        if (pressed) primaryClass += " flags-pane__confirm-primary--pressed";
-        var primaryAttrs = disabled ? ' disabled aria-disabled="true"' : '';
-        /* Single label "Ready" for both states — pressed/unpressed is
-         * conveyed by the navy fill + checkmark, not by changing the
-         * word. Keeps the language separate from the "Approve" /
-         * "Approve all" verbs that fire the row. */
-        return (
-            '<span class="flags-pane__confirm">' +
-            '<button type="button" class="' + primaryClass + '"' +
-            ' data-flag-action="toggle-confirm"' +
-            ' aria-pressed="' + (pressed ? "true" : "false") + '"' +
-            primaryAttrs + '>' +
-            (pressed ? "Ready &#10003;" : "Ready") +
-            '</button>' +
-            '<button type="button" class="flags-pane__confirm-menu"' +
-            ' data-flag-action="open-confirm-menu"' +
-            ' aria-label="More actions">' +
-            '<span aria-hidden="true">&#9662;</span>' +
-            '</button>' +
-            '</span>'
-        );
+
+        /* Newest first by created_at. */
+        stagedMessageIds.sort(function (a, b) {
+            return (flags[b].created_at || 0) - (flags[a].created_at || 0);
+        });
+
+        var html = "";
+        stagedMessageIds.forEach(function (fid) {
+            var flag = flags[fid];
+            var target = TARGET_LABELS[flag.target] || flag.target || "";
+            var initials = (TARGET_OPTIONS[flag.target] || {}).initials || "?";
+            html +=
+                '<div class="message-preview" data-field-id="' +
+                escapeAttr(fid) + '">' +
+                '<div class="message-preview__header">' +
+                    '<span class="message-preview__avatar">' +
+                    escapeHtml(initials) + '</span>' +
+                    '<span class="message-preview__target">' +
+                    escapeHtml(target) + '</span>' +
+                    '<span class="message-preview__field">' +
+                    escapeHtml(fid) + '</span>' +
+                '</div>' +
+                '<div class="message-preview__body">' +
+                    escapeHtml(composeMessageText(flag)) +
+                '</div>' +
+                '<div class="message-preview__actions">' +
+                    '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--ghost"' +
+                        ' data-flag-action="unstage">Edit</button>' +
+                    '<button type="button" class="flags-pane__row-btn flags-pane__row-btn--primary"' +
+                        ' data-flag-action="send">Send</button>' +
+                '</div>' +
+                '</div>';
+        });
+        body.innerHTML = html;
     }
 
-    /* "Send all (N)" button at the foot of the Marked tab. Only
-     * enabled when ≥ 1 row is in the ready state. The count cue
-     * tells the player how many rows will fire on click. */
-    function renderSendAll(readyCount) {
-        var disabled = readyCount === 0;
-        var attrs = disabled ? ' disabled aria-disabled="true"' : '';
-        var label = readyCount > 0
-            ? ("Send all (" + readyCount + ")")
-            : "Send all";
-        return (
-            '<div class="workpanel__send-all">' +
-            '<button type="button" class="workpanel__send-all-btn"' +
-            ' data-flag-action="send-all"' + attrs + '>' +
-            escapeHtml(label) +
-            '</button>' +
-            '</div>'
-        );
-    }
-
-    /* Pill option dropdown popover. Created on demand inside the
-     * Marked tab body; positioned right under the clicked pill via
-     * getBoundingClientRect. */
+    /* Pill option drawer. Slides up from the bottom of the workpanel
+     * content area when a pill is tapped. Mobile-app action-sheet
+     * pattern. The pill being edited gets an orange ring
+     * (.flags-pane__pill--editing) so the connection between pill
+     * and drawer is unambiguous. */
     function showDropdown(fieldId, pillKey) {
         hideDropdown();
 
-        var container = document.getElementById("marked-tab-body");
-        if (!container) return;
-        var pillBtn = container.querySelector(
+        var content = document.querySelector(
+            "#workpanel-tab-marked .workpanel__body"
+        );
+        if (!content) return;
+        var pillBtn = content.querySelector(
             '.flags-pane__row[data-field-id="' + cssEscape(fieldId) + '"]' +
             ' .flags-pane__pill[data-pill="' + pillKey + '"]'
         );
         if (!pillBtn) return;
 
-        var tokens, labels, currentValue;
         var flag = (state.flags || {})[fieldId];
         if (!flag) return;
+
+        var tokens, options, currentValue;
         if (pillKey === "verb") {
             tokens = global.FlagsReducer.VERB_TOKENS;
-            labels = VERB_LABELS;
+            options = VERB_OPTIONS;
             currentValue = flag.verb;
         } else if (pillKey === "target") {
             tokens = global.FlagsReducer.TARGET_TOKENS;
-            labels = TARGET_LABELS;
+            options = TARGET_OPTIONS;
             currentValue = flag.target;
         } else if (pillKey === "channel") {
             tokens = global.FlagsReducer.CHANNEL_TOKENS;
-            labels = CHANNEL_LABELS;
+            options = CHANNEL_OPTIONS;
             currentValue = flag.channel;
         } else {
             return;
         }
 
         var items = tokens.map(function (tok) {
-            var active = tok === currentValue ? " flags-pane__dropdown-item--active" : "";
+            var opt = options[tok] || { title: tok };
+            var isActive = tok === currentValue;
+            var classes = "workpanel__drawer-item"
+                + (isActive ? " workpanel__drawer-item--active" : "");
+            var avatar = opt.initials
+                ? '<span class="workpanel__drawer-item-avatar">' +
+                    escapeHtml(opt.initials) + '</span>'
+                : "";
+            var subtitle = opt.subtitle
+                ? '<span class="workpanel__drawer-item-subtitle">' +
+                    escapeHtml(opt.subtitle) + '</span>'
+                : "";
             return (
-                '<button type="button" class="flags-pane__dropdown-item' + active + '"' +
+                '<button type="button" class="' + classes + '"' +
                 ' data-flag-action="set-pill"' +
                 ' data-pill="' + pillKey + '"' +
                 ' data-value="' + escapeAttr(tok) + '">' +
-                escapeHtml(labels[tok] || tok) +
+                avatar +
+                '<span class="workpanel__drawer-item-text">' +
+                    '<span class="workpanel__drawer-item-title">' +
+                    escapeHtml(opt.title || tok) + '</span>' +
+                    subtitle +
+                '</span>' +
+                '<span class="workpanel__drawer-item-check" aria-hidden="true">' +
+                    '&#10003;' +
+                '</span>' +
                 '</button>'
             );
         }).join("");
 
-        var dropdown = document.createElement("div");
-        dropdown.className = "flags-pane__dropdown";
-        dropdown.id = "flags-pane-dropdown";
-        dropdown.innerHTML = items;
-        document.body.appendChild(dropdown);
+        /* Backdrop + drawer share a wrapper so they can be removed
+         * together. The wrapper is positioned absolute inside the
+         * .workpanel__body scroll container (sits above content,
+         * below the bottom nav). */
+        var wrapper = document.createElement("div");
+        wrapper.className = "workpanel__drawer-host";
+        wrapper.id = "workpanel-drawer-host";
+        wrapper.innerHTML =
+            '<div class="workpanel__drawer-backdrop"' +
+                ' data-flag-action="dismiss-drawer"></div>' +
+            '<div class="workpanel__drawer">' +
+                '<div class="workpanel__drawer-handle" aria-hidden="true"></div>' +
+                '<div class="workpanel__drawer-title">' +
+                    escapeHtml(DRAWER_TITLES[pillKey] || "") +
+                '</div>' +
+                '<div class="workpanel__drawer-list">' + items + '</div>' +
+            '</div>';
+        content.appendChild(wrapper);
 
-        var rect = pillBtn.getBoundingClientRect();
-        dropdown.style.position = "fixed";
-        dropdown.style.top = (rect.bottom + 4) + "px";
-        dropdown.style.left = rect.left + "px";
-        dropdown.style.minWidth = rect.width + "px";
+        /* Trigger the slide-in animation in the next frame. */
+        requestAnimationFrame(function () {
+            wrapper.classList.add("workpanel__drawer-host--open");
+        });
 
-        openDropdown = { fieldId: fieldId, pillKey: pillKey };
+        pillBtn.classList.add("flags-pane__pill--editing");
         pillBtn.setAttribute("aria-expanded", "true");
-    }
-
-    function showConfirmMenu(fieldId) {
-        hideDropdown();
-
-        var container = document.getElementById("marked-tab-body");
-        if (!container) return;
-        var trigger = container.querySelector(
-            '.flags-pane__row[data-field-id="' + cssEscape(fieldId) + '"]' +
-            ' .flags-pane__confirm-menu'
-        );
-        if (!trigger) return;
-
-        var flag = (state.flags || {})[fieldId];
-        if (!flag) return;
-        var complete = global.FlagsReducer.isChainComplete(flag);
-        var executeAttrs = complete ? "" : ' disabled aria-disabled="true"';
-
-        var menu = document.createElement("div");
-        menu.className = "flags-pane__dropdown";
-        menu.id = "flags-pane-dropdown";
-        menu.innerHTML =
-            '<button type="button" class="flags-pane__dropdown-item"' +
-            ' data-flag-action="execute"' + executeAttrs + '>Approve</button>' +
-            '<button type="button" class="flags-pane__dropdown-item flags-pane__dropdown-item--danger"' +
-            ' data-flag-action="discard">Discard</button>';
-        document.body.appendChild(menu);
-
-        var rect = trigger.getBoundingClientRect();
-        menu.style.position = "fixed";
-        menu.style.top = (rect.bottom + 4) + "px";
-        menu.style.right = (window.innerWidth - rect.right) + "px";
-
-        openDropdown = { fieldId: fieldId, pillKey: "_confirmMenu" };
+        openDropdown = { fieldId: fieldId, pillKey: pillKey };
     }
 
     function hideDropdown() {
-        var existing = document.getElementById("flags-pane-dropdown");
-        if (existing) existing.parentNode.removeChild(existing);
+        var drawerHost = document.getElementById("workpanel-drawer-host");
+        if (drawerHost && drawerHost.parentNode) {
+            drawerHost.parentNode.removeChild(drawerHost);
+        }
+        /* Also clean up the legacy popover wrapper if any persists
+         * from an older render path. */
+        var legacy = document.getElementById("flags-pane-dropdown");
+        if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+
         var container = document.getElementById("marked-tab-body");
         if (container) {
             var expanded = container.querySelectorAll(
@@ -429,6 +532,7 @@
             );
             for (var i = 0; i < expanded.length; i++) {
                 expanded[i].setAttribute("aria-expanded", "false");
+                expanded[i].classList.remove("flags-pane__pill--editing");
             }
         }
         openDropdown = null;
@@ -442,9 +546,8 @@
     }
 
     /* Update the titlebar "Marked: N" pill — count + has-flags
-     * state class. aria-pressed reflects whether the marked dropdown
-     * is currently open (toggled in showMarkedDropdown /
-     * hideMarkedDropdown). */
+     * state class. aria-pressed reflects whether the workpanel
+     * is currently open AND showing the Marked tab. */
     function renderMarkedPill() {
         var pill = document.getElementById("marked-pill");
         if (!pill) return;
@@ -452,6 +555,13 @@
         var countSpan = document.getElementById("marked-pill-count");
         if (countSpan) countSpan.textContent = String(count);
         pill.classList.toggle("titlebar__pill--has-flags", count > 0);
+        var chatOpen = false;
+        if (global.LayoutRender && global.LayoutRender._getState) {
+            var ls = global.LayoutRender._getState();
+            chatOpen = ls && ls.chatOpen;
+        }
+        var pressed = chatOpen && activeWorkpanelTab === "marked";
+        pill.setAttribute("aria-pressed", pressed ? "true" : "false");
     }
 
     /* -------- Panel + dropdown event delegation -------- */
@@ -506,7 +616,7 @@
     function closestRow(el) {
         var node = el;
         while (node && node.nodeType === 1) {
-            if (node.classList && node.classList.contains("flags-pane__row")) {
+            if (node.getAttribute && node.getAttribute("data-field-id")) {
                 return node;
             }
             node = node.parentNode;
@@ -524,6 +634,11 @@
                 openMarkedTab();
                 return;
 
+            case "dismiss-drawer":
+                /* Backdrop click — close the open pill drawer. */
+                hideDropdown();
+                return;
+
             case "open-pill":
                 if (!fieldId) return;
                 var pillKey = element.getAttribute("data-pill");
@@ -535,17 +650,6 @@
                     return;
                 }
                 showDropdown(fieldId, pillKey);
-                return;
-
-            case "open-confirm-menu":
-                if (!fieldId) return;
-                if (openDropdown
-                        && openDropdown.fieldId === fieldId
-                        && openDropdown.pillKey === "_confirmMenu") {
-                    hideDropdown();
-                    return;
-                }
-                showConfirmMenu(fieldId);
                 return;
 
             case "set-pill":
@@ -565,27 +669,38 @@
                 dispatch(payload);
                 return;
 
-            case "toggle-confirm":
+            case "stage":
+                /* Compose / Add to draft button on a chain row.
+                 * Stages the row; for Message channel, switches the
+                 * tab to Messages so the player sees the composed
+                 * preview. */
                 if (!fieldId) return;
-                dispatch({ type: "TOGGLE_CONFIRM", field_id: fieldId });
+                var flag = (state.flags || {})[fieldId];
+                dispatch({ type: "STAGE_FLAG", field_id: fieldId });
+                if (flag && flag.channel === "Message") {
+                    setActiveWorkpanelTab("messages");
+                }
                 return;
 
-            case "execute":
-                if (!openDropdown) return;
-                var execFid = openDropdown.fieldId;
-                hideDropdown();
-                dispatch({ type: "EXECUTE_FLAG", field_id: execFid });
+            case "unstage":
+                /* Edit button on a staged row — back to draft so the
+                 * player can re-edit the chain pills. */
+                if (!fieldId) return;
+                dispatch({ type: "UNSTAGE_FLAG", field_id: fieldId });
+                return;
+
+            case "send":
+                /* Send button on a staged Message preview in the
+                 * Messages tab. Fires the row to archive. */
+                if (!fieldId) return;
+                dispatch({ type: "SEND_FLAG", field_id: fieldId });
                 return;
 
             case "discard":
-                if (!openDropdown) return;
-                var discardFid = openDropdown.fieldId;
-                hideDropdown();
-                dispatch({ type: "UNFLAG_FIELD", field_id: discardFid });
-                return;
-
-            case "send-all":
-                dispatch({ type: "SEND_ALL" });
+                /* Discard button on a row (any state). Removes the
+                 * flag entirely. */
+                if (!fieldId) return;
+                dispatch({ type: "UNFLAG_FIELD", field_id: fieldId });
                 return;
         }
     }
@@ -697,6 +812,12 @@
             if (e.key === "Escape" && openDropdown) {
                 hideDropdown();
             }
+        });
+
+        /* Refresh the marked pill's pressed state when the layout
+         * state machine fires (chat-toggle from any path, etc.). */
+        document.addEventListener("vitaprep:layout-applied", function () {
+            renderMarkedPill();
         });
 
         applyState();
